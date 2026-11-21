@@ -20,6 +20,7 @@ export function Conversation() {
   const [msgMenu, setMsgMenu] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ src: string; seconds: number } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const expiringNext = useRef(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -100,6 +101,21 @@ export function Conversation() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, typing]);
 
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const observer = new ResizeObserver(() => {
+      if (stickToBottom.current) list.scrollTop = list.scrollHeight;
+    });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, []);
+
+  function onListScroll(event: React.UIEvent<HTMLDivElement>) {
+    const list = event.currentTarget;
+    stickToBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 2;
+  }
+
   function onType(v: string) {
     setText(v);
     if (v.trim()) getSocket().emit("dm:typing", { conversationId: id });
@@ -173,7 +189,7 @@ export function Conversation() {
         )}
       </header>
 
-      <div className="chat__list chat__list--dm" ref={listRef} onClick={() => setMsgMenu(null)}>
+      <div className="chat__list chat__list--dm" ref={listRef} onScroll={onListScroll} onClick={() => setMsgMenu(null)}>
         {messages.map((m) => {
           const mine = m.senderId === myId;
           return (
