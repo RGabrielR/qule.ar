@@ -33,7 +33,12 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = new URL(event.notification.data?.url || "/", self.location.origin).href;
+  const destination = new URL(event.notification.data?.url || "/", self.location.origin);
+  const target = destination.origin === self.location.origin ? destination : new URL("/", self.location.origin);
+  if (target.pathname === "/toques" || /^\/mensajes\/[^/]+$/.test(target.pathname)) {
+    target.searchParams.set("aviso", "1");
+  }
+  const url = target.href;
   event.waitUntil(
     (async () => {
       const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });

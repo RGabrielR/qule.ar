@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { api, type Author, type Toque, type Viewer } from "../api";
 import { ReactionIcon } from "../components/Reactions";
 import { reactionLabel } from "../reactions";
 import { useMe } from "../App";
 import { BackIcon } from "../components/Icons";
+import { useSectionBack } from "../useSectionBack";
 
 function ago(iso: string) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -15,11 +16,11 @@ function ago(iso: string) {
 }
 
 function PeopleGrid({ title, people, empty, note }: { title: string; people: (Author & { sub?: string; reaction?: string; isNew?: boolean })[] | null; empty: string; note?: string }) {
-  const nav = useNavigate();
+  const goBack = useSectionBack("/yo");
   return (
     <div className="page">
       <header className="topbar topbar--thread">
-        <button className="iconbtn" onClick={() => nav("/yo")} aria-label="Volver"><BackIcon /></button>
+        <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
         <h1 className="topbar__title topbar__title--sm">{title}</h1>
       </header>
       {note && <p className="muted small page-note">{note}</p>}

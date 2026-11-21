@@ -5,11 +5,13 @@ import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { BackIcon, ImageIcon, LockIcon, SendIcon, TimerIcon } from "../components/Icons";
+import { useSectionBack } from "../useSectionBack";
 
 export function Conversation() {
   const { id = "" } = useParams();
   const { me } = useMe();
   const nav = useNavigate();
+  const goBack = useSectionBack("/mensajes");
   const [other, setOther] = useState<Author | null>(null);
   const [messages, setMessages] = useState<Dm[]>([]);
   const [text, setText] = useState("");
@@ -161,7 +163,7 @@ export function Conversation() {
   return (
     <div className="chat">
       <header className="topbar topbar--thread">
-        <button className="iconbtn" onClick={() => nav("/mensajes")} aria-label="Volver"><BackIcon /></button>
+        <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
         {other && (
           <Link to={`/perfil/${other.id}`} className="topbar__who">
             <Avatar src={other.photo} name={other.name} size={36} />
