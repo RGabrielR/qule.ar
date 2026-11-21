@@ -5,6 +5,7 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { BackIcon, PlusIcon } from "../components/Icons";
 import { InvitePeopleSheet } from "../components/Invite";
+import { ReportDialog } from "../components/ReportDialog";
 
 export function GroupInfo() {
   const { id = "" } = useParams();
@@ -18,6 +19,7 @@ export function GroupInfo() {
   const [error, setError] = useState("");
   const [memberMenu, setMemberMenu] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<null | "leave" | "delete">(null);
+  const [reporting, setReporting] = useState(false);
 
   const isMod = info?.role === "owner" || info?.role === "moderator";
   const isOwner = info?.role === "owner";
@@ -230,11 +232,16 @@ export function GroupInfo() {
               <>
                 <button className="btn" onClick={() => setConfirm("leave")}>Salir del grupo</button>
                 {isOwner && <button className="btn btn--ghost btn--dangertext" onClick={() => setConfirm("delete")}>Borrar grupo</button>}
+                {!isOwner && (
+                  <button className="btn btn--ghost btn--dangertext" onClick={() => setReporting(true)}>Reportar este grupo</button>
+                )}
               </>
             )}
           </div>
         </section>
       )}
+
+      {reporting && <ReportDialog groupId={id} name={info.name} onClose={() => setReporting(false)} />}
 
       {info.isGeneral && (
         <section className="section">

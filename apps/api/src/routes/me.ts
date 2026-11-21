@@ -14,7 +14,7 @@ import { hasAlbumAccess } from "./premium.js";
 import { isAdmin } from "./admin.js";
 import { APP_NAME } from "../brand.js";
 import { expiringIsOver } from "../expiring.js";
-import { deleteImageUnlessEvidence, isEvidence } from "../moderation.js";
+import { checkMinorSignals, deleteImageUnlessEvidence, isEvidence } from "../moderation.js";
 import { limit } from "../ratelimit.js";
 import { TERMS_VERSION } from "../legal.js";
 
@@ -141,6 +141,8 @@ meRoutes.put("/me/profile", requireUser, async (c) => {
       termsVersion: TERMS_VERSION,
       termsAcceptedAt: new Date(),
     });
+    checkMinorSignals({ userId: u.id, name: fields.displayName }, { "el nombre": fields.displayName, "la descripción": fields.about })
+      .catch((e) => console.error("checkMinorSignals", e));
     // Todo el mundo entra al chat general
     const [general] = await db.select().from(group).where(eq(group.isGeneral, true));
     if (general) {
@@ -151,6 +153,8 @@ meRoutes.put("/me/profile", requireUser, async (c) => {
     // La fecha de nacimiento no se puede cambiar después del alta
     const { birthdate: _ignored, acceptTerms: _a, ...rest } = data;
     await db.update(profile).set({ ...rest, updatedAt: new Date() }).where(eq(profile.userId, u.id));
+    checkMinorSignals({ userId: u.id, name: rest.displayName }, { "el nombre": rest.displayName, "la descripción": rest.about })
+      .catch((e) => console.error("checkMinorSignals", e));
   }
   return c.json({ ok: true });
 });

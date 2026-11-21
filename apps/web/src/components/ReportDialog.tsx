@@ -3,14 +3,16 @@ import { api } from "../api";
 import { REPORT_REASONS, URGENT_REASONS } from "../options";
 
 type Props = {
-  userId: string;
+  // Se reporta a una persona (userId) o a un grupo (groupId)
+  userId?: string;
+  groupId?: string;
   name: string;
   messageId?: string;
   messageKind?: "group" | "dm";
   onClose: () => void;
 };
 
-export function ReportDialog({ userId, name, messageId, messageKind, onClose }: Props) {
+export function ReportDialog({ userId, groupId, name, messageId, messageKind, onClose }: Props) {
   const [reason, setReason] = useState<string>("");
   const [details, setDetails] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
@@ -18,7 +20,7 @@ export function ReportDialog({ userId, name, messageId, messageKind, onClose }: 
   async function send() {
     setState("sending");
     try {
-      await api("/reports", { method: "POST", json: { userId, reason, details: details || undefined, messageId, messageKind } });
+      await api("/reports", { method: "POST", json: { userId, groupId, reason, details: details || undefined, messageId, messageKind } });
       setState("done");
     } catch {
       setState("error");
@@ -31,12 +33,14 @@ export function ReportDialog({ userId, name, messageId, messageKind, onClose }: 
         {state === "done" ? (
           <>
             <h2 id="report-title">Gracias por avisar</h2>
-            <p className="muted">Vamos a revisar el reporte. Si te hace sentir mejor, también podés bloquear a {name}.</p>
+            <p className="muted">
+              Vamos a revisar el reporte.{groupId ? " Si sos parte del grupo, también podés salir." : ` Si te hace sentir mejor, también podés bloquear a ${name}.`}
+            </p>
             <button className="btn btn--primary" onClick={onClose}>Listo</button>
           </>
         ) : (
           <>
-            <h2 id="report-title">Reportar {messageId ? "mensaje de " : "a "}{name}</h2>
+            <h2 id="report-title">Reportar {groupId ? "el grupo " : messageId ? "mensaje de " : "a "}{name}</h2>
             <div className="chips">
               {REPORT_REASONS.map((r) => (
                 <button key={r} className={`chip ${reason === r ? "chip--on" : ""}`} onClick={() => setReason(r)}>

@@ -340,7 +340,8 @@ socialRoutes.post("/reports", async (c) => {
   limit(me.id, "report");
   const r = z
     .object({
-      userId: z.string(),
+      userId: z.string().optional(),
+      groupId: z.string().optional(),
       reason: z.enum(REPORT_REASONS),
       details: z.string().trim().max(1000).optional(),
       messageId: z.string().optional(),
@@ -348,7 +349,23 @@ socialRoutes.post("/reports", async (c) => {
     })
     .safeParse(await c.req.json());
   if (!r.success) throw new HTTPException(400, { message: "Elegí un motivo" });
-  const { userId, ...rest } = r.data;
+  const { userId: maybeUser, groupId, ...rest } = r.data;
+
+  // Reporte de un grupo: por su nombre, su descripción o lo que pasa adentro. Se guarda copia del nombre y la descripción.
+  if (groupId) {
+    const [g] = await db.select().from(schema.group).where(eq(schema.group.id, groupId));
+    if (!g || g.removedAt) throw new HTTPException(404, { message: "Ese grupo no existe" });
+    if (g.isGeneral) throw new HTTPException(400, { message: "El chat general no se reporta: reportá el mensaje o a la persona" });
+    await db.insert(report).values({
+      id: newId(), reporterId: me.id, targetUserId: null, groupId: g.id,
+      reason: rest.reason, details: rest.details,
+      targetName: g.name, messageBody: [g.name, g.description].filter(Boolean).join(" · "),
+    });
+    if (isUrgent(rest.reason)) notifyModeratorsUrgent().catch((e) => console.error("notifyModeratorsUrgent", e));
+    return c.json({ ok: true });
+  }
+  if (!maybeUser) throw new HTTPException(400, { message: "Falta a quién reportás" });
+  const userId = maybeUser;
   // Copia para moderación (ver report en schema.ts y docs/MODERACION.md)
   let messageBody: string | null = null;
   let evidenceKeys: string[] = [];

@@ -85,6 +85,13 @@
       "when": 1795215665331,
       "tag": "0011_report_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795280288325,
+      "tag": "0012_group_moderation",
+      "breakpoints": true
     }
   ]
 }

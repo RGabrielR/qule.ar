@@ -137,6 +137,8 @@ export const report = pgTable("report", {
   targetUserId: text("target_user_id").references(() => user.id, { onDelete: "set null" }),
   messageId: text("message_id"),
   messageKind: text("message_kind"), // "group" | "dm"
+  // Reporte de un grupo (por su nombre, su descripción o lo que pasa adentro). Si el grupo se purga, queda la copia.
+  groupId: text("group_id").references(() => group.id, { onDelete: "set null" }),
   // Copia al momento del reporte: el nombre visible, el texto del mensaje y los archivos (la foto del mensaje
   // o, si se reporta un perfil por algo urgente, sus fotos públicas). Esos archivos no se borran mientras
   // el reporte esté abierto o haya terminado en una medida; si se descarta, se liberan.
@@ -192,6 +194,10 @@ export const group = pgTable("group", {
   isGeneral: boolean("is_general").notNull().default(false),
   spamRules: jsonb("spam_rules").$type<SpamRules>().notNull().default(DEFAULT_SPAM_RULES),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Dado de baja (por moderación, o por su dueño si tenía reportes): desaparece para todo el mundo pero queda
+  // guardado 90 días como prueba (ver moderation.ts y docs/MODERACION.md). null = activo.
+  removedAt: timestamp("removed_at", { withTimezone: true }),
+  removedReason: text("removed_reason"),
 });
 
 export const groupMember = pgTable("group_member", {

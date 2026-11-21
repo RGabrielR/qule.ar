@@ -11,7 +11,8 @@ import { pushEnabled, pushTo, vapidPublicKey } from "../push.js";
 import { APP_NAME } from "../brand.js";
 import { disconnectUser, emitToGroup } from "../realtime.js";
 import { deleteImage } from "../storage.js";
-import { autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence } from "../moderation.js";
+import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
+import { removeGroup } from "./groups.js";
 
 const { report, profile, session, groupMessage, directMessage, pushSubscription, user, group } = schema;
 
@@ -106,6 +107,16 @@ adminRoutes.get("/admin/reports", async (c) => {
   const totalBy = new Map(totals.map((t) => [t.id ?? "", t.n]));
 
   const hidden = await autoHiddenUsers();
+  const hiddenGroups = await autoHiddenGroups();
+  // Grupos reportados (pueden estar dados de baja: moderación los sigue viendo)
+  const gids = [...new Set(rows.flatMap((r) => (r.groupId ? [r.groupId] : [])))];
+  const groupRows = gids.length ? await db.select().from(group).where(inArray(group.id, gids)) : [];
+  const groupCounts = gids.length
+    ? await db.select({ id: schema.groupMember.groupId, n: sql<number>`count(*)::int` }).from(schema.groupMember)
+        .where(inArray(schema.groupMember.groupId, gids)).groupBy(schema.groupMember.groupId)
+    : [];
+  const groupsById = new Map(groupRows.map((g) => [g.id, g]));
+  const groupMembers = new Map(groupCounts.map((x) => [x.id, x.n]));
   const out = [];
   for (const r of rows) {
     // El mensaje reportado: si ya se borró, se muestra la copia que guardó el reporte
@@ -133,7 +144,25 @@ adminRoutes.get("/admin/reports", async (c) => {
       message,
       reporter: (r.reporterId && people.get(r.reporterId)) || null,
       // Cuenta borrada: id null (no se puede suspender) y el nombre que tenía al reportarla
-      target: people.get(tid) ?? { id: null, name: r.targetName ? `${r.targetName} (cuenta borrada)` : "Cuenta borrada", age: 0, photo: null },
+      target: r.groupId
+        ? null
+        : people.get(tid) ?? { id: null, name: r.targetName ? `${r.targetName} (cuenta borrada)` : "Cuenta borrada", age: 0, photo: null },
+      // Reporte de un grupo: cómo está ahora (puede estar dado de baja)
+      group: r.groupId
+        ? (() => {
+            const g = r.groupId ? groupsById.get(r.groupId) : undefined;
+            return {
+              id: g?.id ?? null,
+              name: g?.name ?? r.targetName ?? "Grupo borrado",
+              description: g?.description ?? null,
+              memberCount: g ? groupMembers.get(g.id) ?? 0 : 0,
+              removedAt: g?.removedAt?.toISOString() ?? null,
+              autoHidden: g ? hiddenGroups.has(g.id) : false,
+            };
+          })()
+        : null,
+      // Sin persona que lo mande: lo generó la app (palabras que sugieren menores)
+      automatic: !r.reporterId && (r.details ?? "").startsWith(AUTO_DETAILS_PREFIX),
       targetSuspendedAt: suspended.get(tid) ?? null,
       targetReportCount: totalBy.get(tid) ?? 0,
       evidenceFiles: r.evidenceKeys.length,
@@ -197,6 +226,43 @@ adminRoutes.post("/admin/users/:id/suspend", async (c) => {
 adminRoutes.post("/admin/users/:id/unsuspend", async (c) => {
   await db.update(profile).set({ suspendedAt: null, suspendReason: null }).where(eq(profile.userId, c.req.param("id")));
   return c.json({ ok: true });
+});
+
+// ---------- Grupos ----------
+
+/** Dar de baja un grupo: desaparece para todo el mundo y queda guardado como prueba. Cierra sus reportes abiertos. */
+adminRoutes.post("/admin/groups/:id/remove", async (c) => {
+  const admin = c.get("user");
+  const { reason } = z.object({ reason: z.string().trim().min(3, "Escribí un motivo").max(300) }).parse(await c.req.json());
+  const [g] = await db.select().from(group).where(eq(group.id, c.req.param("id")));
+  if (!g) throw new HTTPException(404, { message: "Ese grupo no existe" });
+  if (g.isGeneral) throw new HTTPException(400, { message: "El chat general no se puede dar de baja" });
+  if (g.removedAt) throw new HTTPException(409, { message: "Ese grupo ya está dado de baja" });
+  await removeGroup(g.id, `Moderación: ${reason}`);
+  const open = await db.select({ id: report.id }).from(report).where(and(eq(report.groupId, g.id), eq(report.status, "open")));
+  await closeReports(open.map((r) => r.id), admin.id, "actioned", `Grupo dado de baja: ${reason}`);
+  return c.json({ ok: true });
+});
+
+/** Volver a activar un grupo dado de baja (si fue un error). Los miembros siguen siendo los mismos. */
+adminRoutes.post("/admin/groups/:id/restore", async (c) => {
+  const [g] = await db.update(group).set({ removedAt: null, removedReason: null })
+    .where(and(eq(group.id, c.req.param("id")), isNotNull(group.removedAt))).returning();
+  if (!g) throw new HTTPException(404, { message: "Ese grupo no está dado de baja" });
+  return c.json({ ok: true });
+});
+
+/** Grupos dados de baja, con cuántos días les quedan antes de borrarse del todo. */
+adminRoutes.get("/admin/groups/removed", async (c) => {
+  const rows = await db.select().from(group).where(isNotNull(group.removedAt)).orderBy(desc(group.removedAt));
+  return c.json(rows.map((g) => ({
+    id: g.id,
+    name: g.name,
+    description: g.description,
+    removedAt: g.removedAt!.toISOString(),
+    reason: g.removedReason,
+    purgeAt: new Date(g.removedAt!.getTime() + REMOVED_GROUP_DAYS * 86_400_000).toISOString(),
+  })));
 });
 
 adminRoutes.get("/admin/suspended", async (c) => {

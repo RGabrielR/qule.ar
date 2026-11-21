@@ -51,6 +51,8 @@ Usar qule.ar puede decir algo sobre tu orientación sexual o tu identidad de gé
 
 Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, mandar tus mensajes, avisarte con notificaciones, mandarte mails de la cuenta (bienvenida o cambio de contraseña), revisar reportes y cuidar la seguridad.
 
+**Cuidado de menores:** qule.ar es solo para mayores de 18. Para detectar a tiempo si entra alguien menor, la app revisa automáticamente los nombres y las descripciones de los perfiles y los grupos, y busca señales como "+14" o "15 años". Si encuentra una, no borra ni oculta nada: manda el caso a moderación para que lo revise una persona.
+
 **No** vendemos datos, **no** mostramos publicidad y **no** armamos perfiles para terceros.
 
 ## 5. Dónde están y quién más los ve
@@ -78,6 +80,7 @@ Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, m
 - **Si desenviás un mensaje privado**, se borra para las dos personas.
 - **Si borrás un mensaje en un grupo**, se borra: deja de verse para todes y el texto se elimina.
 - **Las fotos temporales** se borran del servidor después de verse.
+- **Si moderación da de baja un grupo**, desaparece para todo el mundo pero queda guardado **90 días** como prueba, y solo lo ve moderación. Después se borra del todo. Lo mismo pasa si su dueño lo borra mientras tiene reportes.
 - **Si alguien reporta un mensaje o un perfil**, guardamos una copia de lo reportado (el texto y las fotos) para que moderación lo pueda revisar aunque después se borre.
   - Si moderación **descarta** el reporte, la copia se borra.
   - Si el reporte **terminó en una medida** (borrar el mensaje o suspender la cuenta), la copia se conserva como registro y como prueba, aunque después se borre la cuenta. Solo la ve moderación, y se entrega a una autoridad únicamente si una orden judicial lo pide. La ley permite no borrar datos cuando hacerlo perjudicaría derechos de otras personas o cuando hay obligación de conservarlos (Ley 25.326, art. 16, inc. 5).

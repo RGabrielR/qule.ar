@@ -16,6 +16,7 @@ export const REPORT_REASONS = [
   "menor de edad",
   "contenido íntimo sin consentimiento",
   "amenazas o violencia",
+  "venta o drogas",
   "acoso",
   "fotos inapropiadas",
   "perfil falso",
@@ -100,5 +101,202 @@ export async function releaseEvidence(reportIds: string[]) {
   await db.update(report).set({ messageBody: null, evidenceKeys: [] }).where(inArray(report.id, reportIds));
   for (const key of new Set(rows.flatMap((r) => r.keys))) {
     if (!(await isEvidence(key)) && !(await stillInUse(key))) await deleteImage(key);
+  }
+}
+
+// ---------- Grupos ----------
+
+/** Grupos ocultos del listado por precaución: reportes urgentes abiertos de AUTO_HIDE_REPORTERS personas distintas. */
+export async function autoHiddenGroups(): Promise<Set<string>> {
+  const rows = await db
+    .select({ id: report.groupId })
+    .from(report)
+    .where(and(eq(report.status, "open"), inArray(report.reason, [...URGENT_REASONS]), sql`${report.groupId} is not null`))
+    .groupBy(report.groupId)
+    .having(sql`count(distinct ${report.reporterId}) >= ${AUTO_HIDE_REPORTERS}`);
+  return new Set(rows.flatMap((r) => (r.id ? [r.id] : [])));
+}
+
+/** ¿El grupo es prueba de algún reporte (el grupo en sí o un mensaje suyo)? Entonces no se borra: se da de baja. */
+export async function groupIsEvidence(groupId: string): Promise<boolean> {
+  const [r] = await db.select({ id: report.id }).from(report)
+    .where(and(
+      inArray(report.status, KEPT),
+      or(
+        eq(report.groupId, groupId),
+        and(eq(report.messageKind, "group"),
+          sql`${report.messageId} in (select id from ${schema.groupMessage} where ${schema.groupMessage.groupId} = ${groupId})`),
+      ),
+    ))
+    .limit(1);
+  return Boolean(r);
+}
+
+/** Días que un grupo dado de baja queda guardado como prueba antes de borrarse del todo. */
+export const REMOVED_GROUP_DAYS = 90;
+
+/** Borra del todo los grupos dados de baja hace más de REMOVED_GROUP_DAYS (sus reportes conservan la copia). */
+export async function purgeRemovedGroups() {
+  await db.delete(schema.group)
+    .where(sql`${schema.group.removedAt} < now() - make_interval(days => ${REMOVED_GROUP_DAYS})`);
+}
+
+// ---------- Alertas automáticas: señales de menores en nombres y descripciones ----------
+// No borran ni ocultan nada: crean un reporte urgente para que una persona lo revise. Ver docs/MODERACION.md.
+
+const MINOR_SIGNALS: RegExp[] = [
+  /(?:^|[^\d+])[-−]\s?18\b/, // "-18"
+  /\+\s?1[0-7]\b/, // "+14", "+16" (el "+18" de adultos no cuenta)
+  /\b1[0-7]\s?(?:anos|anitos|a)\b/, // "15 años", "16a"
+  /\bsub\s?-?\s?1[0-8]\b/, // "sub 18", "sub-16"
+  /\bmenores\b|\bmenor de edad\b|\bmenorcit[oa]s?\b/,
+  /\bteens?\b|\bsecundari[oa]s?\b|\bliceo\b/,
+];
+
+/** Devuelve el fragmento que dispara la alerta, o null. Ignora mayúsculas y tildes. */
+export function minorSignal(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const t = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  for (const re of MINOR_SIGNALS) {
+    const m = re.exec(t);
+    if (m) return m[0].trim();
+  }
+  return null;
+}
+
+export const AUTO_DETAILS_PREFIX = "Alerta automática";
+
+/**
+ * Revisa un texto y, si hay señales de menores, crea un reporte urgente sin persona que lo mande (reporterId null).
+ * No duplica: si ya hay una alerta abierta para ese perfil o grupo, no crea otra.
+ */
+export async function checkMinorSignals(
+  target: { userId: string; name: string } | { groupId: string; name: string },
+  fields: Record<string, string | null | undefined>,
+) {
+  let hit: string | null = null;
+  let where = "";
+  for (const [label, value] of Object.entries(fields)) {
+    hit = minorSignal(value);
+    if (hit) { where = label; break; }
+  }
+  if (!hit) return;
+  const isGroup = "groupId" in target;
+  // No repite: si hay una alerta abierta, o una ya resuelta con el mismo texto (por ejemplo, descartada), no crea otra
+  const text = Object.values(fields).filter(Boolean).join("\n");
+  const [dup] = await db.select({ id: report.id }).from(report)
+    .where(and(
+      sql`${report.reporterId} is null`,
+      sql`${report.details} like ${AUTO_DETAILS_PREFIX + "%"}`,
+      isGroup ? eq(report.groupId, target.groupId) : eq(report.targetUserId, target.userId),
+      or(eq(report.status, "open"), eq(report.messageBody, text)),
+    ))
+    .limit(1);
+  if (dup) return;
+  await db.insert(report).values({
+    id: crypto.randomUUID(),
+    reporterId: null,
+    targetUserId: isGroup ? null : target.userId,
+    groupId: isGroup ? target.groupId : null,
+    reason: "menor de edad",
+    details: `${AUTO_DETAILS_PREFIX}: «${hit}» en ${where}.`,
+    targetName: target.name,
+    messageBody: text,
+  });
+  await notifyModeratorsUrgent();
+}
+
+// ---------- Nombres y descripciones de grupos que no se permiten ----------
+// Un grupo no se puede crear ni editar con un nombre o una descripción que apunte a menores, a vender cosas o
+// servicios (incluidos masajes y servicios sexuales) o a drogas. Ver los Términos (punto 4) y docs/MODERACION.md.
+
+type ForbiddenKind = "menores" | "venta" | "servicios" | "drogas";
+
+const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: RegExp[] }[] = [
+  {
+    kind: "menores",
+    message: "No se pueden crear grupos que sugieran menores de edad. qule.ar es solo para mayores de 18.",
+    patterns: MINOR_SIGNALS,
+  },
+  {
+    kind: "servicios",
+    message: "No se pueden crear grupos para ofrecer masajes, acompañantes ni servicios sexuales.",
+    patterns: [/\bmasaj\w*/, /\bescorts?\b/, /\bacompanantes?\b/, /\bprepagos?\b/, /\btrabajo sexual\b/, /\bservicios? sexual\w*/],
+  },
+  {
+    kind: "venta",
+    message: "Los grupos no pueden ser para vender ni comprar cosas o servicios.",
+    patterns: [
+      /\bvend(?:o|e|emos|en|er|edor\w*)\b/, /\bventas?\b/, /\bcompr(?:o|amos|a y venta)\b/, /\bprecios?\b/,
+      /\$\s?\d/, /\bofertas?\b/, /\bcobr(?:o|amos)\b/, /\bdelivery\b/, /\bstock\b/, /\bmayorista\w*/,
+    ],
+  },
+  {
+    kind: "drogas",
+    message: "No se pueden crear grupos sobre consumo ni venta de drogas.",
+    patterns: [
+      /\btina\b/, /\bmerca\b/, /\bfaso\b/, /\bporros?\b/, /\bpepas?\b/, /\bpoppers?\b/, /\bghb\b/, /\bchems(?:ex)?\b/,
+      /\bpnp\b/, /\bparty (?:and|&|n) play\b/, /\bfiestas? quimica\w*/, /\bcocaina\b/, /\bmdma\b/, /\bketa(?:mina)?\b/,
+      /\bcristal\b/, /💊/u,
+    ],
+  },
+];
+
+const normalize = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+/** Si el nombre o la descripción de un grupo no se permite, devuelve el tipo, el fragmento y el mensaje para mostrar. */
+export function forbiddenGroupText(...texts: (string | null | undefined)[]) {
+  for (const raw of texts) {
+    if (!raw) continue;
+    const t = normalize(raw);
+    for (const rule of FORBIDDEN_GROUP) {
+      for (const re of rule.patterns) {
+        const m = re.exec(t) ?? re.exec(raw);
+        if (m) return { kind: rule.kind, hit: m[0].trim(), message: rule.message };
+      }
+    }
+  }
+  return null;
+}
+
+/** Quien intentó crear o editar un grupo que sugiere menores: alerta urgente sobre esa persona. */
+export async function reportMinorGroupAttempt(user: { id: string; name: string }, hit: string, text: string) {
+  await db.insert(report).values({
+    id: crypto.randomUUID(),
+    reporterId: null,
+    targetUserId: user.id,
+    reason: "menor de edad",
+    details: `${AUTO_DETAILS_PREFIX}: intentó crear o editar un grupo con «${hit}».`,
+    targetName: user.name,
+    messageBody: text,
+  });
+  await notifyModeratorsUrgent();
+}
+
+/**
+ * Revisa los grupos que ya existen con las mismas reglas y manda a moderación los que no cumplen. Corre al arrancar.
+ * No repite: si ya hay una alerta automática con el mismo texto para ese grupo (abierta o resuelta), no crea otra.
+ */
+export async function scanExistingGroups() {
+  const rows = await db.select().from(schema.group)
+    .where(and(sql`${schema.group.removedAt} is null`, eq(schema.group.isGeneral, false)));
+  for (const g of rows) {
+    const bad = forbiddenGroupText(g.name, g.description);
+    if (!bad) continue;
+    const text = [g.name, g.description].filter(Boolean).join("\n");
+    const [dup] = await db.select({ id: report.id }).from(report)
+      .where(and(eq(report.groupId, g.id), sql`${report.reporterId} is null`, eq(report.messageBody, text)))
+      .limit(1);
+    if (dup) continue;
+    await db.insert(report).values({
+      id: crypto.randomUUID(),
+      reporterId: null,
+      groupId: g.id,
+      reason: bad.kind === "menores" ? "menor de edad" : "venta o drogas",
+      details: `${AUTO_DETAILS_PREFIX}: «${bad.hit}» en un grupo creado antes de las reglas nuevas.`,
+      targetName: g.name,
+      messageBody: text,
+    });
+    if (bad.kind === "menores") await notifyModeratorsUrgent();
   }
 }

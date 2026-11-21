@@ -17,6 +17,7 @@ export const REPORT_REASONS = [
   "menor de edad",
   "contenido íntimo sin consentimiento",
   "amenazas o violencia",
+  "venta o drogas",
   "acoso",
   "fotos inapropiadas",
   "perfil falso",
