@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type TouchEvent } from "react";
 import { InstallBanner } from "../components/InstallBanner";
 import { Link } from "react-router";
 import { api, type NearbyPerson } from "../api";
 import { useMe } from "../App";
-import { FilterIcon, PinIcon, StarIcon } from "../components/Icons";
+import { CheckIcon, FilterIcon, PinIcon, RefreshIcon, StarIcon } from "../components/Icons";
 import { LOCATION_EVENT, shareLocation } from "../location";
 import { BODY_TYPES, LOOKING_FOR, POSITIONS, RELATIONSHIP, TRIBES } from "../options";
 
@@ -64,6 +64,7 @@ export function countFilters(f: Filters) {
 
 type Status = "loading" | "ready" | "error";
 type LocState = "none" | "asking" | "denied" | "unsupported" | "ok";
+const REFRESH_DISTANCE = 100;
 
 export function Nearby() {
   const { me, reload } = useMe();
@@ -74,20 +75,87 @@ export function Nearby() {
   const [loc, setLoc] = useState<LocState>("ok");
   const [showFilters, setShowFilters] = useState(false);
   const [updating, setUpdating] = useState<"idle" | "busy" | "done">("idle");
+  const [refreshDistance, setRefreshDistance] = useState(0);
+  const [refreshError, setRefreshError] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const requestRef = useRef<AbortController | null>(null);
+  const pull = useRef<{ x: number; y: number; distance: number } | null>(null);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
-  const load = useCallback(async (f: Filters, offset = 0) => {
+  const load = useCallback(async (f: Filters, offset = 0, releasedDistance = 0) => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setRefreshDistance(releasedDistance);
+    setRefreshError(false);
     try {
-      const d = await api<{ hasLocation: boolean; people: NearbyPerson[]; hasMore: boolean }>(`/nearby?${toQuery(f, offset)}`);
+      const d = await api<{ hasLocation: boolean; people: NearbyPerson[]; hasMore: boolean }>(`/nearby?${toQuery(f, offset)}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       setLoc((prev) => (d.hasLocation ? "ok" : prev === "ok" ? "none" : prev));
       setPeople((prev) => (offset ? [...prev, ...d.people] : d.people));
       setHasMore(d.hasMore);
       setStatus("ready");
     } catch {
-      setStatus("error");
+      if (controller.signal.aborted) return;
+      if (releasedDistance > 0) setRefreshError(true);
+      else setStatus("error");
+    } finally {
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setRefreshDistance(0);
+      }
     }
   }, []);
+
+  const cancelPull = useCallback(() => {
+    pull.current = null;
+    setPullDistance(0);
+  }, []);
+
+  function startPull(event: TouchEvent<HTMLDivElement>) {
+    if (requestRef.current || showFilters || event.currentTarget.scrollTop > 0 || event.touches.length !== 1) {
+      cancelPull();
+      return;
+    }
+    const { clientX, clientY } = event.touches[0];
+    pull.current = { x: clientX, y: clientY, distance: 0 };
+  }
+
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!page) return;
+
+    const movePull = (event: globalThis.TouchEvent) => {
+      const start = pull.current;
+      if (!start) return;
+      if (event.touches.length !== 1 || page.scrollTop > 0) {
+        cancelPull();
+        return;
+      }
+      const { clientX, clientY } = event.touches[0];
+      const down = clientY - start.y;
+      const sideways = Math.abs(clientX - start.x);
+      if (down < -8 || (sideways > 12 && sideways > down)) {
+        cancelPull();
+        return;
+      }
+      // Evita que el navegador convierta en scroll el movimiento de vuelta del mismo arrastre.
+      if ((start.distance > 0 || down > sideways) && event.cancelable) event.preventDefault();
+      start.distance = Math.max(0, Math.min(down, REFRESH_DISTANCE));
+      setPullDistance(start.distance);
+    };
+
+    page.addEventListener("touchmove", movePull, { passive: false });
+    return () => page.removeEventListener("touchmove", movePull);
+  }, [cancelPull]);
+
+  function endPull() {
+    const gesture = pull.current;
+    cancelPull();
+    if (gesture?.distance === REFRESH_DISTANCE && !requestRef.current) void load(filters, 0, gesture.distance);
+  }
 
   /** Pide la ubicación al navegador y manda solo lat/lng; el servidor la redondea a ~500 m. */
   async function share() {
@@ -119,7 +187,12 @@ export function Nearby() {
     // Cada vez que se manda una ubicación nueva (a mano o sola), la grilla se reordena
     const onLocation = () => load(filtersRef.current);
     window.addEventListener(LOCATION_EVENT, onLocation);
-    return () => window.removeEventListener(LOCATION_EVENT, onLocation);
+    return () => {
+      window.removeEventListener(LOCATION_EVENT, onLocation);
+      const current = requestRef.current;
+      requestRef.current = null;
+      current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -131,9 +204,13 @@ export function Nearby() {
   }
 
   const active = countFilters(filters);
+  const refreshing = refreshDistance > 0;
+  const refreshHeight = refreshing ? refreshDistance : pullDistance;
+  const pullProgress = pullDistance / REFRESH_DISTANCE;
+  const readyToRefresh = pullDistance === REFRESH_DISTANCE;
 
   return (
-    <div className="page">
+    <div ref={pageRef} className="page nearby-page" onTouchStart={startPull} onTouchEnd={endPull} onTouchCancel={cancelPull}>
       <header className="topbar">
         <h1 className="topbar__title">Gente</h1>
         {status === "ready" && (
@@ -178,6 +255,21 @@ export function Nearby() {
       )}
 
       {status === "error" && <div className="notice notice--error">No pudimos cargar la grilla. Probá de nuevo en un rato.</div>}
+      {refreshError && <p className="notice notice--error" role="alert">No pudimos actualizar la grilla. Probá de nuevo.</p>}
+
+      <div
+        className={`nearby-refresh${readyToRefresh || refreshing ? " nearby-refresh--ready" : ""}${pullDistance > 0 ? " nearby-refresh--pulling" : ""}`}
+        aria-hidden="true"
+        style={{ height: refreshHeight }}
+      >
+        <span
+          className={refreshing ? "nearby-refresh__spin" : undefined}
+          style={refreshing ? undefined : { transform: `rotate(${(pullProgress - 1) * 270}deg)` }}
+        >
+          {readyToRefresh ? <CheckIcon /> : <RefreshIcon />}
+        </span>
+      </div>
+      <p className="sr-only" role="status">{refreshing ? "Actualizando…" : readyToRefresh ? "Soltá para actualizar" : ""}</p>
 
       {status === "ready" && people.length === 0 && (
         <div className="empty">
@@ -211,7 +303,9 @@ export function Nearby() {
           </ul>
           {hasMore && (
             <div className="center">
-              <button className="btn btn--small" onClick={() => load(filters, people.length)}>Ver más</button>
+              <button className="btn btn--small" disabled={refreshing} onClick={() => {
+                if (!requestRef.current) void load(filters, people.length);
+              }}>Ver más</button>
             </div>
           )}
         </>

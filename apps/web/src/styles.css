@@ -136,6 +136,20 @@ input[type="date"].input { color-scheme: dark; }
 .tabbar__item .badge { position: absolute; top: 8px; left: calc(50% + 6px); }
 
 .page { flex: 1; overflow-y: auto; padding-bottom: 24px; }
+html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
+.nearby-refresh {
+  display: flex; align-items: center; justify-content: center; overflow: clip;
+  color: var(--muted); transition: height 180ms ease-out;
+}
+.nearby-refresh--pulling { transition: none; }
+.nearby-refresh--ready { color: var(--accent); }
+.nearby-refresh span { display: grid; place-items: center; }
+.nearby-refresh__spin { animation: nearby-refresh-spin 0.8s linear infinite; }
+@keyframes nearby-refresh-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) {
+  .nearby-refresh { transition: none; }
+  .nearby-refresh__spin { animation: none; }
+}
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px; border-bottom: 1px solid var(--line); background: var(--bg); flex: none; position: sticky; top: 0; z-index: var(--z-sticky); }
 .topbar--thread { justify-content: flex-start; padding-left: 8px; }
 .topbar__title { font-family: var(--display); font-size: var(--title-sm); font-weight: 800; letter-spacing: -0.02em; }
