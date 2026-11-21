@@ -23,6 +23,7 @@ Las personas voluntarias que mantienen qule.ar. El código es abierto: cualquier
 **Tu perfil (todo opcional, lo completás si querés):**
 
 - Descripción, altura, peso, tipo de cuerpo, posición, tribus, qué buscás, situación sentimental y pronombres.
+- Si querés, tu género, orientación, si te identificás como persona trans y si pertenecés a la comunidad LGBTIQ+. Estos datos quedan ocultos y no se usan en filtros hasta que actives sus controles de visibilidad y búsqueda.
 - **Estado serológico y fecha del último test.** Es un dato de salud: mirá el punto 3.
 - Fotos y videos. Al subirlos les borramos los metadatos, incluida la ubicación GPS.
 
@@ -37,19 +38,20 @@ Las personas voluntarias que mantienen qule.ar. El código es abierto: cualquier
 
 - La dirección IP y el navegador desde el que entrás, para mantener tu sesión y detectar accesos raros. Se guardan lo que dura la sesión: hasta 7 días sin usar la app, o hasta que cerrás sesión.
 - Si activás las notificaciones, un identificador que nos da tu navegador para mandártelas.
-- Algunas preferencias quedan guardadas solo en tu dispositivo, como los filtros. No usamos cookies de publicidad ni de seguimiento: la única cookie es la de tu sesión.
+- Algunas preferencias quedan guardadas solo en tu dispositivo, como los filtros de género, orientación y a quién querés ver. Al buscar, esas selecciones se envían al servidor en el cuerpo de la solicitud para filtrar resultados; no se guardan en tu perfil. No usamos cookies de publicidad ni de seguimiento: la única cookie es la de tu sesión.
 
 ## 3. Datos sensibles
 
-Usar qule.ar puede decir algo sobre tu orientación sexual o tu identidad de género, y el estado serológico es un dato de salud. La ley los llama **datos sensibles** y les da protección especial:
+Usar qule.ar puede decir algo sobre tu orientación sexual, tu identidad de género o tu pertenencia a la comunidad LGBTIQ+, y el estado serológico es un dato de salud. La ley los llama **datos sensibles** y les da protección especial:
 
 - **Nadie está obligado a darlos.** El estado serológico es opcional y lo podés borrar cuando quieras.
-- Si los cargás, nos das tu consentimiento expreso para mostrarlos en tu perfil a las demás personas de la app. Solo los usamos para eso.
-- Nunca los vendemos ni los cedemos, y no los usamos para publicidad.
+- Género, orientación, identidad trans y pertenencia a la comunidad LGBTIQ+ son opcionales. No se muestran en tu perfil ni se usan para encontrarte mediante filtros, salvo que actives cada control correspondiente. Podés desactivarlos o borrarlos desde tu perfil.
+- Si activás que tu género, orientación o identidad trans se usen en filtros, otras personas pueden encontrar tu perfil usando esos criterios. La pertenencia LGBTIQ+ no se usa como filtro.
+- Solo usamos estos datos para las funciones que elegiste dentro de la app. Nunca los vendemos ni los cedemos, y no los usamos para publicidad.
 
 ## 4. Para qué usamos tus datos
 
-Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, mandar tus mensajes, avisarte con notificaciones, mandarte mails de la cuenta (bienvenida o cambio de contraseña), revisar reportes y cuidar la seguridad.
+Solo para que la app funcione: mostrar tu perfil y la gente cerca según los filtros que elegiste, los grupos, mandar tus mensajes, avisarte con notificaciones, mandarte mails de la cuenta (bienvenida o cambio de contraseña), revisar reportes y cuidar la seguridad.
 
 **No** vendemos datos, **no** mostramos publicidad y **no** armamos perfiles para terceros.
 

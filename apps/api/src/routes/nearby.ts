@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { db, schema } from "../db/index.js";
@@ -72,6 +72,8 @@ const list = z
   .string()
   .optional()
   .transform((s) => (s ? s.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 20) : []));
+const genderList = list.pipe(z.array(z.enum(["Mujer", "Varón", "Persona no binaria", "Otra identidad"])));
+const orientationList = list.pipe(z.array(z.enum(["Heterosexual", "Gay/lesbiana", "Bisexual", "Pansexual", "Asexual", "Queer", "Otra orientación"])));
 const int = z.coerce.number().int().optional();
 
 const filtersSchema = z.object({
@@ -79,6 +81,8 @@ const filtersSchema = z.object({
   heightMin: int, heightMax: int,
   weightMin: int, weightMax: int,
   bodyType: list, position: list, tribes: list, lookingFor: list, relationship: list,
+  gender: genderList, orientation: orientationList,
+  trans: z.enum(["1"]).optional(),
   online: z.enum(["1"]).optional(),
   withPhoto: z.enum(["1"]).optional(),
   favorites: z.enum(["1"]).optional(),
@@ -87,14 +91,13 @@ const filtersSchema = z.object({
 
 export type NearbyFilters = z.infer<typeof filtersSchema>;
 
+const queryFiltersSchema = filtersSchema.omit({ gender: true, orientation: true, trans: true });
+
 /** Grilla de gente cerca, de la más cercana a la más lejana. */
-nearbyRoutes.get("/nearby", async (c) => {
+async function nearbyList(c: Context<AppEnv>, f: NearbyFilters) {
   const u = c.get("user");
   const me = c.get("profile")!;
-  // Mostramos a todes, sin límite de distancia: al principio somos pocas personas y la idea es que se encuentren.
-  // Con ubicación, se ordena de más cerca a más lejos; sin ubicación, por quién está en línea.
   const meHasLoc = me.cellLat != null && me.cellLng != null;
-  const f = filtersSchema.parse(c.req.query());
   const blocked = await blockedWith(u.id);
   const favs = new Set(
     (await db.select({ id: schema.favorite.favoriteId }).from(schema.favorite).where(eq(schema.favorite.userId, u.id))).map((r) => r.id),
@@ -131,6 +134,9 @@ nearbyRoutes.get("/nearby", async (c) => {
       anyOf(f.bodyType, p.bodyType) &&
       anyOf(f.position, p.position) &&
       anyOf(f.relationship, p.relationship) &&
+      (!f.gender.length || (p.showGender && p.genderIdentity != null && f.gender.some((value) => value === p.genderIdentity))) &&
+      (!f.orientation.length || (p.showOrientation && p.sexualOrientation != null && f.orientation.some((value) => value === p.sexualOrientation))) &&
+      (!f.trans || (p.showTrans && p.isTrans === true)) &&
       overlap(f.tribes, p.tribes) &&
       overlap(f.lookingFor, p.lookingFor) &&
       (!f.online || online),
@@ -173,4 +179,14 @@ nearbyRoutes.get("/nearby", async (c) => {
       distance: km != null ? distanceLabel(km) : null,
     })),
   });
+}
+
+nearbyRoutes.get("/nearby", async (c) => {
+  const f = queryFiltersSchema.parse(c.req.query());
+  return nearbyList(c, { ...f, gender: [], orientation: [], trans: undefined });
+});
+
+nearbyRoutes.post("/nearby", async (c) => {
+  const f = filtersSchema.parse(await c.req.json());
+  return nearbyList(c, f);
 });

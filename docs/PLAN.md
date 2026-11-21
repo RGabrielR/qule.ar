@@ -4,11 +4,11 @@
 
 ### Cuenta y perfil
 - Registro con Google o con email y contraseña. Fecha de nacimiento obligatoria: solo mayores de 18.
-- Perfil: foto principal, álbum público, nombre visible, edad, altura, peso, contextura, rol, tribus, qué busca, estado de relación, pronombres, estado serológico y último test. Todo opcional salvo la edad.
+- Perfil: foto principal, álbum público, nombre visible, edad, altura, peso, contextura, rol, tribus, qué busca, estado de relación, pronombres, género, orientación, pertenencia LGBTIQ+, estado serológico y último test. Todo opcional salvo la edad; los datos sensibles solo se muestran o se usan en filtros con permiso explícito.
 - Borrar la cuenta borra de verdad todos los datos y fotos.
 
 ### Grilla de gente cerca
-- Perfiles ordenados por distancia, con filtros (edad, altura, peso, rol, tribus, qué busca, online ahora, con foto).
+- Perfiles ordenados por distancia, con filtros (a quién querés ver, género, orientación, personas trans que eligieron aparecer en ese filtro, edad, altura, peso, rol, tribus, qué busca, online ahora, con foto).
 - **La ubicación nunca se muestra exacta:** se guarda redondeada (celda de unos 500 m) y la distancia que se muestra se redondea y lleva ruido, para que nadie pueda triangular a otra persona.
 - Favoritos y "taps".
 

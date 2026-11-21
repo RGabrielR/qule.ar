@@ -2,7 +2,7 @@
 
 **Poné la pava.**
 
-App comunitaria, gratuita y de código abierto para conocer gente cerca y charlar en grupos.
+App comunitaria, gratuita y de código abierto, abierta a todas las personas mayores de 18, para conocer gente cerca y charlar en grupos. Cada quien puede elegir opcionalmente qué datos comparte y a quién quiere ver.
 
 - **Gratis para siempre.** Todo lo que en otras apps es "premium" acá viene incluido.
 - **Código abierto** (AGPL-3.0). Cualquiera puede leerlo, proponer cambios y sumarse.
@@ -17,13 +17,13 @@ Fase 1 (MVP) en marcha. Ya funciona:
 
 - Registro con email y contraseña, y con Google (si configurás las credenciales). Mail de bienvenida y recuperación de contraseña (si configurás SMTP).
 - Alta de perfil con verificación de mayor de 18.
-- Perfil con hasta 6 fotos (se les borran los metadatos y la ubicación GPS) y todos los datos: altura, peso, contextura, rol, tribus, qué buscás, relación, pronombres, estado serológico y último test.
+- Perfil con hasta 6 fotos (se les borran los metadatos y la ubicación GPS) y datos opcionales: altura, peso, contextura, rol, tribus, qué buscás, relación, pronombres, género, orientación, pertenencia a la comunidad LGBTIQ+, estado serológico y último test. La visibilidad y el uso de género u orientación en filtros se eligen por separado.
 - Chat general con antispam: modo lento, cola con cuenta regresiva (podés editar o cancelar lo que está en cola), rotación y límites para cuentas nuevas.
 - Mensajes privados en tiempo real, con fotos y "visto".
 - Bloquear, reportar y borrar tu cuenta con todo lo asociado.
 - Grupos: cualquiera crea uno y queda como dueño. Se entra pidiendo ingreso (el dueño o los moderadores aceptan o rechazan) o aceptando una invitación del dueño o los moderadores: nadie queda adentro sin haberlo elegido. Si te rechazan o te expulsan, esperás 7 días para volver a pedir. Hay lista de todos los grupos con búsqueda, roles (dueño, moderador, miembro), expulsiones, borrado de mensajes por moderación y reglas antispam configurables por grupo. Si el dueño se va, el grupo pasa a un moderador o al miembro más antiguo.
 
-- Grilla de gente cerca, de la más cercana a la más lejana, con estado en línea y filtros: edad, altura, peso, contextura, rol, tribus, qué busca, relación, solo en línea y solo con foto. Se guarda solo una zona de unos 500 m (nunca la posición exacta) que se actualiza sola mientras la app está abierta, la distancia se muestra en tramos para que no se pueda triangular a nadie, y cada persona puede esconder su distancia o borrar su ubicación.
+- Grilla de gente cerca, de la más cercana a la más lejana, con estado en línea y filtros: a quién querés ver, género, orientación, personas trans que eligieron aparecer en ese filtro, edad, altura, peso, contextura, rol, tribus, qué busca, relación, solo en línea y solo con foto. Se guarda solo una zona de unos 500 m (nunca la posición exacta) que se actualiza sola mientras la app está abierta, la distancia se muestra en tramos para que no se pueda triangular a nadie, y cada persona puede esconder su distancia o borrar su ubicación.
 
 - Todo lo "premium", gratis:
   - **Modo incógnito:** no aparecés en la grilla, no se ve si estás en línea y tus visitas no se registran.

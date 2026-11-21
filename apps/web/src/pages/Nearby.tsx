@@ -5,17 +5,21 @@ import { api, type NearbyPerson } from "../api";
 import { useMe } from "../App";
 import { FilterIcon, PinIcon, StarIcon } from "../components/Icons";
 import { LOCATION_EVENT, shareLocation } from "../location";
-import { BODY_TYPES, LOOKING_FOR, POSITIONS, RELATIONSHIP, TRIBES } from "../options";
+import { BODY_TYPES, GENDER_IDENTITIES, LOOKING_FOR, POSITIONS, RELATIONSHIP, SEXUAL_ORIENTATIONS, TRIBES } from "../options";
 
 export type Filters = {
   ageMin?: number; ageMax?: number;
   heightMin?: number; heightMax?: number;
   weightMin?: number; weightMax?: number;
   bodyType: string[]; position: string[]; tribes: string[]; lookingFor: string[]; relationship: string[];
+  gender: string[]; orientation: string[]; trans: boolean;
   online: boolean; withPhoto: boolean; favorites: boolean;
 };
 
-const EMPTY: Filters = { bodyType: [], position: [], tribes: [], lookingFor: [], relationship: [], online: false, withPhoto: false, favorites: false };
+const EMPTY: Filters = {
+  bodyType: [], position: [], tribes: [], lookingFor: [], relationship: [],
+  gender: [], orientation: [], trans: false, online: false, withPhoto: false, favorites: false,
+};
 const STORE_KEY = "mortero:filtros";
 
 function loadFilters(): Filters {
@@ -35,19 +39,20 @@ function saveFilters(f: Filters) {
   }
 }
 
-function toQuery(f: Filters, offset: number) {
-  const q = new URLSearchParams();
+function toBody(f: Filters, offset: number) {
+  const q: Record<string, string> = {};
   for (const k of ["ageMin", "ageMax", "heightMin", "heightMax", "weightMin", "weightMax"] as const) {
-    if (f[k] != null) q.set(k, String(f[k]));
+    if (f[k] != null) q[k] = String(f[k]);
   }
-  for (const k of ["bodyType", "position", "tribes", "lookingFor", "relationship"] as const) {
-    if (f[k].length) q.set(k, f[k].join(","));
+  for (const k of ["bodyType", "position", "tribes", "lookingFor", "relationship", "gender", "orientation"] as const) {
+    if (f[k].length) q[k] = f[k].join(",");
   }
-  if (f.online) q.set("online", "1");
-  if (f.withPhoto) q.set("withPhoto", "1");
-  if (f.favorites) q.set("favorites", "1");
-  if (offset) q.set("offset", String(offset));
-  return q.toString();
+  if (f.trans) q.trans = "1";
+  if (f.online) q.online = "1";
+  if (f.withPhoto) q.withPhoto = "1";
+  if (f.favorites) q.favorites = "1";
+  if (offset) q.offset = String(offset);
+  return q;
 }
 
 export function countFilters(f: Filters) {
@@ -55,7 +60,8 @@ export function countFilters(f: Filters) {
   if (f.ageMin != null || f.ageMax != null) n++;
   if (f.heightMin != null || f.heightMax != null) n++;
   if (f.weightMin != null || f.weightMax != null) n++;
-  n += [f.bodyType, f.position, f.tribes, f.lookingFor, f.relationship].filter((x) => x.length).length;
+  n += [f.bodyType, f.position, f.tribes, f.lookingFor, f.relationship, f.gender, f.orientation].filter((x) => x.length).length;
+  if (f.trans) n++;
   if (f.online) n++;
   if (f.withPhoto) n++;
   if (f.favorites) n++;
@@ -79,7 +85,10 @@ export function Nearby() {
 
   const load = useCallback(async (f: Filters, offset = 0) => {
     try {
-      const d = await api<{ hasLocation: boolean; people: NearbyPerson[]; hasMore: boolean }>(`/nearby?${toQuery(f, offset)}`);
+      const d = await api<{ hasLocation: boolean; people: NearbyPerson[]; hasMore: boolean }>("/nearby", {
+        method: "POST",
+        json: toBody(f, offset),
+      });
       setLoc((prev) => (d.hasLocation ? "ok" : prev === "ok" ? "none" : prev));
       setPeople((prev) => (offset ? [...prev, ...d.people] : d.people));
       setHasMore(d.hasMore);
@@ -157,6 +166,17 @@ export function Nearby() {
       </header>
 
       <InstallBanner />
+
+      <div className="discover-target">
+        <Chips label="A quién querés ver" options={GENDER_IDENTITIES} value={filters.gender} onChange={(v) => applyFilters({ ...filters, gender: v })} />
+      </div>
+      <p className="muted small page-note">
+        {filters.gender.length || filters.orientation.length
+          ? "Los filtros de género y orientación solo muestran perfiles de quienes eligieron compartir esos datos."
+          : filters.trans
+            ? "Solo aparecen personas trans que eligieron aparecer en este filtro."
+          : "Sin elegir opciones, ves perfiles de todos los géneros."}
+      </p>
 
       <p className="sr-only" aria-live="polite">{updating === "done" ? "Ubicación actualizada" : ""}</p>
 
@@ -284,12 +304,18 @@ function FilterSheet({ initial, onApply, onClose }: { initial: Filters; onApply:
           <RangeRow label="Edad" lo={18} hi={99} min={f.ageMin} max={f.ageMax} onChange={(a, b) => setF({ ...f, ageMin: a, ageMax: b })} />
           <RangeRow label="Altura" unit="cm" lo={120} hi={230} min={f.heightMin} max={f.heightMax} onChange={(a, b) => setF({ ...f, heightMin: a, heightMax: b })} />
           <RangeRow label="Peso" unit="kg" lo={35} hi={250} min={f.weightMin} max={f.weightMax} onChange={(a, b) => setF({ ...f, weightMin: a, weightMax: b })} />
+          <Chips label="Género" options={GENDER_IDENTITIES} value={f.gender} onChange={(v) => set("gender", v)} />
+          <Chips label="Orientación" options={SEXUAL_ORIENTATIONS} value={f.orientation} onChange={(v) => set("orientation", v)} />
+          <label className="check">
+            <input type="checkbox" checked={f.trans} onChange={(e) => set("trans", e.target.checked)} />
+            <span>Solo personas trans que eligieron aparecer en este filtro</span>
+          </label>
           <Chips label="Contextura" options={BODY_TYPES} value={f.bodyType} onChange={(v) => set("bodyType", v)} />
           <Chips label="Rol" options={POSITIONS} value={f.position} onChange={(v) => set("position", v)} />
           <Chips label="Tribus" options={TRIBES} value={f.tribes} onChange={(v) => set("tribes", v)} />
           <Chips label="Busca" options={LOOKING_FOR} value={f.lookingFor} onChange={(v) => set("lookingFor", v)} />
           <Chips label="Relación" options={RELATIONSHIP} value={f.relationship} onChange={(v) => set("relationship", v)} />
-          <p className="muted small">Los filtros de altura, peso y demás dejan afuera a quien no completó ese dato.</p>
+          <p className="muted small">Los filtros de género y orientación solo incluyen a quienes eligieron mostrarlos y aparecer en búsquedas. Los demás filtros también dejan afuera a quien no completó ese dato.</p>
         </div>
         <div className="row sheet__foot">
           <button className="btn" onClick={onClose}>Cancelar</button>

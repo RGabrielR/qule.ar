@@ -8,7 +8,7 @@ import { Avatar } from "../components/Avatar";
 import { EyeIcon, LockIcon, PlusIcon, StarIcon } from "../components/Icons";
 import { getTheme, setTheme } from "../theme";
 import { disablePush, enablePush, pushHelp, pushState, testPush, type PushState } from "../push";
-import { BODY_TYPES, HIV_STATUS, LOOKING_FOR, POSITIONS, PRONOUNS, RELATIONSHIP, TRIBES } from "../options";
+import { BODY_TYPES, GENDER_IDENTITIES, HIV_STATUS, LOOKING_FOR, POSITIONS, PRONOUNS, RELATIONSHIP, SEXUAL_ORIENTATIONS, TRIBES } from "../options";
 
 type Form = Omit<Profile, "birthdate" | "age">;
 
@@ -143,6 +143,9 @@ export function MyProfile() {
         displayName: p.displayName, about: p.about, heightCm: p.heightCm, weightKg: p.weightKg,
         bodyType: p.bodyType, position: p.position, tribes: p.tribes, lookingFor: p.lookingFor,
         relationship: p.relationship, pronouns: p.pronouns, hivStatus: p.hivStatus, lastTested: p.lastTested,
+        genderIdentity: p.genderIdentity, genderOther: p.genderOther, sexualOrientation: p.sexualOrientation,
+        orientationOther: p.orientationOther, isTrans: p.isTrans, lgbtqMember: p.lgbtqMember,
+        showGender: p.showGender, showOrientation: p.showOrientation, showTrans: p.showTrans, showLgbtq: p.showLgbtq,
       });
     }
   }, [me?.profile]);
@@ -388,6 +391,85 @@ export function MyProfile() {
         </div>
         <MultiChips label="Tribus" value={form.tribes} options={TRIBES} onChange={(v) => set("tribes", v)} />
         <MultiChips label="Busco" value={form.lookingFor} options={LOOKING_FOR} onChange={(v) => set("lookingFor", v)} />
+        <section className="profile__section">
+          <h3>Identidad y orientación <span className="muted small">Opcional</span></h3>
+          <p className="muted small">Solo se muestran en tu perfil y se usan en filtros si activás cada opción.</p>
+          <div className="form">
+            <Select
+              label="Género"
+              value={form.genderIdentity}
+              options={GENDER_IDENTITIES}
+              onChange={(v) => {
+                setForm({ ...form, genderIdentity: v, genderOther: v === "Otra identidad" ? form.genderOther : null });
+                setSaved("idle");
+              }}
+            />
+            {form.genderIdentity === "Otra identidad" && (
+              <label className="field">
+                <span>¿Cómo describís tu género?</span>
+                <input className="input" maxLength={60} value={form.genderOther ?? ""} onChange={(e) => set("genderOther", e.target.value || null)} />
+              </label>
+            )}
+            <Select
+              label="Orientación"
+              value={form.sexualOrientation}
+              options={SEXUAL_ORIENTATIONS}
+              onChange={(v) => {
+                setForm({ ...form, sexualOrientation: v, orientationOther: v === "Otra orientación" ? form.orientationOther : null });
+                setSaved("idle");
+              }}
+            />
+            {form.sexualOrientation === "Otra orientación" && (
+              <label className="field">
+                <span>¿Cómo describís tu orientación?</span>
+                <input className="input" maxLength={60} value={form.orientationOther ?? ""} onChange={(e) => set("orientationOther", e.target.value || null)} />
+              </label>
+            )}
+            <label className="field">
+              <span>¿Te identificás como una persona trans?</span>
+              <select className="input" value={form.isTrans == null ? "" : form.isTrans ? "si" : "no"} onChange={(e) => {
+                const isTrans = e.target.value === "" ? null : e.target.value === "si";
+                setForm({ ...form, isTrans, showTrans: isTrans === true && form.showTrans });
+                setSaved("idle");
+              }}>
+                <option value="">Prefiero no decir</option>
+                <option value="si">Sí</option>
+                <option value="no">No</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>¿Te identificás como parte de la comunidad LGBTIQ+?</span>
+              <select className="input" value={form.lgbtqMember == null ? "" : form.lgbtqMember ? "si" : "no"} onChange={(e) => {
+                const lgbtqMember = e.target.value === "" ? null : e.target.value === "si";
+                setForm({ ...form, lgbtqMember, showLgbtq: lgbtqMember != null && form.showLgbtq });
+                setSaved("idle");
+              }}>
+                <option value="">Prefiero no decir</option>
+                <option value="si">Sí</option>
+                <option value="no">No</option>
+              </select>
+              <small className="muted">Es opcional y no cambia a quién ves.</small>
+            </label>
+            <div className="stack">
+              <label className="check">
+                <input type="checkbox" checked={form.showGender} onChange={(e) => set("showGender", e.target.checked)} />
+                <span>Mostrar mi género en el perfil y permitir usarlo en filtros</span>
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={form.showOrientation} onChange={(e) => set("showOrientation", e.target.checked)} />
+                <span>Mostrar mi orientación en el perfil y permitir usarla en filtros</span>
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={form.showTrans} disabled={form.isTrans !== true} onChange={(e) => set("showTrans", e.target.checked)} />
+                <span>Mostrar que soy una persona trans y permitir usarlo en filtros</span>
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={form.showLgbtq} disabled={form.lgbtqMember == null} onChange={(e) => set("showLgbtq", e.target.checked)} />
+                <span>Mostrar si pertenezco a la comunidad LGBTIQ+</span>
+              </label>
+            </div>
+          </div>
+        </section>
         <div className="grid2">
           <Select label="Estado serológico" value={form.hivStatus} options={HIV_STATUS} onChange={(v) => set("hivStatus", v)} />
           <label className="field">

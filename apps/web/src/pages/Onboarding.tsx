@@ -19,6 +19,7 @@ export function Onboarding() {
   const nav = useNavigate();
   const [displayName, setDisplayName] = useState(me?.user.name ?? "");
   const [birthdate, setBirthdate] = useState("");
+  const [lgbtqMember, setLgbtqMember] = useState("");
   const [adult, setAdult] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   // Los términos se leen acá mismo; el tilde de aceptarlos se habilita recién cuando se abren
@@ -32,7 +33,10 @@ export function Onboarding() {
     setError("");
     setBusy(true);
     try {
-      await api("/me/profile", { method: "PUT", json: { displayName, birthdate, acceptTerms } });
+      await api("/me/profile", { method: "PUT", json: {
+        displayName, birthdate, acceptTerms,
+        lgbtqMember: lgbtqMember === "" ? null : lgbtqMember === "si",
+      } });
       await reload();
       nav("/yo?nuevo=1", { replace: true });
     } catch (err) {
@@ -58,6 +62,15 @@ export function Onboarding() {
           <span>Fecha de nacimiento</span>
           <input className="input" type="date" required max={maxBirthdate()} value={birthdate} onChange={(e) => setBirthdate(e.target.value)} />
           <small className="muted">Solo mostramos tu edad. La fecha no se puede cambiar después.</small>
+        </label>
+        <label className="field">
+          <span>¿Te identificás como parte de la comunidad LGBTIQ+? (opcional)</span>
+          <select className="input" value={lgbtqMember} onChange={(e) => setLgbtqMember(e.target.value)}>
+            <option value="">Prefiero no decir</option>
+            <option value="si">Sí</option>
+            <option value="no">No</option>
+          </select>
+          <small className="muted">No se muestra en tu perfil salvo que lo actives en Yo, y no cambia a quién ves.</small>
         </label>
         <label className="check">
           <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} />

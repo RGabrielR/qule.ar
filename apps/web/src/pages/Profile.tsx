@@ -16,7 +16,7 @@ const SHARE_OPTIONS: { hours: number | null; label: string }[] = [
   { hours: null, label: "Sin límite" },
 ];
 
-type StatsInput = Pick<PublicProfile, "about" | "heightCm" | "weightKg" | "bodyType" | "position" | "relationship" | "pronouns" | "hivStatus" | "lastTested" | "tribes" | "lookingFor">;
+type StatsInput = Pick<PublicProfile, "about" | "heightCm" | "weightKg" | "bodyType" | "position" | "relationship" | "pronouns" | "hivStatus" | "lastTested" | "tribes" | "lookingFor" | "genderIdentity" | "genderOther" | "sexualOrientation" | "orientationOther" | "isTrans" | "lgbtqMember">;
 
 export function ProfileStats({ p }: { p: StatsInput }) {
   const rows: [string, string | null][] = [
@@ -26,6 +26,10 @@ export function ProfileStats({ p }: { p: StatsInput }) {
     ["Rol", p.position],
     ["Relación", p.relationship],
     ["Pronombres", p.pronouns],
+    ["Género", p.genderIdentity === "Otra identidad" ? p.genderOther || p.genderIdentity : p.genderIdentity],
+    ["Orientación", p.sexualOrientation === "Otra orientación" ? p.orientationOther || p.sexualOrientation : p.sexualOrientation],
+    ["Identidad trans", p.isTrans ? "Sí" : null],
+    ["Parte de la comunidad LGBTIQ+", p.lgbtqMember == null ? null : p.lgbtqMember ? "Sí" : "No"],
     ["Estado serológico", p.hivStatus],
     ["Último test", p.lastTested ? new Date(p.lastTested + "T12:00").toLocaleDateString("es-AR", { month: "long", year: "numeric" }) : null],
   ];

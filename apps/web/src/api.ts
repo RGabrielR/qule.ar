@@ -68,6 +68,16 @@ export type Profile = {
   lookingFor: string[];
   relationship: string | null;
   pronouns: string | null;
+  genderIdentity: string | null;
+  genderOther: string | null;
+  sexualOrientation: string | null;
+  orientationOther: string | null;
+  isTrans: boolean | null;
+  lgbtqMember: boolean | null;
+  showGender: boolean;
+  showOrientation: boolean;
+  showTrans: boolean;
+  showLgbtq: boolean;
   hivStatus: string | null;
   lastTested: string | null;
 };
@@ -86,7 +96,7 @@ export type Me = {
   photos: (Media & { id: string; position: number; isPrivate: boolean })[];
 };
 
-export type PublicProfile = Omit<Profile, "birthdate"> & {
+export type PublicProfile = Omit<Profile, "birthdate" | "showGender" | "showOrientation" | "showTrans" | "showLgbtq"> & {
   id: string;
   photos: string[];
   isMe: boolean;

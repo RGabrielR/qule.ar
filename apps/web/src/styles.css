@@ -106,6 +106,7 @@ input[type="date"].input { color-scheme: dark; }
 .hint { margin-top: 8px; }
 .lead { margin-bottom: 10px; }
 .page-note { padding: 12px 16px 0; }
+.discover-target { padding: 14px 16px 0; }
 .section__title--tight { margin-bottom: 4px; }
 .subhead--spaced { margin: 14px 0 8px; }
 .grid--spaced { margin-top: 8px; }
