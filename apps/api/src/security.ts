@@ -34,7 +34,7 @@ export function securityHeaders(appUrl: string, indexHtml: string | null) {
       imgSrc: ["'self'", "data:", "blob:"],
       mediaSrc: ["'self'", "blob:"],
       connectSrc: ["'self'", ws],
-      workerSrc: ["'self'"],
+      workerSrc: ["'self'", "blob:"], // El conversor HEIC corre en un worker creado desde el navegador.
       manifestSrc: ["'self'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],

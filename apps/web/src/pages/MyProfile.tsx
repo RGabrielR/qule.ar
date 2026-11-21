@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useSearchParams } from "react-router";
 import { api, authClient, closeSocket, upload, type AlbumGrant, type Author, type Profile } from "../api";
 import { useMe } from "../App";
@@ -118,6 +119,52 @@ function ThemeSetting() {
   );
 }
 
+type UploadState = { isPrivate: boolean } & (
+  | { kind: "uploading"; current: number; total: number; video: boolean }
+  | { kind: "error"; message: string }
+);
+
+const MAX_PHOTO_BYTES = 12 * 1024 * 1024;
+const UPLOAD_ERROR_DURATION_MS = 5000;
+
+function isHeicPhoto(file: File, bytes: ArrayBuffer): boolean {
+  // Algunos selectores omiten el MIME o cambian la extensión. Reconocemos también la marca del contenedor.
+  const header = new TextDecoder().decode(bytes.slice(4, 12));
+  return /^ftyp(?:hei[cxms]|hev[cxms]|mif1|msf1)$/.test(header)
+    || /^image\/hei[cf](?:-sequence)?$/i.test(file.type)
+    || /\.hei[cf]$/i.test(file.name);
+}
+
+async function preparePhotoForUpload(file: File): Promise<File> {
+  if (file.size > MAX_PHOTO_BYTES) throw new Error("La foto pesa demasiado (máx. 12 MB)");
+  // El selector puede entregar un archivo respaldado por un proveedor de fotos en la nube.
+  // Leemos sus bytes antes de que el navegador intente enviarlo como parte del formulario.
+  const bytes = await file.arrayBuffer().catch(() => null);
+  if (!bytes?.byteLength) throw new Error("No pudimos abrir la foto. Descargala al dispositivo y volvé a elegirla.");
+  const readable = new File([bytes], file.name, { type: file.type });
+  if (!isHeicPhoto(file, bytes)) return readable;
+
+  let jpeg: Blob;
+  try {
+    const { heicTo } = await import("heic-to/csp");
+    jpeg = await heicTo({ blob: readable, type: "image/jpeg", quality: 0.85 });
+    if (!jpeg.size || jpeg.type !== "image/jpeg") throw new Error("JPEG inválido");
+  } catch {
+    throw new Error("No pudimos convertir la foto a JPG. Probá guardarla como JPG y volvé a elegirla.");
+  }
+  if (jpeg.size > MAX_PHOTO_BYTES) throw new Error("La foto convertida pesa demasiado (máx. 12 MB)");
+  return new File([jpeg], `${file.name.replace(/\.[^.]+$/, "") || "foto"}.jpg`, { type: jpeg.type });
+}
+
+function UploadProgress({ upload }: { upload: UploadState | null }) {
+  if (upload?.kind !== "uploading") return null;
+  return (
+    <p className="muted small" role="status">
+      Subiendo {upload.current} de {upload.total}{upload.video ? " · los videos tardan un poco más en procesarse" : ""}…
+    </p>
+  );
+}
+
 export function MyProfile() {
   const { me, reload } = useMe();
   const [params] = useSearchParams();
@@ -125,14 +172,14 @@ export function MyProfile() {
   const [form, setForm] = useState<Form | null>(null);
   const [saved, setSaved] = useState<"idle" | "saving" | "ok" | "error">("idle");
   const [error, setError] = useState("");
-  const [uploading, setUploading] = useState(false);
+  const [uploadState, setUploadState] = useState<UploadState | null>(null);
+  const uploading = uploadState?.kind === "uploading";
   const [blocked, setBlocked] = useState<Author[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [deleteText, setDeleteText] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const nextPrivate = useRef(false);
   const [grants, setGrants] = useState<AlbumGrant[]>([]);
-  const [progress, setProgress] = useState<{ done: number; total: number; video: boolean } | null>(null);
   const [viewing, setViewing] = useState<number | null>(null);
   const [toquesNew, setToquesNew] = useState(0);
 
@@ -152,6 +199,12 @@ export function MyProfile() {
     api<{ count: number }>("/toques/unseen").then((r) => setToquesNew(r.count)).catch(() => {});
     api<AlbumGrant[]>("/album/grants").then(setGrants).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (uploadState?.kind !== "error") return;
+    const timer = window.setTimeout(() => setUploadState(null), UPLOAD_ERROR_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [uploadState]);
 
   if (!me?.profile || !form) return null;
   const publicPhotos = me.photos.filter((p) => !p.isPrivate);
@@ -204,13 +257,13 @@ export function MyProfile() {
   /** Sube varios archivos seguidos (de a uno, así el servidor procesa los videos sin trabarse). */
   async function addFiles(files: File[], priv = false) {
     if (!files.length) return;
-    setUploading(true);
-    setError("");
     const errors: string[] = [];
     for (const [i, file] of files.entries()) {
-      setProgress({ done: i, total: files.length, video: file.type.startsWith("video/") });
+      const video = file.type.startsWith("video/");
+      setUploadState({ kind: "uploading", isPrivate: priv, current: i + 1, total: files.length, video });
       try {
-        await upload("/me/photos", file, priv ? { private: "1" } : {});
+        const media = video ? file : await preparePhotoForUpload(file);
+        await upload("/me/photos", media, priv ? { private: "1" } : {});
       } catch (err) {
         errors.push(`${file.name}: ${(err as Error).message}`);
         // Si se llenó el álbum o el perfil, no tiene sentido seguir
@@ -218,9 +271,9 @@ export function MyProfile() {
       }
     }
     await reload();
-    setProgress(null);
-    setUploading(false);
-    if (errors.length) setError(errors.join(" · "));
+    const remaining = errors.length - 1;
+    const details = remaining > 0 ? ` · ${remaining} ${remaining === 1 ? "archivo más" : "archivos más"} sin subir` : "";
+    setUploadState(errors.length ? { kind: "error", isPrivate: priv, message: `${errors[0]}${details}` } : null);
   }
 
   async function removePhoto(photoId: string) {
@@ -297,6 +350,7 @@ export function MyProfile() {
             </button>
           )}
         </div>
+        <UploadProgress upload={uploadState?.isPrivate === false ? uploadState : null} />
         <p className="muted small">Al subir una foto le borramos los metadatos, incluida la ubicación GPS.</p>
       </section>
 
@@ -322,11 +376,7 @@ export function MyProfile() {
             </button>
           )}
         </div>
-        {progress && (
-          <p className="muted small" role="status">
-            Subiendo {progress.done + 1} de {progress.total}{progress.video ? " · los videos tardan un poco más en procesarse" : ""}…
-          </p>
-        )}
+        <UploadProgress upload={uploadState?.isPrivate ? uploadState : null} />
         {grants.length > 0 && (
           <>
             <h3 className="subhead subhead--spaced">Lo pueden ver</h3>
@@ -351,10 +401,14 @@ export function MyProfile() {
           accept="image/*"
           multiple
           hidden
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []);
-            addFiles(files, nextPrivate.current);
-            e.target.value = "";
+          onChange={async (e) => {
+            const input = e.currentTarget;
+            const files = Array.from(input.files ?? []);
+            try {
+              await addFiles(files, nextPrivate.current);
+            } finally {
+              input.value = "";
+            }
           }}
         />
         {viewing != null && (
@@ -487,6 +541,10 @@ export function MyProfile() {
           <Link to="/terminos">Términos</Link> · <Link to="/privacidad">Privacidad</Link>.
         </p>
       </section>
+      {uploadState?.kind === "error" && createPortal(
+        <div className="toast toast--upload-error" role="alert">{uploadState.message}</div>,
+        document.body,
+      )}
     </div>
   );
 }
