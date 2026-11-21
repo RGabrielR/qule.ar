@@ -216,14 +216,16 @@ input[type="date"].input { color-scheme: dark; }
 .profile__photo { position: relative; aspect-ratio: 4 / 5; max-height: 70vh; width: 100%; background: var(--surface-2); overflow: hidden; }
 .profile__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .profile__photo::after { content: ""; position: absolute; inset: auto 0 0; height: 45%; background: linear-gradient(transparent, var(--scrim-strong)); pointer-events: none; }
+.profile__photo > .iconbtn--float { z-index: var(--z-sticky); }
 .profile__nophoto { width: 100%; height: 100%; display: grid; place-items: center; font-family: var(--display); font-size: var(--display-xl); color: var(--accent); background: var(--accent-soft); }
-.profile__name { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: var(--z-raised); display: flex; flex-direction: column; }
+.profile__name { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: var(--z-raised); display: flex; flex-direction: column; pointer-events: none; }
 .profile__name h1 { font-family: var(--display); font-size: var(--title-3xl); font-weight: 800; letter-spacing: -0.02em; }
 .profile__name span { font-size: var(--title-sm); color: var(--muted); }
 .profile__dots { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); left: 64px; right: 16px; display: flex; gap: 4px; z-index: var(--z-sticky); }
 .profile__dots button { flex: 1; height: 3px; border-radius: var(--radius-hair); border: 0; padding: 0; background: var(--on-media-dim); }
 .profile__dots button.on { background: var(--on-media); }
-.profile__tap { position: absolute; top: 60px; bottom: 30%; width: 40%; background: transparent; border: 0; z-index: var(--z-raised); }
+.profile__tap { position: absolute; inset-block: 0; width: 50%; background: transparent; border: 0; z-index: var(--z-raised); }
+.profile__tap:focus-visible { outline-offset: -3px; }
 .profile__tap--prev { left: 0; }
 .profile__tap--next { right: 0; }
 .profile__body { padding: 16px; display: flex; flex-direction: column; gap: 18px; }
