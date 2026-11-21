@@ -6,6 +6,7 @@ import { Wordmark } from "../components/Wordmark";
 import { Logo } from "../components/Logo";
 import { APP_NAME, APP_SLOGAN } from "../brand";
 import { GoogleMark } from "../components/GoogleMark";
+import { EyeIcon, EyeOffIcon } from "../components/Icons";
 
 export function Login() {
   const { reload } = useMe();
@@ -13,6 +14,7 @@ export function Login() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [google, setGoogle] = useState(false);
@@ -21,6 +23,12 @@ export function Login() {
   useEffect(() => {
     api<{ google: boolean; passwordReset: boolean }>("/config").then((c) => { setGoogle(c.google); setCanReset(c.passwordReset); }).catch(() => {});
   }, []);
+
+  function selectMode(next: "in" | "up") {
+    if (next === mode) return;
+    setShowPassword(false);
+    setMode(next);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,8 +69,8 @@ export function Login() {
         )}
 
         <div className="segmented" role="tablist">
-          <button role="tab" aria-selected={mode === "in"} onClick={() => setMode("in")}>Entrar</button>
-          <button role="tab" aria-selected={mode === "up"} onClick={() => setMode("up")}>Crear cuenta</button>
+          <button role="tab" aria-selected={mode === "in"} onClick={() => selectMode("in")}>Entrar</button>
+          <button role="tab" aria-selected={mode === "up"} onClick={() => selectMode("up")}>Crear cuenta</button>
         </div>
 
         <form onSubmit={submit} className="form">
@@ -76,20 +84,34 @@ export function Login() {
             <span>Email</span>
             <input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
           </label>
-          <label className="field">
-            <span>Contraseña</span>
-            <input
-              className="input"
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={mode === "up" ? "new-password" : "current-password"}
-            />
+          <div className="field">
+            <label htmlFor="auth-password">Contraseña</label>
+            <div className="password-input">
+              <input
+                id="auth-password"
+                className="input"
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === "up" ? "new-password" : "current-password"}
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                className="iconbtn password-input__toggle"
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                aria-controls="auth-password"
+                onClick={() => setShowPassword((visible) => !visible)}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
             {mode === "up" && <small className="muted">Mínimo 8 caracteres.</small>}
             {mode === "in" && canReset && <Link to="/recuperar" className="linkbtn small forgot">¿Te olvidaste la contraseña?</Link>}
-          </label>
+          </div>
           {error && <p className="error" role="alert">{error}</p>}
           <button className="btn btn--primary" disabled={busy}>
             {busy ? "Un toque…" : mode === "up" ? "Crear cuenta" : "Entrar"}

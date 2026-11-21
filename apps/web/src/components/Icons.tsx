@@ -45,6 +45,9 @@ export const LockIcon = () => (
 export const EyeIcon = () => (
   <svg {...base} width={18} height={18}><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
 );
+export const EyeOffIcon = () => (
+  <svg {...base} width={18} height={18}><path d="M3 3l18 18M10.6 5.1A9 9 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.7 3.5M6.1 6.1A17 17 0 0 0 2 12s3.6 7 10 7a9 9 0 0 0 5.9-2.1M10 10a3 3 0 0 0 4 4" /></svg>
+);
 export const TimerIcon = () => (
   <svg {...base} width={18} height={18}><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2M9 2h6" /></svg>
 );
