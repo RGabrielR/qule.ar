@@ -104,3 +104,11 @@ export function AlbumGrid({ items, onOpen }: { items: Media[]; onOpen: (i: numbe
     </div>
   );
 }
+
+export function albumCount(total: number, videos: number) {
+  const photos = total - videos;
+  const parts = [];
+  if (photos) parts.push(`${photos} ${photos === 1 ? "foto" : "fotos"}`);
+  if (videos) parts.push(`${videos} ${videos === 1 ? "video" : "videos"}`);
+  return parts.join(" y ");
+}

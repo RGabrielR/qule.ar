@@ -54,3 +54,12 @@ export const InfoIcon = () => (
 export const PlusIcon = () => (
   <svg {...base}><path d="M12 5v14M5 12h14" /></svg>
 );
+export const EditIcon = () => (
+  <svg {...base}><path d="m14 6 4 4M4 20l4.5-1 11-11a2.8 2.8 0 0 0-4-4l-11 11L4 20Z" /></svg>
+);
+export const SettingsIcon = () => (
+  <svg {...base}><path d="M9.5 3h5l.7 2.4 2 .9 2.3-.8 2.5 4.3-1.7 1.8v2l1.7 1.8-2.5 4.3-2.3-.8-2 .9-.7 2.2h-5l-.7-2.2-2-.9-2.3.8L2 15.4l1.7-1.8v-2L2 9.8l2.5-4.3 2.3.8 2-.9L9.5 3Z" /><circle cx="12" cy="12.5" r="3" /></svg>
+);
+export const ChevronRightIcon = () => (
+  <svg {...base}><path d="m9 5 7 7-7 7" /></svg>
+);

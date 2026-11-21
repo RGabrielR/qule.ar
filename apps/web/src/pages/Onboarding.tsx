@@ -34,7 +34,7 @@ export function Onboarding() {
     try {
       await api("/me/profile", { method: "PUT", json: { displayName, birthdate, acceptTerms } });
       await reload();
-      nav("/yo?nuevo=1", { replace: true });
+      nav("/yo/editar?nuevo=1", { replace: true });
     } catch (err) {
       setError((err as Error).message);
     } finally {

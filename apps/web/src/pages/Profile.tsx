@@ -5,7 +5,8 @@ import { BackIcon, LockIcon, StarIcon } from "../components/Icons";
 import { useMe } from "../App";
 import { InviteToGroups } from "../components/Invite";
 import { ReportDialog } from "../components/ReportDialog";
-import { AlbumGrid, AlbumViewer, untilLabel } from "../components/AlbumViewer";
+import { albumCount, AlbumGrid, AlbumViewer, untilLabel } from "../components/AlbumViewer";
+import { ProfileCover, ProfileStats } from "../components/ProfileContent";
 import { ReactionIcon, ReactionPicker } from "../components/Reactions";
 import { reactionLabel } from "../reactions";
 
@@ -16,52 +17,11 @@ const SHARE_OPTIONS: { hours: number | null; label: string }[] = [
   { hours: null, label: "Sin límite" },
 ];
 
-type StatsInput = Pick<PublicProfile, "about" | "heightCm" | "weightKg" | "bodyType" | "position" | "relationship" | "pronouns" | "hivStatus" | "lastTested" | "tribes" | "lookingFor">;
-
-export function ProfileStats({ p }: { p: StatsInput }) {
-  const rows: [string, string | null][] = [
-    ["Altura", p.heightCm ? `${p.heightCm} cm` : null],
-    ["Peso", p.weightKg ? `${p.weightKg} kg` : null],
-    ["Contextura", p.bodyType],
-    ["Rol", p.position],
-    ["Relación", p.relationship],
-    ["Pronombres", p.pronouns],
-    ["Estado serológico", p.hivStatus],
-    ["Último test", p.lastTested ? new Date(p.lastTested + "T12:00").toLocaleDateString("es-AR", { month: "long", year: "numeric" }) : null],
-  ];
-  const visible = rows.filter(([, v]) => v);
-  return (
-    <>
-      {p.about && <p className="profile__about">{p.about}</p>}
-      {visible.length > 0 && (
-        <dl className="stats">
-          {visible.map(([k, v]) => (
-            <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
-          ))}
-        </dl>
-      )}
-      {p.tribes.length > 0 && (
-        <section className="profile__section">
-          <h3>Tribus</h3>
-          <div className="chips">{p.tribes.map((t) => <span key={t} className="chip chip--static">{t}</span>)}</div>
-        </section>
-      )}
-      {p.lookingFor.length > 0 && (
-        <section className="profile__section">
-          <h3>Busca</h3>
-          <div className="chips">{p.lookingFor.map((t) => <span key={t} className="chip chip--static">{t}</span>)}</div>
-        </section>
-      )}
-    </>
-  );
-}
-
 export function ProfilePage() {
   const { id = "" } = useParams();
   const nav = useNavigate();
   const [p, setP] = useState<PublicProfile | null>(null);
   const [missing, setMissing] = useState(false);
-  const [photoIdx, setPhotoIdx] = useState(0);
   const [reporting, setReporting] = useState(false);
   const [confirmBlock, setConfirmBlock] = useState(false);
   const { me } = useMe();
@@ -76,7 +36,6 @@ export function ProfilePage() {
   useEffect(() => {
     setP(null);
     setMissing(false);
-    setPhotoIdx(0);
     api<PublicProfile>(`/users/${id}`).then((x) => {
       setP(x);
       if (params.get("album") === "1" && x.privateAlbum?.items?.length) setViewing(0);
@@ -144,40 +103,14 @@ export function ProfilePage() {
 
   return (
     <div className="page profile">
-      <div className="profile__photo">
-        {p.photos.length ? (
-          <img src={p.photos[photoIdx]} alt={`Foto de ${p.displayName}`} />
-        ) : (
-          <div className="profile__nophoto">{p.displayName.charAt(0).toUpperCase()}</div>
-        )}
-        <button className="iconbtn iconbtn--float" onClick={() => nav(-1)} aria-label="Volver"><BackIcon /></button>
-        {p.photos.length > 1 && (
-          <div className="profile__dots">
-            {p.photos.map((_, i) => (
-              <button key={i} aria-label={`Foto ${i + 1}`} className={i === photoIdx ? "on" : ""} onClick={() => setPhotoIdx(i)} />
-            ))}
-          </div>
-        )}
-        {p.photos.length > 1 && (
-          <>
-            <button className="profile__tap profile__tap--prev" aria-label="Foto anterior" onClick={() => setPhotoIdx((i) => (i - 1 + p.photos.length) % p.photos.length)} />
-            <button className="profile__tap profile__tap--next" aria-label="Foto siguiente" onClick={() => setPhotoIdx((i) => (i + 1) % p.photos.length)} />
-          </>
-        )}
-        <div className="profile__name">
-          <div className="profile__nameline">
-            <h1>{p.displayName}</h1>
-            <span>{p.age}</span>
-          </div>
-          {(p.online || p.recent || p.distance) && (
-            <p className="profile__status">
-              {p.online ? <><i className="dot dot--on" /> En línea</> : p.recent ? <><i className="dot dot--recent" /> Hace un rato</> : null}
-              {(p.online || p.recent) && p.distance && " · "}
-              {p.distance}
-            </p>
-          )}
-        </div>
-      </div>
+      <ProfileCover
+        key={p.id}
+        photos={p.photos}
+        displayName={p.displayName}
+        age={p.age}
+        status={p}
+        back={<button className="iconbtn iconbtn--float" onClick={() => nav(-1)} aria-label="Volver"><BackIcon /></button>}
+      />
 
       <div className="profile__body">
         {!p.isMe && (
@@ -283,12 +216,4 @@ export function ProfilePage() {
       {reporting && <ReportDialog userId={p.id} name={p.displayName} onClose={() => setReporting(false)} />}
     </div>
   );
-}
-
-function albumCount(total: number, videos: number) {
-  const photos = total - videos;
-  const parts = [];
-  if (photos) parts.push(`${photos} ${photos === 1 ? "foto" : "fotos"}`);
-  if (videos) parts.push(`${videos} ${videos === 1 ? "video" : "videos"}`);
-  return parts.join(" y ");
 }
