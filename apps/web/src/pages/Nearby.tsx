@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { InstallBanner } from "../components/InstallBanner";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { api, type NearbyPerson } from "../api";
 import { useMe } from "../App";
 import { FilterIcon, PinIcon, StarIcon } from "../components/Icons";
@@ -64,9 +64,17 @@ export function countFilters(f: Filters) {
 
 type Status = "loading" | "ready" | "error";
 type LocState = "none" | "asking" | "denied" | "unsupported" | "ok";
+type NearbyPage = { hasLocation: boolean; people: NearbyPerson[]; hasMore: boolean };
+type NearbyPosition = { userId: string; query: string; top: number; count: number };
+
+// Guarda las posiciones recientes por entrada del historial, sin guardar los perfiles.
+const positions = new Map<string, NearbyPosition>();
+const POSITION_LIMIT = 20;
 
 export function Nearby() {
   const { me, reload } = useMe();
+  const { key: entry, state } = useLocation();
+  const userId = me?.user.id;
   const [filters, setFilters] = useState<Filters>(loadFilters);
   const [people, setPeople] = useState<NearbyPerson[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -74,18 +82,68 @@ export function Nearby() {
   const [loc, setLoc] = useState<LocState>("ok");
   const [showFilters, setShowFilters] = useState(false);
   const [updating, setUpdating] = useState<"idle" | "busy" | "done">("idle");
+  const [requesting, setRequesting] = useState(false);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const requestRef = useRef<AbortController | null>(null);
+  const [returnPosition] = useState(() => {
+    const previousEntry = typeof state?.nearbyEntry === "string" ? state.nearbyEntry : entry;
+    const saved = positions.get(entry) ?? positions.get(previousEntry);
+    return saved && saved.userId === userId && saved.query === toQuery(filters, 0) ? saved : undefined;
+  });
+  const pendingRestore = useRef(returnPosition);
+  const visible = useRef({ count: 0, ready: false });
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
-  const load = useCallback(async (f: Filters, offset = 0) => {
+  useLayoutEffect(() => {
+    visible.current = { count: people.length, ready: status === "ready" };
+    if (status === "ready" && pendingRestore.current && pageRef.current) {
+      pageRef.current.scrollTop = pendingRestore.current.top;
+      pendingRestore.current = undefined;
+    }
+  }, [people, status]);
+
+  useLayoutEffect(() => {
+    const page = pageRef.current;
+    return () => {
+      const { count, ready } = visible.current;
+      if (page && userId && ready) {
+        positions.delete(entry);
+        positions.set(entry, { userId, query: toQuery(filtersRef.current, 0), top: page.scrollTop, count });
+        if (positions.size > POSITION_LIMIT) {
+          const oldest = positions.keys().next().value;
+          if (oldest !== undefined) positions.delete(oldest);
+        }
+      }
+    };
+  }, [entry, userId]);
+
+  const load = useCallback(async (f: Filters, offset = 0, restoreCount = 0) => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const { signal } = controller;
+    const fetchPage = (start: number) => api<NearbyPage>(`/nearby?${toQuery(f, start)}`, { signal });
+    setRequesting(true);
     try {
-      const d = await api<{ hasLocation: boolean; people: NearbyPerson[]; hasMore: boolean }>(`/nearby?${toQuery(f, offset)}`);
+      const d = await fetchPage(offset);
+      const loaded = [...d.people];
+      let hasMore = d.hasMore;
+      while (hasMore && loaded.length < restoreCount) {
+        const next = await fetchPage(loaded.length);
+        loaded.push(...next.people);
+        hasMore = next.hasMore && next.people.length > 0;
+      }
+      if (signal.aborted) return;
       setLoc((prev) => (d.hasLocation ? "ok" : prev === "ok" ? "none" : prev));
-      setPeople((prev) => (offset ? [...prev, ...d.people] : d.people));
-      setHasMore(d.hasMore);
+      setPeople((prev) => (offset ? [...prev, ...loaded] : loaded));
+      setHasMore(hasMore);
       setStatus("ready");
     } catch {
+      if (signal.aborted) return;
       setStatus("error");
+    } finally {
+      if (!signal.aborted) setRequesting(false);
     }
   }, []);
 
@@ -115,15 +173,21 @@ export function Nearby() {
   }
 
   useEffect(() => {
-    load(filters);
     // Cada vez que se manda una ubicación nueva (a mano o sola), la grilla se reordena
-    const onLocation = () => load(filtersRef.current);
+    const onLocation = () => load(filtersRef.current, 0, pendingRestore.current?.count ?? visible.current.count);
+    onLocation();
     window.addEventListener(LOCATION_EVENT, onLocation);
-    return () => window.removeEventListener(LOCATION_EVENT, onLocation);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      window.removeEventListener(LOCATION_EVENT, onLocation);
+      requestRef.current?.abort();
+    };
+  }, [load]);
 
   function applyFilters(f: Filters) {
+    pendingRestore.current = undefined;
+    if (pageRef.current) pageRef.current.scrollTop = 0;
+    setPeople([]);
+    setStatus("loading");
     setFilters(f);
     saveFilters(f);
     setShowFilters(false);
@@ -133,7 +197,7 @@ export function Nearby() {
   const active = countFilters(filters);
 
   return (
-    <div className="page">
+    <div className="page" ref={pageRef}>
       <header className="topbar">
         <h1 className="topbar__title">Gente</h1>
         {status === "ready" && (
@@ -195,7 +259,7 @@ export function Nearby() {
           <ul className="grid">
             {people.map((p) => (
               <li key={p.id}>
-                <Link to={`/perfil/${p.id}`} className="tile" aria-label={`${p.name}, ${p.age}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
+                <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" aria-label={`${p.name}, ${p.age}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
                   {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
                   {p.favorite && <span className="tile__fav" aria-label="Favorito"><StarIcon filled size={14} /></span>}
                   <span className="tile__info">
@@ -211,7 +275,7 @@ export function Nearby() {
           </ul>
           {hasMore && (
             <div className="center">
-              <button className="btn btn--small" onClick={() => load(filters, people.length)}>Ver más</button>
+              <button className="btn btn--small" disabled={requesting} onClick={() => load(filters, people.length)}>Ver más</button>
             </div>
           )}
         </>

@@ -200,6 +200,7 @@ function Shell() {
 
   // En una conversación abierta, la barra de abajo se esconde para dejar lugar al teclado
   const inThread = /^\/mensajes\/.+/.test(loc.pathname);
+  const nearbyEntry = loc.pathname.startsWith("/perfil/") ? loc.state?.nearbyEntry : undefined;
 
   return (
     <div className={`shell ${inThread ? "shell--thread" : ""}`}>
@@ -215,7 +216,7 @@ function Shell() {
       )}
       {!inThread && (
         <nav className="tabbar" aria-label="Secciones">
-          <NavLink to="/cerca" className="tabbar__item">
+          <NavLink to="/cerca" state={nearbyEntry ? { nearbyEntry } : undefined} className="tabbar__item">
             <GridIcon /> <span>Gente</span>
           </NavLink>
           <NavLink to="/grupos" className="tabbar__item">
