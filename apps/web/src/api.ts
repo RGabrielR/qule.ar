@@ -80,6 +80,8 @@ export type Me = {
   user: { id: string; email: string; name: string; isAdmin: boolean };
   profile: (Profile & {
     hasLocation: boolean;
+    discoveryCountry: "AR" | "MX" | null;
+    discoveryCity: string | null;
     showDistance: boolean;
     incognito: boolean;
     /** Avisos que apagó (false). Lo que no está cuenta como prendido. */

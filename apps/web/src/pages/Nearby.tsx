@@ -7,6 +7,8 @@ import { CheckIcon, FilterIcon, PinIcon, RefreshIcon, StarIcon } from "../compon
 import { LOCATION_EVENT, shareLocation } from "../location";
 import { BODY_TYPES, LOOKING_FOR, POSITIONS, RELATIONSHIP, TRIBES } from "../options";
 import { DialogFocus } from "../components/DialogFocus";
+import { DiscoveryCityFields, type CityFields } from "../components/DiscoveryCityFields";
+import { DISCOVERY_NAMES } from "../../../../packages/geo/discovery";
 
 export type Filters = {
   ageMin?: number; ageMax?: number;
@@ -14,6 +16,7 @@ export type Filters = {
   weightMin?: number; weightMax?: number;
   bodyType: string[]; position: string[]; tribes: string[]; lookingFor: string[]; relationship: string[];
   online: boolean; withPhoto: boolean; favorites: boolean;
+  area?: CityFields;
 };
 
 const EMPTY: Filters = { bodyType: [], position: [], tribes: [], lookingFor: [], relationship: [], online: false, withPhoto: false, favorites: false };
@@ -47,6 +50,10 @@ function toQuery(f: Filters, offset: number) {
   if (f.online) q.set("online", "1");
   if (f.withPhoto) q.set("withPhoto", "1");
   if (f.favorites) q.set("favorites", "1");
+  if (f.area?.country && f.area.city.trim()) {
+    q.set("country", f.area.country);
+    q.set("city", f.area.city);
+  }
   if (offset) q.set("offset", String(offset));
   return q.toString();
 }
@@ -60,6 +67,7 @@ export function countFilters(f: Filters) {
   if (f.online) n++;
   if (f.withPhoto) n++;
   if (f.favorites) n++;
+  if (f.area?.country) n++;
   return n;
 }
 
@@ -247,6 +255,7 @@ export function Nearby() {
   }, []);
 
   function applyFilters(f: Filters) {
+    filtersRef.current = f;
     pendingRestore.current = undefined;
     if (pageRef.current) pageRef.current.scrollTop = 0;
     setFilters(f);
@@ -286,10 +295,20 @@ export function Nearby() {
       </header>
 
       <InstallBanner />
+      {status === "ready" && (
+        <div className="page-note">
+          {filters.area?.country
+            ? <button className="chip chip--on" type="button" aria-label="Quitar filtro de ciudad"
+                onClick={() => applyFilters({ ...filters, area: undefined })}>
+                {filters.area.city}, {DISCOVERY_NAMES[filters.area.country]} ×
+              </button>
+            : <button className="btn btn--small" type="button" onClick={() => setShowFilters(true)}>Explorar por ciudad</button>}
+        </div>
+      )}
 
       <p className="sr-only" aria-live="polite">{updating === "done" ? "Ubicación actualizada" : ""}</p>
 
-      {status === "ready" && loc !== "ok" && (
+      {status === "ready" && loc !== "ok" && !filters.area?.country && (
         <div className="notice locate-bar">
           <span className="locate-bar__icon"><PinIcon /></span>
           <div className="locate-bar__text">
@@ -416,6 +435,12 @@ function FilterSheet({ initial, onApply, onClose }: { initial: Filters; onApply:
           <button className="linkbtn" onClick={() => setF(EMPTY)}>Limpiar</button>
         </div>
         <div className="sheet__body form">
+          <fieldset className="field">
+            <legend>Explorar por ciudad</legend>
+            <DiscoveryCityFields value={f.area ?? { country: "", city: "" }}
+              onChange={(value) => set("area", value.country ? value : undefined)} empty="Cualquier país" />
+            <small className="muted">Ves a quienes eligieron mostrar esa ciudad.</small>
+          </fieldset>
           <label className="check">
             <input type="checkbox" checked={f.online} onChange={(e) => set("online", e.target.checked)} />
             <span>Solo en línea ahora</span>
@@ -440,7 +465,9 @@ function FilterSheet({ initial, onApply, onClose }: { initial: Filters; onApply:
         </div>
         <div className="row sheet__foot">
           <button className="btn" onClick={onClose}>Cancelar</button>
-          <button className="btn btn--primary" onClick={() => onApply(f)}>Aplicar</button>
+          <button className="btn btn--primary"
+            disabled={!!f.area?.country && (f.area.city.trim().length < 2 || !/\p{L}/u.test(f.area.city))}
+            onClick={() => onApply(f)}>Aplicar</button>
         </div>
       </div>
     </div>

@@ -74,6 +74,10 @@ export const profile = pgTable("profile", {
   cellLat: doublePrecision("cell_lat"),
   cellLng: doublePrecision("cell_lng"),
   locationUpdatedAt: timestamp("location_updated_at", { withTimezone: true }),
+  // Ciudad que la persona comparte manualmente para aparecer al explorar esa ciudad.
+  discoveryCountry: text("discovery_country").$type<"AR" | "MX">(),
+  discoveryCity: text("discovery_city"),
+  discoveryCityKey: text("discovery_city_key"),
   showDistance: boolean("show_distance").notNull().default(true),
   // Incógnito: no aparecés en la grilla, no se ve si estás en línea y tus visitas no quedan registradas
   incognito: boolean("incognito").notNull().default(false),
@@ -89,6 +93,7 @@ export const profile = pgTable("profile", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  index("profile_discovery_city_idx").on(t.discoveryCountry, t.discoveryCityKey),
   index("profile_cell_idx").on(t.cellLat, t.cellLng),
   // La grilla de Cerca: solo quienes se muestran, de la última vez vista hacia atrás (ver routes/nearby.ts)
   index("profile_grid_idx").on(t.lastSeenAt.desc()).where(sql`${t.incognito} = false and ${t.suspendedAt} is null`),

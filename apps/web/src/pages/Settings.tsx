@@ -5,6 +5,7 @@ import { useMe } from "../App";
 import { APP_NAME, THEME_LABELS, themes, type ThemeName } from "../brand";
 import { Avatar } from "../components/Avatar";
 import { BackIcon } from "../components/Icons";
+import { DiscoveryCityFields, type CityFields } from "../components/DiscoveryCityFields";
 import { disablePush, enablePush, pushHelp, pushState, testPush, type PushState } from "../push";
 import { getTheme, setTheme } from "../theme";
 
@@ -130,6 +131,46 @@ function ThemeSetting() {
   );
 }
 
+function DiscoveryCitySetting({ initial, onSaved }: { initial: CityFields; onSaved: () => Promise<void> }) {
+  const [value, setValue] = useState(initial);
+  const [saved, setSaved] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState("");
+
+  async function save(city: CityFields | null) {
+    if (busy) return;
+    setBusy(true);
+    setFeedback("");
+    try {
+      await api("/me/discovery-city", { method: "PUT", json: city });
+      const updated = city ?? { country: "" as const, city: "" };
+      setValue(updated);
+      setSaved(updated);
+      setFeedback(city ? "Tu ciudad ya aparece en Gente." : "Quitaste tu ciudad de Gente.");
+      await onSaved().catch(() => {});
+    } catch (err) {
+      setFeedback((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="section form" onSubmit={(e) => { e.preventDefault(); void save(value); }}>
+      <h2 className="section__title">Ciudad en Gente</h2>
+      <p className="muted small">Elegí qué ciudad mostrar para aparecer cuando alguien la explore. Esto es independiente de tu ubicación por GPS.</p>
+      <DiscoveryCityFields value={value} onChange={setValue} empty="Elegí un país" />
+      <div className="row">
+        <button className="btn btn--primary" disabled={busy || !value.country || value.city.trim().length < 2 || !/\p{L}/u.test(value.city)}>
+          Mostrar mi ciudad
+        </button>
+        {!!saved.country && <button type="button" className="btn" disabled={busy} onClick={() => save(null)}>Quitar mi ciudad</button>}
+      </div>
+      {feedback && <p className="muted small" role="status">{feedback}</p>}
+    </form>
+  );
+}
+
 export function Settings() {
   const { me, reload } = useMe();
   const [blocked, setBlocked] = useState<Author[] | null>(null);
@@ -242,6 +283,8 @@ export function Settings() {
           )}
         </div>
       </section>
+
+      <DiscoveryCitySetting initial={{ country: me.profile.discoveryCountry ?? "", city: me.profile.discoveryCity ?? "" }} onSaved={reload} />
 
       <section className="section">
         <h2 className="section__title">Personas bloqueadas</h2>
