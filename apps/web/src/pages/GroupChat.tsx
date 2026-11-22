@@ -1,4 +1,3 @@
-import { historyUpdates, watchHistory } from "../features/messages/history";
 import { groupOutbox, mergeHistory, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -36,7 +35,6 @@ function GroupChatThread({ id }: { id: string }) {
   const [confirmed, setMessages] = useState<GroupMessage[]>([]);
   const { messages, pendingByMessage, remember, forget } = useTimeline(confirmed, pending, me?.user.id);
   const [queued, setQueued] = useState<GroupMessage[]>([]);
-  const pageSignal = useRef<AbortSignal | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [text, setText] = useState("");
   const [phrasesOpen, setPhrasesOpen] = useState(false);
@@ -111,56 +109,45 @@ function GroupChatThread({ id }: { id: string }) {
 
   useEffect(() => {
     if (!isMember) return;
-    const history = historyUpdates(setMessages);
-    const queue = historyUpdates(setQueued);
+    let alive = true;
     setMessages([]);
     setQueued([]);
-    const stopHistory = watchHistory(async (signal) => {
-      pageSignal.current = null;
-      setHasMore(false);
-      history.begin();
-      queue.begin();
-      const d = await api<{ messages: GroupMessage[]; queued: GroupMessage[]; hasMore: boolean }>(
-        `/groups/${id}/messages`, { signal },
-      );
-      if (signal.aborted) return;
-      for (const m of [...d.messages, ...d.queued]) {
-        if (m.author.id === me?.user.id) groupOutbox.acknowledge(scope, m);
-      }
-      for (const m of d.queued) forget(m.idempotencyKey ?? m.id);
-      pageSignal.current = signal;
-      history.finish(d.messages);
-      queue.finish(d.queued);
-      setHasMore(d.hasMore);
-    }, (error) => {
-      history.stop();
-      queue.stop();
-      setNotice({ kind: "error", text: error.message });
-    });
+    api<{ messages: GroupMessage[]; queued: GroupMessage[]; hasMore: boolean }>(`/groups/${id}/messages`)
+      .then((d) => {
+        if (!alive) return;
+        stickToBottom.current = true;
+        for (const m of [...d.messages, ...d.queued]) {
+          if (m.author.id === me?.user.id) groupOutbox.acknowledge(scope, m);
+        }
+        setMessages((list) => mergeHistory(d.messages, list));
+        setQueued((list) => mergeHistory(d.queued, list));
+        setHasMore(d.hasMore);
+      })
+      .catch((e) => setNotice({ kind: "error", text: e.message }));
 
     const s = getSocket();
     const onMessage = (m: GroupMessage) => {
       if (m.groupId !== id) return;
       if (m.author.id === me?.user.id) groupOutbox.acknowledge(scope, m);
-      queue.update((q) => q.filter((x) => x.id !== m.id));
-      history.update((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
+      setQueued((q) => q.filter((x) => x.id !== m.id));
+      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
     };
     const onQueued = (m: GroupMessage) => {
       if (m.groupId !== id) return;
       if (m.author.id === me?.user.id) forget(m.idempotencyKey ?? m.id);
       if (m.author.id === me?.user.id) groupOutbox.acknowledge(scope, m);
-      queue.update((q) => {
+      setQueued((q) => {
         const rest = q.filter((x) => x.id !== m.id);
         return [...rest, m].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
       });
     };
     const onCancelled = (p: { id: string; groupId: string }) => {
       if (p.groupId !== id) return;
-      queue.update((q) => q.filter((x) => x.id !== p.id));
+      setQueued((q) => q.filter((x) => x.id !== p.id));
     };
     const onDeleted = (p: { id: string; groupId: string }) => {
       if (p.groupId !== id) return;
-      history.update((list) => list.filter((x) => x.id !== p.id));
+      setMessages((list) => list.filter((x) => x.id !== p.id));
     };
     const stopWatching = groupOutbox.watchConfirmations(scope, (m) => {
       if (m.status === "queued") onQueued(m);
@@ -172,12 +159,12 @@ function GroupChatThread({ id }: { id: string }) {
     s.on("group:deleted", onDeleted);
     const onReaction = (p: ReactionEvent) => {
       if (p.scope !== "group" || p.groupId !== id) return;
-      history.update((list) => list.map((x) => (x.id === p.messageId ? { ...x, reactions: p.reactions } : x)));
+      setMessages((list) => list.map((x) => (x.id === p.messageId ? { ...x, reactions: p.reactions } : x)));
     };
     s.on("reaction", onReaction);
     return () => {
       stopWatching();
-      stopHistory();
+      alive = false;
       s.off("group:message", onMessage);
       s.off("group:queued", onQueued);
       s.off("group:cancelled", onCancelled);
@@ -205,14 +192,12 @@ function GroupChatThread({ id }: { id: string }) {
 
   async function loadOlder() {
     const first = confirmed[0];
-    const signal = pageSignal.current;
-    if (!first || !signal || signal.aborted) return;
+    if (!first) return;
     const el = listRef.current;
     const prevHeight = el?.scrollHeight ?? 0;
     const d = await api<{ messages: GroupMessage[]; hasMore: boolean }>(
       `/groups/${id}/messages?before=${encodeURIComponent(first.scheduledAt)}`,
     );
-    if (signal.aborted) return;
     stickToBottom.current = false;
     setMessages((list) => mergeHistory(d.messages, list));
     setHasMore(d.hasMore);

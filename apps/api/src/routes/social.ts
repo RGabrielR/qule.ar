@@ -199,7 +199,7 @@ socialRoutes.get("/conversations/:id/messages", async (c) => {
     .where(and(...conds))
     .orderBy(desc(directMessage.createdAt))
     .limit(50);
-  const reactions = await reactionsFor("dm", rows.map((m) => m.id));
+  const reactions = await reactionsFor(rows.map((m) => m.id));
   return c.json({ messages: rows.reverse().map((m) => serializeDm(m, reactions.get(m.id), me.id)), hasMore: rows.length === 50 });
 });
 
@@ -321,7 +321,7 @@ socialRoutes.delete("/conversations/:id/messages/:mid", async (c) => {
     .returning();
   if (!row) return c.notFound();
   if (row.photoKey) await deleteImageUnlessEvidence(row.photoKey);
-  await db.delete(schema.reaction).where(and(eq(schema.reaction.scope, "dm"), eq(schema.reaction.messageId, row.id)));
+  await db.delete(schema.reaction).where(eq(schema.reaction.messageId, row.id));
   const payload = { conversationId: conv.id, id: row.id };
   emitToUser(me.id, "dm:deleted", payload);
   emitToUser(otherId, "dm:deleted", payload);

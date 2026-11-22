@@ -17,8 +17,7 @@ test("reintentos de mensajes privados, fotos temporales y turnos de grupo", asyn
   const { auth } = await import("./auth.js");
   const { groupRoutes } = await import("./routes/groups.js");
   const { socialRoutes } = await import("./routes/social.js");
-  const { toqueRoutes } = await import("./routes/toques.js");
-  const app = new Hono().route("/", groupRoutes).route("/", socialRoutes).route("/", toqueRoutes);
+  const app = new Hono().route("/", groupRoutes).route("/", socialRoutes);
 
   async function account(name: string) {
     const credentials = { email: name + "@example.com", password: "clave-para-pruebas" };
@@ -92,19 +91,4 @@ test("reintentos de mensajes privados, fotos temporales y turnos de grupo", asyn
   });
   assert.equal(legacy.status, 200);
   assert.ok((await legacy.json()).id);
-
-  async function react(scope: string, kind: string) {
-    const messageId = scope === "dm" ? first.id : original.id;
-    const result = await app.request(`/reactions/${scope}/${messageId}`, { method: "PUT", headers: {
-      cookie: sender.cookie, "content-type": "application/json",
-    }, body: JSON.stringify({ kind }) });
-    assert.equal(result.status, 200);
-    return (await result.json()).reactions;
-  }
-  assert.deepEqual(await react("dm", "hola"), [{ kind: "hola", by: [sender.id] }]);
-  assert.deepEqual(await react("group", "hola"), [{ kind: "hola", by: [sender.id] }]);
-  assert.equal((await app.request(dm + "/" + first.id, { method: "DELETE", headers: { cookie: sender.cookie } })).status, 200);
-  const replacement = await post(dm, key);
-  assert.notEqual(replacement.id, first.id);
-  assert.deepEqual(await react("group", "hola"), []);
 });

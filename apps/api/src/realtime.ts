@@ -113,7 +113,7 @@ export async function serializeGroupMessages(rows: (typeof groupMessage.$inferSe
     : [];
   const quotedById = new Map(quoted.map((q) => [q.id, q]));
   const authors = await authorsFor([...rows.map((r) => r.userId), ...quoted.map((q) => q.userId)]);
-  const reactions = await reactionsFor("group", rows.filter((r) => r.status === "published").map((r) => r.id));
+  const reactions = await reactionsFor(rows.filter((r) => r.status === "published").map((r) => r.id));
   // En los grupos se muestra solo el nombre y la foto, sin la edad
   const author = (id: string) => {
     const a = authors.get(id);

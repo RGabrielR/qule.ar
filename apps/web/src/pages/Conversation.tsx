@@ -1,5 +1,4 @@
-import { historyUpdates, watchHistory } from "../features/messages/history";
-import { privateOutbox, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
+import { privateOutbox, mergeHistory, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, getSocket, upload, type Author, type Dm, type ReactionEvent } from "../api";
@@ -40,7 +39,6 @@ function ConversationThread({ id }: { id: string }) {
 
   useEffect(() => {
     let alive = true;
-    const history = historyUpdates(setMessages);
     const markRead = () =>
       api(`/conversations/${id}/read`, { method: "POST" })
         .then(() => window.dispatchEvent(new Event("mortero:read")))
@@ -48,38 +46,32 @@ function ConversationThread({ id }: { id: string }) {
     api<{ other: Author }>(`/conversations/${id}`)
       .then((c) => alive && setOther(c.other))
       .catch(() => nav("/mensajes", { replace: true }));
-    const stopHistory = watchHistory(async (signal) => {
-      history.begin();
-      const d = await api<{ messages: Dm[]; hasMore: boolean }>(`/conversations/${id}/messages`, { signal });
-      if (signal.aborted) return;
+    api<{ messages: Dm[] }>(`/conversations/${id}/messages`).then((d) => {
+      if (!alive) return;
       for (const m of d.messages) {
         if (m.senderId === myId) privateOutbox.acknowledge(scope, m);
       }
-      history.finish(d.messages);
-      setError((current) => current === "No se pudo cargar la charla." ? "" : current);
+      setMessages((list) => mergeHistory(d.messages, list));
       markRead();
-    }, () => {
-      history.stop();
-      setError("No se pudo cargar la charla.");
-    });
+    }).catch(() => { if (alive) setError("No se pudo cargar la charla."); });
     const s = getSocket();
     const onMsg = (m: Dm) => {
       if (m.conversationId !== id) return;
       if (m.senderId === myId) privateOutbox.acknowledge(scope, m);
       setTyping(false);
-      history.update((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
+      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
       if (m.senderId !== myId) markRead();
     };
     const onRead = (p: { conversationId: string; readAt: string }) => {
       if (p.conversationId !== id) return;
-      history.update((list) => list.map((m) => (m.senderId === myId && !m.readAt ? { ...m, readAt: p.readAt } : m)));
+      setMessages((list) => list.map((m) => (m.senderId === myId && !m.readAt ? { ...m, readAt: p.readAt } : m)));
     };
     const onDeleted = (p: { conversationId: string; id: string }) => {
       if (p.conversationId !== id) return;
-      history.update((list) => list.filter((m) => m.id !== p.id));
+      setMessages((list) => list.filter((m) => m.id !== p.id));
     };
     const onOpened = (p: { conversationId: string; id: string }) => {
-      if (p.conversationId === id) history.update((list) => list.map((m) => (m.id === p.id ? { ...m, opened: true } : m)));
+      if (p.conversationId === id) setMessages((list) => list.map((m) => (m.id === p.id ? { ...m, opened: true } : m)));
     };
     const onTyping = (p: { conversationId: string }) => {
       if (p.conversationId !== id) return;
@@ -89,7 +81,7 @@ function ConversationThread({ id }: { id: string }) {
     };
     const onReaction = (p: ReactionEvent) => {
       if (p.scope !== "dm" || p.conversationId !== id) return;
-      history.update((list) => list.map((m) => (m.id === p.messageId ? { ...m, reactions: p.reactions } : m)));
+      setMessages((list) => list.map((m) => (m.id === p.messageId ? { ...m, reactions: p.reactions } : m)));
     };
     const stopWatching = privateOutbox.watchConfirmations(scope, onMsg);
     s.on("reaction", onReaction);
@@ -100,7 +92,6 @@ function ConversationThread({ id }: { id: string }) {
     s.on("dm:typing", onTyping);
     return () => {
       stopWatching();
-      stopHistory();
       alive = false;
       s.off("reaction", onReaction);
       s.off("dm:message", onMsg);

@@ -968,7 +968,7 @@ groupRoutes.delete("/groups/:id/messages/:mid", async (c) => {
     emitToUser(u.id, "group:cancelled", { id: row.id, groupId: row.groupId });
   } else if (row.status === "published") {
     await db.update(groupMessage).set({ status: "deleted", body: "" }).where(eq(groupMessage.id, row.id));
-    await db.delete(schema.reaction).where(and(eq(schema.reaction.scope, "group"), eq(schema.reaction.messageId, row.id)));
+    await db.delete(schema.reaction).where(eq(schema.reaction.messageId, row.id));
     await emitToGroup(row.groupId, row.userId, "group:deleted", { id: row.id, groupId: row.groupId });
   }
   return c.json({ ok: true });

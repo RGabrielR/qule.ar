@@ -118,16 +118,15 @@ toqueRoutes.put("/reactions/:scope{dm|group}/:messageId", async (c) => {
     deliver = (p) => emitToGroup(m.groupId, me.id, "reaction", p);
   }
 
-  const myReaction = and(eq(reaction.scope, scope), eq(reaction.messageId, messageId), eq(reaction.userId, me.id));
-  const [current] = await db.select().from(reaction).where(myReaction);
+  const [current] = await db.select().from(reaction).where(and(eq(reaction.messageId, messageId), eq(reaction.userId, me.id)));
   const kind = r.data.kind;
   if (!kind || current?.kind === kind) {
-    await db.delete(reaction).where(myReaction);
+    await db.delete(reaction).where(and(eq(reaction.messageId, messageId), eq(reaction.userId, me.id)));
   } else {
     await db.insert(reaction).values({ messageId, scope, userId: me.id, kind })
       .onConflictDoUpdate({ target: [reaction.messageId, reaction.userId], set: { kind, createdAt: new Date() } });
   }
-  const reactions = (await reactionsFor(scope, [messageId])).get(messageId) ?? [];
+  const reactions = (await reactionsFor([messageId])).get(messageId) ?? [];
   await deliver({ scope, messageId, ...where, reactions });
   return c.json({ reactions });
 });
