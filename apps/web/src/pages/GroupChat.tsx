@@ -1,4 +1,4 @@
-import { historyUpdates, refreshPage, watchHistory } from "../features/messages/history";
+import { historyUpdates, watchHistory } from "../features/messages/history";
 import { groupOutbox, mergeHistory, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -36,6 +36,7 @@ function GroupChatThread({ id }: { id: string }) {
   const [confirmed, setMessages] = useState<GroupMessage[]>([]);
   const { messages, pendingByMessage, remember, forget } = useTimeline(confirmed, pending, me?.user.id);
   const [queued, setQueued] = useState<GroupMessage[]>([]);
+  const pageSignal = useRef<AbortSignal | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [text, setText] = useState("");
   const [phrasesOpen, setPhrasesOpen] = useState(false);
@@ -115,6 +116,8 @@ function GroupChatThread({ id }: { id: string }) {
     setMessages([]);
     setQueued([]);
     const stopHistory = watchHistory(async (signal) => {
+      pageSignal.current = null;
+      setHasMore(false);
       history.begin();
       queue.begin();
       const d = await api<{ messages: GroupMessage[]; queued: GroupMessage[]; hasMore: boolean }>(
@@ -125,8 +128,9 @@ function GroupChatThread({ id }: { id: string }) {
         if (m.author.id === me?.user.id) groupOutbox.acknowledge(scope, m);
       }
       for (const m of d.queued) forget(m.idempotencyKey ?? m.id);
-      history.finish((list) => refreshPage(list, d.messages, d.hasMore));
-      queue.finish(() => d.queued);
+      pageSignal.current = signal;
+      history.finish(d.messages);
+      queue.finish(d.queued);
       setHasMore(d.hasMore);
     }, (error) => {
       history.stop();
@@ -201,12 +205,14 @@ function GroupChatThread({ id }: { id: string }) {
 
   async function loadOlder() {
     const first = confirmed[0];
-    if (!first) return;
+    const signal = pageSignal.current;
+    if (!first || !signal || signal.aborted) return;
     const el = listRef.current;
     const prevHeight = el?.scrollHeight ?? 0;
     const d = await api<{ messages: GroupMessage[]; hasMore: boolean }>(
       `/groups/${id}/messages?before=${encodeURIComponent(first.scheduledAt)}`,
     );
+    if (signal.aborted) return;
     stickToBottom.current = false;
     setMessages((list) => mergeHistory(d.messages, list));
     setHasMore(d.hasMore);

@@ -41,18 +41,11 @@ export function historyUpdates<M>(setList: (update: Update<M>) => void) {
       changes?.push(change);
       setList(change);
     },
-    finish(snapshot: Update<M>) {
+    finish(snapshot: M[]) {
       const live = changes ?? [];
       changes = undefined;
-      setList((list) => live.reduce((updated, change) => change(updated), snapshot(list)));
+      setList(() => live.reduce((updated, change) => change(updated), snapshot));
     },
     stop() { changes = undefined; },
   };
-}
-
-/** Conserva páginas anteriores solo si se solapan con el historial recién recibido. */
-export function refreshPage<M extends { id: string }>(current: M[], recent: M[], hasMore: boolean) {
-  if (!hasMore || !recent.length) return recent;
-  const first = current.findIndex((message) => message.id === recent[0].id);
-  return first > 0 ? [...current.slice(0, first), ...recent] : recent;
 }

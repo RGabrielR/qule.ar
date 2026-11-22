@@ -1,4 +1,4 @@
-import { historyUpdates, refreshPage, watchHistory } from "../features/messages/history";
+import { historyUpdates, watchHistory } from "../features/messages/history";
 import { privateOutbox, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -55,7 +55,7 @@ function ConversationThread({ id }: { id: string }) {
       for (const m of d.messages) {
         if (m.senderId === myId) privateOutbox.acknowledge(scope, m);
       }
-      history.finish((list) => refreshPage(list, d.messages, d.hasMore));
+      history.finish(d.messages);
       setError((current) => current === "No se pudo cargar la charla." ? "" : current);
       markRead();
     }, () => {
