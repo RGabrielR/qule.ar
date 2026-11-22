@@ -1,4 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { historyUpdates, refreshPage, watchHistory } from "../features/messages/history";
+import { privateOutbox, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, getSocket, upload, type Author, type Dm, type ReactionEvent } from "../api";
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
@@ -10,15 +12,21 @@ import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedP
 
 export function Conversation() {
   const { id = "" } = useParams();
+  return <ConversationThread key={id} id={id} />;
+}
+
+function ConversationThread({ id }: { id: string }) {
   const { me } = useMe();
+  const scope = JSON.stringify([me?.user.id, id]);
+  const pending = usePending(privateOutbox, scope);
   const nav = useNavigate();
   const goBack = useSectionBack("/mensajes");
   const [other, setOther] = useState<Author | null>(null);
-  const [messages, setMessages] = useState<Dm[]>([]);
+  const [confirmed, setMessages] = useState<Dm[]>([]);
+  const { messages, pendingByMessage, remember } = useTimeline(confirmed, pending, me?.user.id);
   const [text, setText] = useState("");
   const [phrasesOpen, setPhrasesOpen] = useState(false);
   const [error, setError] = useState("");
-  const [sending, setSending] = useState(false);
   const [typing, setTyping] = useState(false);
   const [photoMenu, setPhotoMenu] = useState(false);
   const [msgMenu, setMsgMenu] = useState<string | null>(null);
@@ -32,6 +40,7 @@ export function Conversation() {
 
   useEffect(() => {
     let alive = true;
+    const history = historyUpdates(setMessages);
     const markRead = () =>
       api(`/conversations/${id}/read`, { method: "POST" })
         .then(() => window.dispatchEvent(new Event("mortero:read")))
@@ -39,27 +48,38 @@ export function Conversation() {
     api<{ other: Author }>(`/conversations/${id}`)
       .then((c) => alive && setOther(c.other))
       .catch(() => nav("/mensajes", { replace: true }));
-    api<{ messages: Dm[] }>(`/conversations/${id}/messages`).then((d) => {
-      if (!alive) return;
-      setMessages(d.messages);
+    const stopHistory = watchHistory(async (signal) => {
+      history.begin();
+      const d = await api<{ messages: Dm[]; hasMore: boolean }>(`/conversations/${id}/messages`, { signal });
+      if (signal.aborted) return;
+      for (const m of d.messages) {
+        if (m.senderId === myId) privateOutbox.acknowledge(scope, m);
+      }
+      history.finish((list) => refreshPage(list, d.messages, d.hasMore));
+      setError((current) => current === "No se pudo cargar la charla." ? "" : current);
       markRead();
+    }, () => {
+      history.stop();
+      setError("No se pudo cargar la charla.");
     });
     const s = getSocket();
     const onMsg = (m: Dm) => {
       if (m.conversationId !== id) return;
+      if (m.senderId === myId) privateOutbox.acknowledge(scope, m);
       setTyping(false);
-      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
+      history.update((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
       if (m.senderId !== myId) markRead();
     };
     const onRead = (p: { conversationId: string; readAt: string }) => {
       if (p.conversationId !== id) return;
-      setMessages((list) => list.map((m) => (m.senderId === myId && !m.readAt ? { ...m, readAt: p.readAt } : m)));
+      history.update((list) => list.map((m) => (m.senderId === myId && !m.readAt ? { ...m, readAt: p.readAt } : m)));
     };
     const onDeleted = (p: { conversationId: string; id: string }) => {
-      if (p.conversationId === id) setMessages((list) => list.filter((m) => m.id !== p.id));
+      if (p.conversationId !== id) return;
+      history.update((list) => list.filter((m) => m.id !== p.id));
     };
     const onOpened = (p: { conversationId: string; id: string }) => {
-      if (p.conversationId === id) setMessages((list) => list.map((m) => (m.id === p.id ? { ...m, opened: true } : m)));
+      if (p.conversationId === id) history.update((list) => list.map((m) => (m.id === p.id ? { ...m, opened: true } : m)));
     };
     const onTyping = (p: { conversationId: string }) => {
       if (p.conversationId !== id) return;
@@ -69,8 +89,9 @@ export function Conversation() {
     };
     const onReaction = (p: ReactionEvent) => {
       if (p.scope !== "dm" || p.conversationId !== id) return;
-      setMessages((list) => list.map((m) => (m.id === p.messageId ? { ...m, reactions: p.reactions } : m)));
+      history.update((list) => list.map((m) => (m.id === p.messageId ? { ...m, reactions: p.reactions } : m)));
     };
+    const stopWatching = privateOutbox.watchConfirmations(scope, onMsg);
     s.on("reaction", onReaction);
     s.on("dm:message", onMsg);
     s.on("dm:read", onRead);
@@ -78,6 +99,8 @@ export function Conversation() {
     s.on("dm:opened", onOpened);
     s.on("dm:typing", onTyping);
     return () => {
+      stopWatching();
+      stopHistory();
       alive = false;
       s.off("reaction", onReaction);
       s.off("dm:message", onMsg);
@@ -87,7 +110,7 @@ export function Conversation() {
       s.off("dm:typing", onTyping);
       clearTimeout(typingTimer.current);
     };
-  }, [id, myId, nav]);
+  }, [id, myId, nav, scope]);
 
   /** Poner, cambiar o sacar mi reacción a un mensaje (si toco la que ya tenía, se saca). */
   async function react(m: Dm, kind: string) {
@@ -103,7 +126,7 @@ export function Conversation() {
   useLayoutEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, typing]);
+  }, [confirmed, pending, typing]);
 
   useLayoutEffect(() => {
     const list = listRef.current;
@@ -125,38 +148,39 @@ export function Conversation() {
     if (v.trim()) getSocket().emit("dm:typing", { conversationId: id });
   }
 
-  async function send(e?: React.FormEvent) {
+  function send(e?: React.FormEvent) {
     e?.preventDefault();
     const body = text.trim();
     if (!body) return;
     setError("");
     setText("");
-    try {
-      const m = await api<Dm>(`/conversations/${id}/messages`, { method: "POST", json: { body } });
-      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
-    } catch (err) {
-      setText((t) => t || body);
-      setError((err as Error).message);
-    }
+    enqueue(body);
+  }
+
+  function enqueue(body: string | null, file?: File) {
+    if (!myId) return;
+    const idempotencyKey = crypto.randomUUID();
+    remember(idempotencyKey);
+    const headers = { "Idempotency-Key": idempotencyKey };
+    const expiring = Boolean(file && expiringNext.current);
+    const photo = file && !expiring ? URL.createObjectURL(file) : null;
+    const path = `/conversations/${id}/messages`;
+    privateOutbox.add({
+      scope,
+      message: {
+        id: idempotencyKey, idempotencyKey, conversationId: id, senderId: myId, body, photo,
+        kind: file ? "photo" : "text", expiring, opened: false, readAt: null, createdAt: new Date().toISOString(), reactions: [],
+      },
+      submit: () => file ? upload<Dm>(path, file, expiring ? { expiring: "1" } : {}, headers)
+        : api<Dm>(path, { method: "POST", headers, json: { body } }),
+      release: photo ? () => URL.revokeObjectURL(photo) : undefined,
+    });
   }
 
   function pickPhoto(expiring: boolean) {
     expiringNext.current = expiring;
     setPhotoMenu(false);
     fileRef.current?.click();
-  }
-
-  async function sendPhoto(file: File) {
-    setSending(true);
-    setError("");
-    try {
-      const m = await upload<Dm>(`/conversations/${id}/messages`, file, expiringNext.current ? { expiring: "1" } : {});
-      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSending(false);
-    }
   }
 
   async function openExpiring(m: Dm) {
@@ -195,53 +219,57 @@ export function Conversation() {
 
       <div className="chat__list chat__list--dm" role="log" aria-label="Mensajes" ref={listRef} onScroll={onListScroll} onClick={() => setMsgMenu(null)}>
         {messages.map((m) => {
+          const entry = pendingByMessage.get(m);
           const mine = m.senderId === myId;
           return (
-            <div key={m.id} className={`bubble ${mine ? "bubble--mine" : ""} ${m.kind === "album" ? "bubble--album" : ""}`}>
-              {m.kind === "album" ? (
-                mine ? (
-                  <p><LockIcon /> Le compartiste tu álbum privado{m.body ? ` por ${m.body}` : ""}</p>
+            <Fragment key={m.idempotencyKey ?? m.id}>
+              <div className={`bubble ${mine ? "bubble--mine" : ""} ${m.kind === "album" ? "bubble--album" : ""}`}>
+                {m.kind === "album" ? (
+                  mine ? (
+                    <p><LockIcon /> Le compartiste tu álbum privado{m.body ? ` por ${m.body}` : ""}</p>
+                  ) : (
+                    <Link to={`/perfil/${m.senderId}?album=1`} className="album-msg">
+                      <LockIcon /> Te compartió su álbum privado{m.body ? ` por ${m.body}` : ""} · <u>Ver</u>
+                    </Link>
+                  )
+                ) : m.expiring ? (
+                  mine ? (
+                    <p className="expiring"><TimerIcon /> Foto temporal · {m.opened ? "ya la vio" : "sin abrir"}</p>
+                  ) : m.opened ? (
+                    <p className="expiring"><TimerIcon /> Foto temporal · ya la viste</p>
+                  ) : (
+                    <button className="expiring expiring--btn" onClick={() => openExpiring(m)}>
+                      <TimerIcon /> Foto temporal · tocá para ver
+                    </button>
+                  )
                 ) : (
-                  <Link to={`/perfil/${m.senderId}?album=1`} className="album-msg">
-                    <LockIcon /> Te compartió su álbum privado{m.body ? ` por ${m.body}` : ""} · <u>Ver</u>
-                  </Link>
-                )
-              ) : m.expiring ? (
-                mine ? (
-                  <p className="expiring"><TimerIcon /> Foto temporal · {m.opened ? "ya la vio" : "sin abrir"}</p>
-                ) : m.opened ? (
-                  <p className="expiring"><TimerIcon /> Foto temporal · ya la viste</p>
-                ) : (
-                  <button className="expiring expiring--btn" onClick={() => openExpiring(m)}>
-                    <TimerIcon /> Foto temporal · tocá para ver
-                  </button>
-                )
-              ) : (
-                <>
-                  {m.photo && <img className="bubble__photo" src={m.photo} alt="Foto enviada" loading="lazy" />}
-                  {m.body && <p>{m.body}</p>}
-                </>
-              )}
-              <time>{new Date(m.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</time>
-              <ReactionBar reactions={m.reactions ?? []} myId={myId} mine={mine} onToggle={(k) => react(m, k)} />
-              {m.kind !== "album" && (
-                <>
-                  <button
-                    className="bubble__more"
-                    aria-label="Reaccionar u opciones del mensaje"
-                    onClick={(e) => { e.stopPropagation(); setMsgMenu(msgMenu === m.id ? null : m.id); }}
-                  >
-                    ⋯
-                  </button>
-                  {msgMenu === m.id && (
-                    <div className={`menu menu--bubble ${mine ? "" : "menu--bubble-theirs"}`} role="menu" onClick={(e) => e.stopPropagation()}>
-                      <ReactionPicker current={myReaction(m.reactions ?? [], myId)} onPick={(k) => react(m, k)} />
-                      {mine && <button role="menuitem" className="danger" onClick={() => unsend(m)}>Desenviar (se borra para los dos)</button>}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+                  <>
+                    {entry?.failure && !entry.failure.retryable && m.kind === "photo" ? <p>Foto</p> : m.photo && <img className="bubble__photo" src={m.photo} alt="Foto enviada" loading="lazy" />}
+                    {m.body && <p>{m.body}</p>}
+                  </>
+                )}
+                <time>{new Date(m.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</time>
+                <ReactionBar reactions={m.reactions ?? []} myId={myId} mine={mine} onToggle={(k) => react(m, k)} />
+                {!entry && m.kind !== "album" && (
+                  <>
+                    <button
+                      className="bubble__more"
+                      aria-label="Reaccionar u opciones del mensaje"
+                      onClick={(e) => { e.stopPropagation(); setMsgMenu(msgMenu === m.id ? null : m.id); }}
+                    >
+                      ⋯
+                    </button>
+                    {msgMenu === m.id && (
+                      <div className={`menu menu--bubble ${mine ? "" : "menu--bubble-theirs"}`} role="menu" onClick={(e) => e.stopPropagation()}>
+                        <ReactionPicker current={myReaction(m.reactions ?? [], myId)} onPick={(k) => react(m, k)} />
+                        {mine && <button role="menuitem" className="danger" onClick={() => unsend(m)}>Desenviar (se borra para los dos)</button>}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              {entry && <SendFailure failure={entry.failure} retry={() => privateOutbox.retry(entry)} dismiss={() => privateOutbox.dismiss(entry)} />}
+            </Fragment>
           );
         })}
         {lastMine?.readAt && messages[messages.length - 1]?.id === lastMine.id && <p className="seen">Visto</p>}
@@ -263,7 +291,7 @@ export function Conversation() {
           <SavedPhrasesMenu text={text} onClose={() => setPhrasesOpen(false)} onPick={(p) => { onType(p); setPhrasesOpen(false); }} />
         )}
         <div className="composer__row">
-          <button type="button" className="iconbtn" aria-label="Mandar foto" aria-expanded={photoMenu} disabled={sending} onClick={() => { setPhotoMenu((v) => !v); setPhrasesOpen(false); }}>
+          <button type="button" className="iconbtn" aria-label="Mandar foto" aria-expanded={photoMenu} onClick={() => { setPhotoMenu((v) => !v); setPhrasesOpen(false); }}>
             <ImageIcon />
           </button>
           <SavedPhrasesButton open={phrasesOpen} onToggle={() => { setPhrasesOpen((v) => !v); setPhotoMenu(false); }} />
@@ -274,7 +302,7 @@ export function Conversation() {
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) sendPhoto(f);
+              if (f) enqueue(null, f);
               e.target.value = "";
             }}
           />

@@ -67,12 +67,15 @@ export const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
  */
 const MAX_INPUT_PIXELS = 40_000_000;
 
+export class InvalidImageError extends Error {}
+
 export async function saveImage(input: ArrayBuffer | Buffer): Promise<string> {
   const out = await sharp(Buffer.isBuffer(input) ? input : Buffer.from(input), { limitInputPixels: MAX_INPUT_PIXELS })
     .rotate()
     .resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true })
     .webp({ quality: 82 })
-    .toBuffer();
+    .toBuffer()
+    .catch((cause) => { throw new InvalidImageError("No pudimos leer esa imagen", { cause }); });
   const key = `${crypto.randomUUID()}.webp`;
   await putBlob(key, out, "image/webp");
   return key;

@@ -1,3 +1,5 @@
+import { historyUpdates, refreshPage, watchHistory } from "../features/messages/history";
+import { groupOutbox, mergeHistory, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, getSocket, type GroupInfo, type GroupMessage, type ReactionEvent } from "../api";
@@ -21,11 +23,18 @@ function fmtCountdown(ms: number) {
 
 export function GroupChat() {
   const { id = "general" } = useParams();
+  return <GroupChatThread key={id} id={id} />;
+}
+
+function GroupChatThread({ id }: { id: string }) {
   const { me } = useMe();
+  const scope = JSON.stringify([me?.user.id, id]);
+  const pending = usePending(groupOutbox, scope);
   const nav = useNavigate();
   const [info, setInfo] = useState<GroupInfo | null>(null);
   const [infoTick, setInfoTick] = useState(0);
-  const [messages, setMessages] = useState<GroupMessage[]>([]);
+  const [confirmed, setMessages] = useState<GroupMessage[]>([]);
+  const { messages, pendingByMessage, remember, forget } = useTimeline(confirmed, pending, me?.user.id);
   const [queued, setQueued] = useState<GroupMessage[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [text, setText] = useState("");
@@ -101,56 +110,77 @@ export function GroupChat() {
 
   useEffect(() => {
     if (!isMember) return;
-    let alive = true;
+    const history = historyUpdates(setMessages);
+    const queue = historyUpdates(setQueued);
     setMessages([]);
     setQueued([]);
-    api<{ messages: GroupMessage[]; queued: GroupMessage[]; hasMore: boolean }>(`/groups/${id}/messages`)
-      .then((d) => {
-        if (!alive) return;
-        stickToBottom.current = true;
-        setMessages(d.messages);
-        setQueued(d.queued);
-        setHasMore(d.hasMore);
-      })
-      .catch((e) => setNotice({ kind: "error", text: e.message }));
+    const stopHistory = watchHistory(async (signal) => {
+      history.begin();
+      queue.begin();
+      const d = await api<{ messages: GroupMessage[]; queued: GroupMessage[]; hasMore: boolean }>(
+        `/groups/${id}/messages`, { signal },
+      );
+      if (signal.aborted) return;
+      for (const m of [...d.messages, ...d.queued]) {
+        if (m.author.id === me?.user.id) groupOutbox.acknowledge(scope, m);
+      }
+      for (const m of d.queued) forget(m.idempotencyKey ?? m.id);
+      history.finish((list) => refreshPage(list, d.messages, d.hasMore));
+      queue.finish(() => d.queued);
+      setHasMore(d.hasMore);
+    }, (error) => {
+      history.stop();
+      queue.stop();
+      setNotice({ kind: "error", text: error.message });
+    });
 
     const s = getSocket();
     const onMessage = (m: GroupMessage) => {
       if (m.groupId !== id) return;
-      setQueued((q) => q.filter((x) => x.id !== m.id));
-      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
+      if (m.author.id === me?.user.id) groupOutbox.acknowledge(scope, m);
+      queue.update((q) => q.filter((x) => x.id !== m.id));
+      history.update((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
     };
     const onQueued = (m: GroupMessage) => {
       if (m.groupId !== id) return;
-      setQueued((q) => {
+      if (m.author.id === me?.user.id) forget(m.idempotencyKey ?? m.id);
+      if (m.author.id === me?.user.id) groupOutbox.acknowledge(scope, m);
+      queue.update((q) => {
         const rest = q.filter((x) => x.id !== m.id);
         return [...rest, m].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
       });
     };
     const onCancelled = (p: { id: string; groupId: string }) => {
-      if (p.groupId === id) setQueued((q) => q.filter((x) => x.id !== p.id));
+      if (p.groupId !== id) return;
+      queue.update((q) => q.filter((x) => x.id !== p.id));
     };
     const onDeleted = (p: { id: string; groupId: string }) => {
-      if (p.groupId === id) setMessages((list) => list.filter((x) => x.id !== p.id));
+      if (p.groupId !== id) return;
+      history.update((list) => list.filter((x) => x.id !== p.id));
     };
+    const stopWatching = groupOutbox.watchConfirmations(scope, (m) => {
+      if (m.status === "queued") onQueued(m);
+      if (m.status === "published") onMessage(m);
+    });
     s.on("group:message", onMessage);
     s.on("group:queued", onQueued);
     s.on("group:cancelled", onCancelled);
     s.on("group:deleted", onDeleted);
     const onReaction = (p: ReactionEvent) => {
       if (p.scope !== "group" || p.groupId !== id) return;
-      setMessages((list) => list.map((x) => (x.id === p.messageId ? { ...x, reactions: p.reactions } : x)));
+      history.update((list) => list.map((x) => (x.id === p.messageId ? { ...x, reactions: p.reactions } : x)));
     };
     s.on("reaction", onReaction);
     return () => {
-      alive = false;
+      stopWatching();
+      stopHistory();
       s.off("group:message", onMessage);
       s.off("group:queued", onQueued);
       s.off("group:cancelled", onCancelled);
       s.off("group:deleted", onDeleted);
       s.off("reaction", onReaction);
     };
-  }, [id, isMember]);
+  }, [id, isMember, scope]);
 
   // Reloj para las cuentas regresivas de la cola
   useEffect(() => {
@@ -162,7 +192,7 @@ export function GroupChat() {
   useLayoutEffect(() => {
     const el = listRef.current;
     if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
-  }, [messages, queued]);
+  }, [confirmed, pending, queued]);
 
   function onScroll() {
     const el = listRef.current;
@@ -170,7 +200,7 @@ export function GroupChat() {
   }
 
   async function loadOlder() {
-    const first = messages[0];
+    const first = confirmed[0];
     if (!first) return;
     const el = listRef.current;
     const prevHeight = el?.scrollHeight ?? 0;
@@ -178,7 +208,7 @@ export function GroupChat() {
       `/groups/${id}/messages?before=${encodeURIComponent(first.scheduledAt)}`,
     );
     stickToBottom.current = false;
-    setMessages((list) => [...d.messages, ...list]);
+    setMessages((list) => mergeHistory(d.messages, list));
     setHasMore(d.hasMore);
     requestAnimationFrame(() => {
       if (el) el.scrollTop = el.scrollHeight - prevHeight;
@@ -188,37 +218,42 @@ export function GroupChat() {
   async function send(e?: React.FormEvent) {
     e?.preventDefault();
     const body = text.trim();
-    if (!body) return;
+    if (!body || !me) return;
     setNotice(null);
-    // Se vacía al toque; si falla, se devuelve el texto
     setText("");
-    const wasEditing = editing;
-    const wasReplying = replyTo;
+    const quote = replyTo;
     setReplyTo(null);
-    try {
-      if (wasEditing) {
-        setEditing(null);
-        await api(`/groups/${id}/messages/${wasEditing}`, { method: "PATCH", json: { body } });
-        return;
+    if (editing) {
+      setEditing(null);
+      try {
+        await api(`/groups/${id}/messages/${editing}`, { method: "PATCH", json: { body } });
+      } catch (err) {
+        setText((draft) => draft || body);
+        setEditing(editing);
+        setReplyTo(quote);
+        setNotice({ kind: "error", text: (err as Error).message });
       }
-      const r = await api<{ message: GroupMessage; reasons: string[] }>(`/groups/${id}/messages`, {
-        method: "POST",
-        json: { body, replyToId: wasReplying?.id },
-      });
-      stickToBottom.current = true;
-      if (r.message.status === "queued") {
-        setQueued((q) => (q.some((x) => x.id === r.message.id) ? q : [...q, r.message]));
-        const why = r.reasons.length ? ` (${r.reasons.join(", ")})` : "";
-        setNotice({ kind: "info", text: `Tu mensaje quedó en cola${why}. Sale solo cuando te toque.` });
-      } else {
-        setMessages((list) => (list.some((x) => x.id === r.message.id) ? list : [...list, r.message]));
-      }
-    } catch (err) {
-      setText((t) => t || body);
-      if (wasEditing) setEditing(wasEditing);
-      if (wasReplying) setReplyTo(wasReplying);
-      setNotice({ kind: "error", text: (err as Error).message });
+      return;
     }
+
+    const idempotencyKey = crypto.randomUUID();
+    remember(idempotencyKey);
+    stickToBottom.current = true;
+    groupOutbox.add({
+      scope,
+      message: {
+        id: idempotencyKey, idempotencyKey, groupId: id, body, status: "published", scheduledAt: new Date().toISOString(),
+        author: { id: me.user.id, name: me.profile?.displayName ?? me.user.name, photo: me.photos.find((p) => !p.isPrivate)?.thumb ?? null },
+        replyTo: quote ? { id: quote.id, authorName: quote.author.name, body: quote.body?.slice(0, 160) ?? null } : null,
+        reactions: [],
+      },
+      submit: async () => {
+        const result = await api<{ message: GroupMessage }>(`/groups/${id}/messages`, {
+          method: "POST", headers: { "Idempotency-Key": idempotencyKey }, json: { body, replyToId: quote?.id },
+        });
+        return result.message;
+      },
+    });
   }
 
   async function cancel(m: GroupMessage) {
@@ -311,13 +346,14 @@ export function GroupChat() {
           </div>
         )}
         {messages.map((m, i) => {
+          const entry = pendingByMessage.get(m);
           const prev = messages[i - 1];
           const grouped =
             prev && prev.author.id === m.author.id &&
             new Date(m.scheduledAt).getTime() - new Date(prev.scheduledAt).getTime() < 5 * 60_000;
           const mine = m.author.id === me?.user.id;
           return (
-            <div key={m.id} id={`gm-${m.id}`} className={`gmsg ${grouped && !m.replyTo ? "gmsg--grouped" : ""}`}>
+            <div key={m.idempotencyKey ?? m.id} id={`gm-${m.id}`} className={`gmsg ${grouped && !m.replyTo ? "gmsg--grouped" : ""}`}>
               <div className="gmsg__avatar">
                 {!(grouped && !m.replyTo) && (
                   <Link to={`/perfil/${m.author.id}`} aria-label={`Ver perfil de ${m.author.name}`}>
@@ -341,9 +377,9 @@ export function GroupChat() {
                 <p className="gmsg__body">{m.body}</p>
                 <ReactionBar reactions={m.reactions ?? []} myId={me?.user.id} onToggle={(k) => react(m, k)} />
               </div>
-              <button className="iconbtn gmsg__more" aria-label="Opciones del mensaje" onClick={() => setMenuFor(menuFor === m.id ? null : m.id)}>
+              {!entry && <button className="iconbtn gmsg__more" aria-label="Opciones del mensaje" onClick={() => setMenuFor(menuFor === m.id ? null : m.id)}>
                 <DotsIcon />
-              </button>
+              </button>}
               {menuFor === m.id && (
                 <div className="menu" role="menu">
                   {m.status === "published" && <ReactionPicker current={myReaction(m.reactions ?? [], me?.user.id)} onPick={(k) => react(m, k)} />}
@@ -360,6 +396,7 @@ export function GroupChat() {
                   )}
                 </div>
               )}
+              {entry && <SendFailure failure={entry.failure} retry={() => groupOutbox.retry(entry)} dismiss={() => groupOutbox.dismiss(entry)} />}
             </div>
           );
         })}
@@ -367,7 +404,7 @@ export function GroupChat() {
         {queued.map((m) => {
           const ms = new Date(m.scheduledAt).getTime() - now;
           return (
-            <div key={m.id} className="queued">
+            <div key={m.idempotencyKey ?? m.id} className="queued">
               <div className="queued__head">
                 <ClockIcon /> En cola · sale en <b>{fmtCountdown(ms)}</b>
               </div>

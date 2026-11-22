@@ -264,6 +264,7 @@ export const groupInvite = pgTable("group_invite", {
 
 export const groupMessage = pgTable("group_message", {
   id: text("id").primaryKey(),
+  idempotencyKey: text("idempotency_key"),
   groupId: text("group_id").notNull().references(() => group.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
@@ -273,6 +274,7 @@ export const groupMessage = pgTable("group_message", {
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  uniqueIndex("gm_sender_idempotency_idx").on(t.userId, t.idempotencyKey),
   index("gm_group_sched_idx").on(t.groupId, t.status, t.scheduledAt),
   index("gm_user_idx").on(t.groupId, t.userId, t.scheduledAt),
   // Al borrar una cuenta se borran sus mensajes: sin esto había que recorrer la tabla entera
@@ -291,6 +293,7 @@ export const conversation = pgTable("conversation", {
 
 export const directMessage = pgTable("direct_message", {
   id: text("id").primaryKey(),
+  idempotencyKey: text("idempotency_key"),
   conversationId: text("conversation_id").notNull().references(() => conversation.id, { onDelete: "cascade" }),
   senderId: text("sender_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   kind: text("kind").notNull().default("text"), // text | photo | album
@@ -302,6 +305,7 @@ export const directMessage = pgTable("direct_message", {
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  uniqueIndex("dm_sender_idempotency_idx").on(t.senderId, t.idempotencyKey),
   index("dm_conv_idx").on(t.conversationId, t.createdAt),
   // /files/:key busca si el archivo es foto de un mensaje privado
   index("dm_photo_key_idx").on(t.photoKey),

@@ -4,11 +4,11 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { db, schema } from "../db/index.js";
 import {
-  ageFrom, authorsFor, imageUrl, isBlocked, mediaOut, newId, reactionsFor, type ReactionSummary, requireProfile, requireUser, type AppEnv,
+  messageKey, ageFrom, authorsFor, imageUrl, isBlocked, mediaOut, newId, reactionsFor, type ReactionSummary, requireProfile, requireUser, type AppEnv,
 } from "../lib.js";
 import { emitToUser, isOnline } from "../realtime.js";
 import { distanceLabel, visibleKm } from "../geo.js";
-import { deleteImage, MAX_UPLOAD_BYTES, saveImage } from "../storage.js";
+import { deleteImage, InvalidImageError, MAX_UPLOAD_BYTES, saveImage } from "../storage.js";
 import { albumAccessUntil, recordView } from "./premium.js";
 import { myRecentToque } from "./toques.js";
 import { pushTo } from "../push.js";
@@ -95,9 +95,10 @@ async function myConversation(convId: string, userId: string) {
   return { conv, otherId: conv.userA === userId ? conv.userB : conv.userA };
 }
 
-function serializeDm(m: typeof directMessage.$inferSelect, reactions: ReactionSummary[] = []) {
+function serializeDm(m: typeof directMessage.$inferSelect, reactions: ReactionSummary[] = [], viewerId?: string) {
   return {
     id: m.id,
+    idempotencyKey: viewerId === m.senderId ? m.idempotencyKey : undefined,
     conversationId: m.conversationId,
     senderId: m.senderId,
     kind: m.kind === "text" && m.photoKey ? "photo" : m.kind,
@@ -198,8 +199,8 @@ socialRoutes.get("/conversations/:id/messages", async (c) => {
     .where(and(...conds))
     .orderBy(desc(directMessage.createdAt))
     .limit(50);
-  const reactions = await reactionsFor(rows.map((m) => m.id));
-  return c.json({ messages: rows.reverse().map((m) => serializeDm(m, reactions.get(m.id))), hasMore: rows.length === 50 });
+  const reactions = await reactionsFor("dm", rows.map((m) => m.id));
+  return c.json({ messages: rows.reverse().map((m) => serializeDm(m, reactions.get(m.id), me.id)), hasMore: rows.length === 50 });
 });
 
 socialRoutes.post("/conversations/:id/messages", async (c) => {
@@ -207,10 +208,21 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
   const { conv, otherId } = await myConversation(c.req.param("id"), me.id);
   if (await isBlocked(me.id, otherId)) throw new HTTPException(404, { message: "Perfil no disponible" });
 
+  const idempotencyKey = messageKey(c.req.header("Idempotency-Key"));
+  async function previous(reader: Pick<typeof db, "select">) {
+    if (!idempotencyKey) return;
+    const [existing] = await reader.select().from(directMessage).where(and(eq(directMessage.senderId, me.id), eq(directMessage.idempotencyKey, idempotencyKey)));
+    if (existing && existing.conversationId !== conv.id) throw new HTTPException(409);
+    return existing;
+  }
+
+  const existing = await previous(db);
+  if (existing) return c.json(serializeDm(existing, undefined, me.id));
+  const multipart = (c.req.header("content-type") ?? "").includes("multipart/form-data");
   let body: string | null = null;
   let photoKey: string | null = null;
   let expiring = false;
-  if ((c.req.header("content-type") ?? "").includes("multipart/form-data")) {
+  if (multipart) {
     await limit(me.id, "dmPhoto");
     const form = await c.req.parseBody();
     expiring = form.expiring === "1";
@@ -219,8 +231,9 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
     if (file.size > MAX_UPLOAD_BYTES) throw new HTTPException(413, { message: "La foto pesa demasiado (máx. 12 MB)" });
     try {
       photoKey = await saveImage(await file.arrayBuffer());
-    } catch {
-      throw new HTTPException(400, { message: "No pudimos leer esa imagen" });
+    } catch (error) {
+      if (error instanceof InvalidImageError) throw new HTTPException(400, { message: error.message });
+      throw error;
     }
   } else {
     await limit(me.id, "dm");
@@ -229,15 +242,39 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
     body = r.data.body;
   }
 
-  const now = new Date();
-  const [row] = await db
-    .insert(directMessage)
-    .values({ id: newId(), conversationId: conv.id, senderId: me.id, kind: photoKey ? "photo" : "text", body, photoKey, expiring, createdAt: now })
-    .returning();
-  await db.update(conversation).set({ lastMessageAt: now }).where(eq(conversation.id, conv.id));
-  const msg = serializeDm(row);
+  // El índice único decide qué pedido guarda el mensaje si llegan dos reintentos juntos.
+  const { row, fresh } = await db.transaction(async (tx) => {
+    const now = new Date();
+    const [inserted] = await tx.insert(directMessage).values({
+      id: newId(),
+      idempotencyKey,
+      conversationId: conv.id,
+      senderId: me.id,
+      kind: photoKey ? "photo" : "text",
+      body, photoKey, expiring, createdAt: now,
+    }).onConflictDoNothing({ target: [directMessage.senderId, directMessage.idempotencyKey] }).returning();
+    if (!inserted) {
+      const saved = await previous(tx);
+      if (!saved) throw new HTTPException(409);
+      return { row: saved, fresh: false };
+    }
+    await tx.update(conversation).set({
+      lastMessageAt: sql`greatest(${conversation.lastMessageAt}, ${now.toISOString()}::timestamptz)`,
+    }).where(eq(conversation.id, conv.id));
+    return { row: inserted, fresh: true };
+  }).catch(async (error) => {
+    // Si se perdió la respuesta al commit, la foto puede estar en uso.
+    if (photoKey) {
+      const [linked] = await db.select({ id: directMessage.id }).from(directMessage).where(eq(directMessage.photoKey, photoKey));
+      if (!linked) await deleteImage(photoKey);
+    }
+    throw error;
+  });
+  if (!fresh && photoKey) await deleteImage(photoKey);
+  const msg = serializeDm(row, undefined, me.id);
+  if (!fresh) return c.json(msg);
   emitToUser(me.id, "dm:message", msg);
-  emitToUser(otherId, "dm:message", msg);
+  emitToUser(otherId, "dm:message", serializeDm(row));
   // Notificación discreta (sin nombre ni contenido). Se manda siempre: si la app está abierta y a la vista,
   // el service worker no la muestra. Antes se salteaba si "estaba en línea", y en el celu con la app
   // minimizada la conexión queda abierta un rato y el aviso nunca llegaba.
@@ -284,7 +321,7 @@ socialRoutes.delete("/conversations/:id/messages/:mid", async (c) => {
     .returning();
   if (!row) return c.notFound();
   if (row.photoKey) await deleteImageUnlessEvidence(row.photoKey);
-  await db.delete(schema.reaction).where(eq(schema.reaction.messageId, row.id));
+  await db.delete(schema.reaction).where(and(eq(schema.reaction.scope, "dm"), eq(schema.reaction.messageId, row.id)));
   const payload = { conversationId: conv.id, id: row.id };
   emitToUser(me.id, "dm:deleted", payload);
   emitToUser(otherId, "dm:deleted", payload);

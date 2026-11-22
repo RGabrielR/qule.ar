@@ -22,11 +22,11 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
   return data as T;
 }
 
-export const upload = <T,>(path: string, file: File, extra: Record<string, string> = {}) => {
+export const upload = <T,>(path: string, file: File, extra: Record<string, string> = {}, headers?: HeadersInit) => {
   const fd = new FormData();
   fd.append("file", file);
   for (const [k, v] of Object.entries(extra)) fd.append(k, v);
-  return api<T>(path, { method: "POST", body: fd });
+  return api<T>(path, { method: "POST", body: fd, headers });
 };
 
 let socket: Socket | null = null;
@@ -36,6 +36,7 @@ export function getSocket(): Socket {
   return socket;
 }
 export function closeSocket() {
+  window.dispatchEvent(new Event("mortero:session-ended"));
   socket?.disconnect();
   socket = null;
 }
@@ -120,6 +121,7 @@ export type NearbyPerson = {
 };
 
 export type GroupMessage = {
+  idempotencyKey?: string | null;
   id: string;
   groupId: string;
   body: string | null;
@@ -132,6 +134,7 @@ export type GroupMessage = {
 };
 
 export type Dm = {
+  idempotencyKey?: string | null;
   id: string;
   conversationId: string;
   senderId: string;
