@@ -10,6 +10,7 @@ import { slowModeText } from "../features/groups/groupRules";
 import { useTabData } from "../features/navigation/tabData";
 import { GroupPhotoSetting } from "../components/GroupPhoto";
 import { GroupAvatar } from "../components/GroupAvatar";
+import { GroupEvents } from "../components/GroupEvents";
 
 export function GroupInfo() {
   const { id = "" } = useParams();
@@ -132,6 +133,8 @@ export function GroupInfo() {
       </section>
 
       {error && <div className="notice notice--error" role="alert">{error}</div>}
+
+      {info.role && !info.isGeneral && <GroupEvents key={id} groupId={id} canEdit={isMod} />}
 
       {isMod && !info.isGeneral && (
         <section className="section">

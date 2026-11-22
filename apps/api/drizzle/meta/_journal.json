@@ -127,6 +127,13 @@
       "when": 1795318013115,
       "tag": "0017_indices_velocidad",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795362860661,
+      "tag": "0018_agenda_grupos",
+      "breakpoints": true
     }
   ]
 }

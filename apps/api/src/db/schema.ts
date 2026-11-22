@@ -1,5 +1,5 @@
 import {
-  pgTable, text, timestamp, boolean, integer, date, jsonb, uniqueIndex, index, primaryKey, doublePrecision,
+  pgTable, text, timestamp, boolean, integer, date, jsonb, uniqueIndex, index, primaryKey, doublePrecision, foreignKey, unique,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { encryptedText } from "../crypt.js";
@@ -224,6 +224,27 @@ export const groupMember = pgTable("group_member", {
   muted: boolean("muted").notNull().default(false),
   joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.groupId, t.userId] }), index("group_member_user_idx").on(t.userId)]);
+
+export const groupEvent = pgTable("group_event", {
+  id: text("id").primaryKey(),
+  groupId: text("group_id").notNull().references(() => group.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  capacity: integer("capacity").notNull(),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+}, (t) => [index("group_event_start_idx").on(t.groupId, t.startsAt), unique("group_event_group_key").on(t.id, t.groupId)]);
+
+export const groupEventAttendance = pgTable("group_event_attendance", {
+  eventId: text("event_id").notNull(),
+  groupId: text("group_id").notNull(),
+  userId: text("user_id").notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.eventId, t.userId] }),
+  foreignKey({ columns: [t.eventId, t.groupId], foreignColumns: [groupEvent.id, groupEvent.groupId] }).onDelete("cascade"),
+  foreignKey({ columns: [t.groupId, t.userId], foreignColumns: [groupMember.groupId, groupMember.userId] }).onDelete("cascade"),
+  index("group_event_attendance_member_idx").on(t.groupId, t.userId),
+]);
 
 /**
  * Solicitudes de ingreso. Nadie puede meter a otra persona en un grupo: se entra pidiendo o aceptando una invitación (group_invite).

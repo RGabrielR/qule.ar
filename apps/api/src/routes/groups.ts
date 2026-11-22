@@ -15,7 +15,7 @@ import { broadcast, onBroadcast } from "../shared.js";
 import { pushTo } from "../push.js";
 import { notifyGroupMessage } from "../groupNotify.js";
 
-const { group, groupMember, groupMessage, groupJoinRequest, groupInvite } = schema;
+const { group, groupMember, groupMessage, groupJoinRequest, groupInvite, groupEvent, groupEventAttendance } = schema;
 
 /** Días que tiene que esperar alguien rechazado o expulsado para volver a pedir ingreso. */
 const REAPPLY_DAYS = 7;
@@ -47,6 +47,75 @@ async function requireMod(groupId: string, userId: string) {
   if (!canModerate(r.member?.role)) throw new HTTPException(403, { message: "Solo dueño o moderadores" });
   return r as typeof r & { member: NonNullable<typeof r.member> };
 }
+
+const eventInput = z.object({
+  title: z.string().trim().min(3, "Escribí un título").max(70),
+  description: z.string().trim().max(400).optional(),
+  startsAt: z.iso.datetime({ offset: true }).transform((iso) => new Date(iso))
+    .refine((date) => date.getTime() > Date.now(), "Elegí una fecha futura"),
+  capacity: z.number().int().min(1).max(500),
+});
+
+groupRoutes.get("/groups/:id/events", async (c) => {
+  const { id } = c.req.param();
+  const { id: userId } = c.get("user");
+  const { member } = await membership(id, userId);
+  if (!member) throw new HTTPException(403, { message: "No sos parte de este grupo" });
+  const rows = await db.select({
+    id: groupEvent.id, title: groupEvent.title, description: groupEvent.description, startsAt: groupEvent.startsAt,
+    capacity: groupEvent.capacity, cancelledAt: groupEvent.cancelledAt,
+    attendees: sql<number>`count(${groupEventAttendance.userId})::int`,
+    attending: sql<boolean>`coalesce(bool_or(${groupEventAttendance.userId} = ${userId}), false)`,
+  }).from(groupEvent).leftJoin(groupEventAttendance, eq(groupEventAttendance.eventId, groupEvent.id))
+    .where(and(eq(groupEvent.groupId, id), gt(groupEvent.startsAt, new Date())))
+    .groupBy(groupEvent.id).orderBy(asc(groupEvent.startsAt), asc(groupEvent.id)).limit(30);
+  return c.json(rows);
+});
+
+groupRoutes.post("/groups/:id/events", async (c) => {
+  const organizer = c.get("user");
+  const { group: g } = await requireMod(c.req.param("id"), organizer.id);
+  const event = parse(eventInput, await c.req.json().catch(() => undefined));
+  const id = newId();
+  await db.insert(groupEvent).values({ ...event, id, groupId: g.id });
+  return c.json({ id }, 201);
+});
+
+groupRoutes.delete("/groups/:id/events/:eventId", async (c) => {
+  const { group: g } = await requireMod(c.req.param("id"), c.get("user").id);
+  await db.update(groupEvent).set({ cancelledAt: new Date() }).where(and(
+    eq(groupEvent.groupId, g.id), eq(groupEvent.id, c.req.param("eventId")),
+    isNull(groupEvent.cancelledAt), gt(groupEvent.startsAt, new Date()),
+  ));
+  return c.json({ ok: true });
+});
+
+groupRoutes.on(["PUT", "DELETE"], "/groups/:id/events/:eventId/attendance", async (c) => {
+  const { id, eventId } = c.req.param();
+  const { id: userId } = c.get("user");
+  const { member } = await membership(id, userId);
+  if (!member) throw new HTTPException(403, { message: "No sos parte de este grupo" });
+  const own = and(eq(groupEventAttendance.eventId, eventId), eq(groupEventAttendance.groupId, id), eq(groupEventAttendance.userId, userId));
+  if (c.req.method === "DELETE") {
+    await db.delete(groupEventAttendance).where(own);
+    return c.json({ ok: true });
+  }
+  await db.transaction(async (tx) => {
+    const [event] = await tx.select().from(groupEvent).where(and(
+      eq(groupEvent.groupId, id), eq(groupEvent.id, eventId),
+    )).for("update");
+    if (!event) throw new HTTPException(404, { message: "No encontramos ese evento" });
+    if (event.cancelledAt || event.startsAt <= new Date()) throw new HTTPException(409, { message: "El evento ya no acepta confirmaciones" });
+
+    const [existing] = await tx.select({ id: groupEventAttendance.eventId }).from(groupEventAttendance).where(own);
+    if (existing) return;
+    const [{ attendees }] = await tx.select({ attendees: sql<number>`count(*)::int` }).from(groupEventAttendance)
+      .where(eq(groupEventAttendance.eventId, eventId));
+    if (attendees >= event.capacity) throw new HTTPException(409, { message: "El evento está lleno" });
+    await tx.insert(groupEventAttendance).values({ eventId, groupId: id, userId });
+  });
+  return c.json({ ok: true });
+});
 
 /**
  * Cuántos miembros tiene cada grupo. Se guarda un minuto en memoria: el grupo general tiene miles de miembros
