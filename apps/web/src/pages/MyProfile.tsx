@@ -107,6 +107,8 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
   const publicFileRef = useRef<HTMLInputElement>(null);
   const privateFileRef = useRef<HTMLInputElement>(null);
   const [grants, setGrants] = useState<AlbumGrant[]>([]);
+  const [grantFeedback, setGrantFeedback] = useState("");
+  const grantsHeading = useRef<HTMLHeadingElement>(null);
   const [progress, setProgress] = useState<{ done: number; total: number; video: boolean } | null>(null);
   const [viewing, setViewing] = useState<number | null>(null);
   const [cropBatch, setCropBatch] = useState<(MediaBatch & { image: HTMLImageElement }) | null>(null);
@@ -185,6 +187,16 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
     return changeMedia(async () => {
       await api(`/album/grants/${userId}`, { method: "DELETE" });
       setGrants((g) => g.filter((x) => x.id !== userId));
+    });
+  }
+
+  function revokeAll() {
+    if (!confirm("¿Quitar todos los accesos a tu álbum privado?")) return;
+    return changeMedia(async () => {
+      await api("/album/grants", { method: "DELETE" });
+      grantsHeading.current?.focus();
+      setGrants([]);
+      setGrantFeedback("Quitaste todos los accesos.");
     });
   }
 
@@ -355,9 +367,13 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
             Subiendo {progress.done + 1} de {progress.total}{progress.video ? " · los videos tardan un poco más en procesarse" : ""}…
           </p>
         )}
+        <div className="album-access__heading">
+          <h3 className="subhead" ref={grantsHeading} tabIndex={-1}>Acceso al álbum</h3>
+          {!!grants.length && <button type="button" className="btn btn--small btn--ghost btn--dangertext" disabled={mediaLocked} onClick={revokeAll}>Quitar todos los accesos</button>}
+        </div>
+        {grantFeedback && <p className="muted small" role="status">{grantFeedback}</p>}
         {grants.length > 0 && (
           <>
-            <h3 className="subhead subhead--spaced">Lo pueden ver</h3>
             <ul className="blocked grants">
               {grants.map((g) => (
                 <li key={g.id}>
@@ -392,7 +408,7 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
         )}
       </section>
 
-      <form className="section form" onSubmit={save}>
+      <form className="section form profile-editor__form" onSubmit={save}>
         <h2 className="section__title">Sobre vos <span className="muted">{profile.age} años</span></h2>
         <label className="field">
           <span>Nombre</span>

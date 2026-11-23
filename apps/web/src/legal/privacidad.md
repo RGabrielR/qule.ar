@@ -50,7 +50,7 @@ Usar qule.ar puede decir algo sobre tu orientación sexual o tu identidad de gé
 
 ## 4. Para qué usamos tus datos
 
-Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, mandar tus mensajes, avisarte con notificaciones, mandarte mails de la cuenta (bienvenida o cambio de contraseña), revisar reportes y cuidar la seguridad.
+Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, mandar tus mensajes, avisarte con notificaciones, mandarte mails de la cuenta (solo para cambiar la contraseña y avisos sobre tu cuenta, como una suspensión: nunca publicidad), revisar reportes y cuidar la seguridad.
 
 **Cuidado de menores:** qule.ar es solo para mayores de 18. Para detectar a tiempo si entra alguien menor, la app revisa automáticamente los nombres y las descripciones de los perfiles y los grupos, y busca señales como "+14" o "15 años". Si encuentra una, no borra ni oculta nada: manda el caso a moderación para que lo revise una persona.
 

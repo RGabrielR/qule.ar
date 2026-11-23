@@ -14,8 +14,10 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
   const s = await auth.api.getSession({ headers: c.req.raw.headers });
   if (!s) throw new HTTPException(401, { message: "Tenés que iniciar sesión" });
   const [p] = await db.select().from(profile).where(eq(profile.userId, s.user.id));
-  // Cuenta suspendida: solo puede ver su estado (GET /api/me) y borrar su cuenta (DELETE /api/me)
-  if (p?.suspendedAt && !(c.req.path === "/api/me" && ["GET", "DELETE"].includes(c.req.method))) {
+  // Cuenta suspendida: solo puede ver su estado (GET /api/me), borrar su cuenta (DELETE /api/me) y pedir que
+  // se revise la suspensión (/api/appeal, ver routes/appeals.ts)
+  const allowed = (c.req.path === "/api/me" && ["GET", "DELETE"].includes(c.req.method)) || c.req.path === "/api/appeal" || c.req.path.startsWith("/api/appeal/");
+  if (p?.suspendedAt && !allowed) {
     throw new HTTPException(403, { message: "Tu cuenta está suspendida" });
   }
   c.set("user", s.user);

@@ -59,7 +59,7 @@ Las reglas completas de convivencia están en el [Código de conducta](https://g
 
 - Podés reportar perfiles y mensajes desde la app. Un equipo de moderación voluntario revisa los reportes.
 - Para revisar un reporte, quien modera puede ver el mensaje o el perfil reportado.
-- Si alguien rompe las reglas, podemos avisarle, borrar contenido, o suspender o borrar su cuenta. Si creés que nos equivocamos con tu cuenta, escribinos.
+- Si alguien rompe las reglas, podemos avisarle, borrar contenido, o suspender o borrar su cuenta. Si creés que nos equivocamos con tu cuenta, podés pedir una revisión desde la misma app: es privado y te respondemos ahí.
 
 ## 7. Encuentros en persona: cuidate
 

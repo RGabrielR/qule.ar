@@ -14,6 +14,7 @@ import { emitPublishedMessage, emitToGroup, emitToUser, isOnline, serializeGroup
 import { broadcast, onBroadcast } from "../shared.js";
 import { pushTo } from "../push.js";
 import { notifyGroupMessage } from "../groupNotify.js";
+import { forgetFile } from "../fileCache.js";
 
 const { group, groupMember, groupMessage, groupJoinRequest, groupInvite } = schema;
 
@@ -188,7 +189,10 @@ async function kickAll(groupId: string) {
 /** Da de baja un grupo: desaparece para todo el mundo y queda guardado 90 días como prueba (ver moderation.ts). */
 export async function removeGroup(groupId: string, reason: string) {
   await kickAll(groupId);
-  await db.update(group).set({ removedAt: new Date(), removedReason: reason }).where(eq(group.id, groupId));
+  const [g] = await db.update(group).set({ removedAt: new Date(), removedReason: reason }).where(eq(group.id, groupId))
+    .returning({ photoKey: group.photoKey });
+  // Su foto pasa a verla solo moderación
+  forgetFile(g?.photoKey);
 }
 
 /** El dueño cierra el grupo: si es prueba de un reporte, se da de baja (no se pierde); si no, se borra. */
@@ -215,17 +219,34 @@ groupRoutes.get("/groups", async (c) => {
   return c.json(rows.map(({ photoKey, ...r }) => ({ ...r, photo: thumbUrl(photoKey), memberCount: counts.get(r.id) ?? 0, pendingCount: pending.get(r.id) ?? 0 })));
 });
 
-/** Todos los grupos, para explorar y pedir ingreso. */
+/** Grupos por página en Explorar. */
+export const EXPLORE_PAGE = 60;
+
+/**
+ * Todos los grupos, para explorar y pedir ingreso: los que tienen más gente primero, de a páginas.
+ * Antes se traían los 200 más nuevos y recién ahí se ordenaban por miembros: cuando hubo más de 200 grupos,
+ * los más viejos (que son los más grandes) dejaron de aparecer.
+ * `offset` pide la página siguiente; `limit` (hasta 300) sirve para recargar de una vez lo que ya se ve.
+ */
 groupRoutes.get("/groups/all", async (c) => {
   const u = c.get("user");
   const q = (c.req.query("q") ?? "").trim().slice(0, 40);
+  const offset = Math.max(0, Math.min(10_000, Number(c.req.query("offset")) || 0));
+  const pageSize = Math.max(1, Math.min(300, Number(c.req.query("limit")) || EXPLORE_PAGE));
   const conds = [eq(group.isGeneral, false), isNull(group.removedAt)];
   if (q) conds.push(or(ilike(group.name, `%${q}%`), ilike(group.description, `%${q}%`))!);
+  // Cuenta con el índice de la clave de group_member (group_id, user_id)
+  const members = sql<number>`(select count(*)::int from ${groupMember} where ${groupMember.groupId} = ${group.id})`;
+  const page = await db.select({ g: group, n: members }).from(group).where(and(...conds))
+    .orderBy(desc(members), desc(group.createdAt), asc(group.id))
+    .limit(pageSize + 1)
+    .offset(offset);
+  const more = page.length > pageSize;
   const hiddenGroups = await autoHiddenGroups();
-  const rows = (await db.select().from(group).where(and(...conds)).orderBy(desc(group.createdAt)).limit(200))
-    .filter((g) => !hiddenGroups.has(g.id)); // ocultos por precaución: varios reportes urgentes sin revisar
+  const visible = page.slice(0, pageSize).filter((r) => !hiddenGroups.has(r.g.id)); // ocultos por precaución: varios reportes urgentes sin revisar
+  const rows = visible.map((r) => r.g);
+  const counts = new Map(visible.map((r) => [r.g.id, r.n]));
   const ids = rows.map((r) => r.id);
-  const counts = await memberCounts(ids);
   const mine = ids.length
     ? await db.select().from(groupMember).where(and(eq(groupMember.userId, u.id), inArray(groupMember.groupId, ids)))
     : [];
@@ -241,9 +262,7 @@ groupRoutes.get("/groups/all", async (c) => {
     pending: states.get(g.id)?.pending ?? false,
     cooldownUntil: states.get(g.id)?.cooldownUntil ?? null,
   }));
-  // Los más concurridos primero
-  list.sort((a, b) => b.memberCount - a.memberCount);
-  return c.json(list);
+  return c.json({ groups: list, nextOffset: more ? offset + pageSize : null });
 });
 
 // ---------- Crear, editar, borrar ----------
@@ -370,7 +389,7 @@ groupRoutes.post("/groups/:id/requests", async (c) => {
   if (member) throw new HTTPException(400, { message: "Ya sos parte de este grupo" });
   // Si ya te habían invitado, pedir entrar es aceptar la invitación
   if ((await inviteStateFor(u.id, [g.id])).get(g.id) === "invited") {
-    await joinGroup(g, u.id, null);
+    await acceptPendingAdmission(g.id, u.id, { kind: "invite" });
     return c.json({ joined: true });
   }
   const state = (await requestStateFor(u.id, [g.id])).get(g.id);
@@ -426,23 +445,29 @@ groupRoutes.post("/groups/:id/requests/:rid/:decision{accept|reject}", async (c)
   const u = c.get("user");
   const { group: g } = await requireMod(c.req.param("id"), u.id);
   const accept = c.req.param("decision") === "accept";
-  const [req] = await db
-    .update(groupJoinRequest)
-    .set({ status: accept ? "accepted" : "rejected", resolvedBy: u.id, resolvedAt: new Date() })
-    .where(and(
-      eq(groupJoinRequest.id, c.req.param("rid")),
-      eq(groupJoinRequest.groupId, g.id),
-      eq(groupJoinRequest.status, "pending"),
-    ))
-    .returning();
-  if (!req) throw new HTTPException(409, { message: "Esa solicitud ya fue resuelta" });
+  const applicantId = await db.transaction(async (tx) => {
+    await lockActiveGroup(tx, g.id);
+    await lockModerator(tx, g.id, u.id);
+    const now = new Date();
+    const [resolved] = await tx
+      .update(groupJoinRequest)
+      .set({ status: accept ? "accepted" : "rejected", resolvedBy: u.id, resolvedAt: now })
+      .where(and(
+        eq(groupJoinRequest.id, c.req.param("rid")),
+        eq(groupJoinRequest.groupId, g.id),
+        eq(groupJoinRequest.status, "pending"),
+      ))
+      .returning({ userId: groupJoinRequest.userId });
+    if (!resolved) throw new HTTPException(409, { message: "Esa solicitud ya fue resuelta" });
+    if (accept) await addMember(tx, g.id, resolved.userId, u.id, now);
+    return resolved.userId;
+  });
   if (accept) {
-    await joinGroup(g, req.userId, u.id); // también cierra una invitación que tuviera pendiente
-    emitToUser(req.userId, "group:accepted", { groupId: g.id, name: g.name });
-    pushTo(req.userId, { title: "Te aceptaron en un grupo", body: "Ya podés entrar al chat.", url: `/grupos/${g.id}`, tag: `acc-${g.id}`, kind: "solicitudes" }).catch(() => {});
+    await notifyGroupJoin(g.id, applicantId);
+    notifyRequestAccepted(g, applicantId);
   } else {
-    emitToUser(req.userId, "group:rejected", { groupId: g.id, name: g.name });
-    await notifyMods(g.id, "group:request", { groupId: g.id });
+    emitToUser(applicantId, "group:rejected", { groupId: g.id, name: g.name });
+    await notifyAdmissionMods(g.id);
   }
   return c.json({ ok: true });
 });
@@ -453,21 +478,67 @@ groupRoutes.post("/groups/:id/requests/:rid/:decision{accept|reject}", async (c)
 /** Invitaciones pendientes que puede tener un grupo a la vez (frena las invitaciones masivas). */
 const MAX_PENDING_INVITES = 50;
 
-/** Suma a alguien al grupo y cierra lo que tenía pendiente (su solicitud o su invitación). */
-async function joinGroup(g: typeof group.$inferSelect, userId: string, by: string | null) {
-  const now = new Date();
-  await db.insert(groupMember).values({ groupId: g.id, userId }).onConflictDoNothing();
-  forgetMemberCount(g.id);
-  await db
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Bloquea primero el grupo: aceptar una solicitud y aceptar una invitación pueden modificar las mismas filas en distinto orden. */
+async function lockActiveGroup(tx: Transaction, groupId: string) {
+  const [active] = await tx.select({ id: group.id }).from(group)
+    .where(and(eq(group.id, groupId), isNull(group.removedAt))).for("no key update");
+  if (!active) throw new HTTPException(404, { message: "Ese grupo ya no existe" });
+}
+
+/** Evita que cambie el rol mientras el moderador resuelve el ingreso. */
+async function lockModerator(tx: Transaction, groupId: string, userId: string) {
+  const [member] = await tx.select({ role: groupMember.role }).from(groupMember)
+    .where(and(eq(groupMember.groupId, groupId), eq(groupMember.userId, userId))).for("share");
+  if (!canModerate(member?.role)) throw new HTTPException(403, { message: "Solo dueño o moderadores" });
+}
+
+/** Suma a alguien al grupo y cierra lo que tenía pendiente dentro de la misma transacción. */
+async function addMember(tx: Transaction, groupId: string, userId: string, by: string | null, now: Date) {
+  await tx.insert(groupMember).values({ groupId, userId }).onConflictDoNothing();
+  await tx
     .update(groupJoinRequest)
     .set({ status: "accepted", resolvedBy: by, resolvedAt: now })
-    .where(and(eq(groupJoinRequest.groupId, g.id), eq(groupJoinRequest.userId, userId), eq(groupJoinRequest.status, "pending")));
-  await db
+    .where(and(eq(groupJoinRequest.groupId, groupId), eq(groupJoinRequest.userId, userId), eq(groupJoinRequest.status, "pending")));
+  await tx
     .update(groupInvite)
     .set({ status: "accepted", resolvedAt: now })
-    .where(and(eq(groupInvite.groupId, g.id), eq(groupInvite.userId, userId), eq(groupInvite.status, "pending")));
-  syncGroupRoom(userId, g.id, true);
-  await notifyMods(g.id, "group:request", { groupId: g.id });
+    .where(and(eq(groupInvite.groupId, groupId), eq(groupInvite.userId, userId), eq(groupInvite.status, "pending")));
+}
+
+async function notifyGroupJoin(groupId: string, userId: string) {
+  forgetMemberCount(groupId);
+  syncGroupRoom(userId, groupId, true);
+  await notifyAdmissionMods(groupId);
+}
+
+function notifyAdmissionMods(groupId: string) {
+  return notifyMods(groupId, "group:request", { groupId })
+    .catch((error) => console.error("Aviso de ingreso a moderación", { groupId, error }));
+}
+
+function notifyRequestAccepted(g: { id: string; name: string }, userId: string) {
+  emitToUser(userId, "group:accepted", { groupId: g.id, name: g.name });
+  pushTo(userId, { title: "Te aceptaron en un grupo", body: "Ya podés entrar al chat.", url: `/grupos/${g.id}`, tag: `acc-${g.id}`, kind: "solicitudes" }).catch(() => {});
+}
+
+type PendingAdmission = { kind: "invite" } | { kind: "request"; moderatorId: string };
+
+/** Al coincidir una solicitud y una invitación, confirma que la anterior siga pendiente. */
+async function acceptPendingAdmission(groupId: string, userId: string, pending: PendingAdmission) {
+  await db.transaction(async (tx) => {
+    await lockActiveGroup(tx, groupId);
+    const moderatorId = pending.kind === "request" ? pending.moderatorId : null;
+    if (moderatorId !== null) await lockModerator(tx, groupId, moderatorId);
+    const source = pending.kind === "invite" ? groupInvite : groupJoinRequest;
+    const [row] = await tx.select({ id: source.id }).from(source)
+      .where(and(eq(source.groupId, groupId), eq(source.userId, userId), eq(source.status, "pending")))
+      .limit(1).for("update");
+    if (!row) throw new HTTPException(409, { message: "El ingreso ya se resolvió. Actualizá el grupo." });
+    await addMember(tx, groupId, userId, moderatorId, new Date());
+  });
+  await notifyGroupJoin(groupId, userId);
 }
 
 /** Qué pasa entre una persona y un grupo: si ya está, si tiene invitación o solicitud pendiente. */
@@ -547,9 +618,8 @@ groupRoutes.post("/groups/:id/invites", async (c) => {
   if (state === "declined") throw new HTTPException(429, { message: "Rechazó una invitación hace poco. Esperá unos días para volver a invitarle" });
   if (state === "requested") {
     // Ya había pedido entrar: invitarle es lo mismo que aceptarle
-    await joinGroup(g, target, u.id);
-    emitToUser(target, "group:accepted", { groupId: g.id, name: g.name });
-    pushTo(target, { title: "Te aceptaron en un grupo", body: "Ya podés entrar al chat.", url: `/grupos/${g.id}`, tag: `acc-${g.id}`, kind: "solicitudes" }).catch(() => {});
+    await acceptPendingAdmission(g.id, target, { kind: "request", moderatorId: u.id });
+    notifyRequestAccepted(g, target);
     return c.json({ joined: true });
   }
 
@@ -716,43 +786,63 @@ groupRoutes.get("/invites", requireUser, requireProfile, async (c) => {
 groupRoutes.post("/invites/:iid/:decision{accept|decline}", requireUser, requireProfile, async (c) => {
   const u = c.get("user");
   const accept = c.req.param("decision") === "accept";
-  const [inv] = await db
-    .select()
-    .from(groupInvite)
-    .where(and(eq(groupInvite.id, c.req.param("iid")), eq(groupInvite.userId, u.id), eq(groupInvite.status, "pending")));
-  if (!inv) throw new HTTPException(409, { message: "Esa invitación ya no está disponible" });
-  const [g] = await db.select().from(group).where(eq(group.id, inv.groupId));
-  if (!g || g.removedAt) throw new HTTPException(404, { message: "Ese grupo ya no existe" });
-  if (accept) {
-    await joinGroup(g, u.id, inv.invitedBy);
-  } else {
-    await db.update(groupInvite).set({ status: "declined", resolvedAt: new Date() }).where(eq(groupInvite.id, inv.id));
-    await notifyMods(g.id, "group:request", { groupId: g.id });
-  }
-  emitToUser(u.id, "group:invite", { groupId: g.id }); // para que se actualice el contador en sus otras pestañas
-  if (accept) return c.json({ groupId: g.id });
+  const groupId = await db.transaction(async (tx) => {
+    const pendingInvite = and(
+      eq(groupInvite.id, c.req.param("iid")),
+      eq(groupInvite.userId, u.id),
+      eq(groupInvite.status, "pending"),
+    );
+    const [inv] = await tx.select({ groupId: groupInvite.groupId }).from(groupInvite).where(pendingInvite);
+    if (!inv) throw new HTTPException(409, { message: "Esa invitación ya no está disponible" });
+    await lockActiveGroup(tx, inv.groupId);
+    const now = new Date();
+    const [resolved] = await tx.update(groupInvite)
+      .set({ status: accept ? "accepted" : "declined", resolvedAt: now })
+      .where(pendingInvite)
+      .returning({ invitedBy: groupInvite.invitedBy });
+    if (!resolved) throw new HTTPException(409, { message: "Esa invitación ya no está disponible" });
+    if (accept) await addMember(tx, inv.groupId, u.id, resolved.invitedBy, now);
+    return inv.groupId;
+  });
+  if (accept) await notifyGroupJoin(groupId, u.id);
+  else await notifyAdmissionMods(groupId);
+  emitToUser(u.id, "group:invite", { groupId }); // para que se actualice el contador en sus otras pestañas
+  if (accept) return c.json({ groupId });
   return c.json({ ok: true });
 });
 
 // ---------- Miembros ----------
 
+/** De a 25, como la grilla de Gente: la información del grupo no trae cientos de integrantes de una. */
+const MEMBER_PAGE = 25;
+
 groupRoutes.get("/groups/:id/members", async (c) => {
   const u = c.get("user");
   const { group: g, member } = await membership(c.req.param("id"), u.id);
   if (!member) throw new HTTPException(403, { message: "No sos parte de este grupo" });
+  const offset = parse(z.coerce.number().int().min(0), c.req.query("offset") ?? 0);
   const rows = await db
     .select()
     .from(groupMember)
     .where(eq(groupMember.groupId, g.id))
-    .orderBy(sql`case ${groupMember.role} when 'owner' then 0 when 'moderator' then 1 else 2 end`, asc(groupMember.joinedAt))
-    .limit(500);
+    .orderBy(
+      sql`case ${groupMember.role} when 'owner' then 0 when 'moderator' then 1 else 2 end`,
+      asc(groupMember.joinedAt),
+      asc(groupMember.userId),
+    )
+    .limit(MEMBER_PAGE + 1)
+    .offset(offset);
+  const hasMore = rows.length > MEMBER_PAGE;
   const blocked = await blockedWith(u.id);
-  const visible = rows.filter((r) => !blocked.has(r.userId));
+  const visible = rows.slice(0, MEMBER_PAGE).filter((r) => !blocked.has(r.userId));
   const authors = await authorsFor(visible.map((r) => r.userId));
-  return c.json(visible.flatMap((r) => {
-    const a = authors.get(r.userId);
-    return a ? [{ ...a, role: r.role as Role, joinedAt: r.joinedAt.toISOString() }] : [];
-  }));
+  return c.json({
+    members: visible.flatMap((r) => {
+      const a = authors.get(r.userId);
+      return a ? [{ ...a, role: r.role as Role, joinedAt: r.joinedAt.toISOString() }] : [];
+    }),
+    nextOffset: hasMore ? offset + MEMBER_PAGE : null,
+  });
 });
 
 /** Nombrar o sacar moderadores (solo el dueño). */

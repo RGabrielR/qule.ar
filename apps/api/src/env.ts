@@ -14,8 +14,11 @@ export const env = {
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
   VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY,
   VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
-  // Mails (bienvenida, recuperar contraseña). Ej.: smtps://resend:API_KEY@smtp.resend.com:465
+  // Mails (recuperar contraseña y avisos de moderación). Ej. con Amazon SES:
+  // smtps://USUARIO_SMTP:CLAVE_SMTP@email-smtp.eu-west-1.amazonaws.com:465
   SMTP_URL: process.env.SMTP_URL,
+  // Tope de mails en 24 horas, entre todos. Si se llega, no sale ninguno más hasta que baje (ver mail.ts).
+  MAIL_DAILY_CAP: Number(process.env.MAIL_DAILY_CAP ?? 2000),
   MAIL_FROM: process.env.MAIL_FROM ?? "qule.ar <hola@qule.local>",
   // Emails con acceso al panel de moderación, separados por coma
   ADMIN_EMAILS: (process.env.ADMIN_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),

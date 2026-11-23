@@ -22,7 +22,9 @@ import { nearbyRoutes } from "./routes/nearby.js";
 import { premiumRoutes } from "./routes/premium.js";
 import { adminRoutes } from "./routes/admin.js";
 import { toqueRoutes } from "./routes/toques.js";
+import { appealRoutes } from "./routes/appeals.js";
 import { securityHeaders } from "./security.js";
+import { limitApiBody } from "./requestBody.js";
 import { sweepExpiredPhotos } from "./expiring.js";
 import { purgeRemovedGroups, scanExistingGroups } from "./moderation.js";
 import { signalReady } from "./shared.js";
@@ -82,6 +84,7 @@ if (canonical.protocol === "https:") {
   });
 }
 
+app.use("/api/*", limitApiBody);
 app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 app.route("/api", meRoutes);
 app.route("/api", groupRoutes);
@@ -90,6 +93,7 @@ app.route("/api", nearbyRoutes);
 app.route("/api", premiumRoutes);
 app.route("/api", adminRoutes);
 app.route("/api", toqueRoutes);
+app.route("/api", appealRoutes);
 app.all("/api/*", (c) => c.json({ error: "No existe" }, 404));
 
 // En producción el API también sirve la web compilada (un solo proceso, un solo puerto)

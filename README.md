@@ -63,7 +63,7 @@ Copiá `.env.example` a `.env` y completá lo que necesites:
 | `DATABASE_URL` | Postgres real. Si no está, se usa PGlite. |
 | `APP_URL` | URL pública de la web (por defecto `http://localhost:5173`). |
 | `ADMIN_EMAILS` | Emails con acceso al panel de moderación, separados por coma. Solo cuentan si el mail de la cuenta está verificado (por ejemplo, si entra con Google). |
-| `ADMIN_USER_IDS` | IDs de cuenta con acceso a moderación, separados por coma. Para quien entra con mail y contraseña. El ID se ve en `/api/me` con la sesión iniciada. |
+| `ADMIN_USER_IDS` | IDs de cuenta con la administración general (todos los permisos de moderación), separados por coma. Al resto del equipo se le dan permisos chicos desde el panel (ver docs/MODERACION.md). Para quien entra con mail y contraseña. El ID se ve en `/api/me` con la sesión iniciada. |
 | `SMTP_URL` / `MAIL_FROM` | Mails de bienvenida y para recuperar la contraseña, por cualquier SMTP (Resend, Brevo, etc.). Sin esto no se mandan mails y no aparece "¿Te olvidaste la contraseña?". En desarrollo los mails salen por consola. |
 | `CLIENT_IP_HEADER` | Encabezado con la IP real de cada persona (límite de intentos). `cf-connecting-ip` por defecto; con el nginx de `deploy/`, `x-real-ip`. Ver [docs/DEPLOY.md](docs/DEPLOY.md). |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Notificaciones push. Se generan con `npm run vapid`. En desarrollo se crean solas. |

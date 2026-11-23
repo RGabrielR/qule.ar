@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db, schema } from "./db/index.js";
 import { env } from "./env.js";
-import { resetMail, sendMail, welcomeMail } from "./mail.js";
+import { resetMail, sendMail } from "./mail.js";
 import { clustered, hit } from "./shared.js";
 
 export const googleEnabled = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
@@ -53,17 +53,8 @@ export const auth = betterAuth({
     // Al cambiar la contraseña se cierran las demás sesiones abiertas
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
-      void sendMail(resetMail(user.email, url));
-    },
-  },
-  databaseHooks: {
-    user: {
-      create: {
-        // Mail de bienvenida, también para quien entra con Google. No se espera: el registro sigue aunque falle.
-        after: async (user) => {
-          void sendMail(welcomeMail(user.email, user.name));
-        },
-      },
+      // Tope por dirección y general en mail.ts. Better Auth responde lo mismo exista o no la cuenta.
+      void sendMail(resetMail(user.email, url), "reset");
     },
   },
   socialProviders: googleEnabled

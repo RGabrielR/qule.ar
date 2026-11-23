@@ -1,6 +1,6 @@
 import { and, asc, eq, or } from "drizzle-orm";
 import { mailEnabled } from "../mail.js";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { db, schema } from "../db/index.js";
@@ -9,13 +9,14 @@ import { syncGroupRoom } from "../realtime.js";
 import { deleteImage, MAX_UPLOAD_BYTES, MAX_VIDEO_BYTES, readImage, saveImage, saveVideo, videoEnabled, videoFile, type VideoSource } from "../storage.js";
 import { googleEnabled } from "../auth.js";
 import { hasAlbumAccess } from "./premium.js";
-import { isAdmin } from "./admin.js";
+import { accessFor } from "../staff.js";
 import { APP_NAME } from "../brand.js";
 import { expiringIsOver } from "../expiring.js";
 import { checkMinorSignals, deleteImageUnlessEvidence, isEvidence } from "../moderation.js";
 import { limit } from "../ratelimit.js";
 import { TERMS_VERSION } from "../legal.js";
 import { NOTIFY_KINDS } from "../push.js";
+import { forgetFile, isKnownPublic, rememberPublic, requireUserForFiles } from "../fileAccess.js";
 
 const { profile, photo, user, group, groupMember, directMessage, conversation } = schema;
 const MAX_PHOTOS = 6;
@@ -46,8 +47,11 @@ export const meRoutes = new Hono<AppEnv>();
 meRoutes.get("/config", (c) => c.json({ google: googleEnabled, passwordReset: mailEnabled || process.env.NODE_ENV !== "production" }));
 
 // Archivos: solo para gente con sesión, así no se pueden scrapear las fotos desde afuera
-meRoutes.get("/files/:key", requireUser, async (c) => {
+meRoutes.get("/files/:key", requireUserForFiles, async (c) => {
   const key = c.req.param("key");
+  const thumb = c.req.query("s") === "thumb";
+  // Foto pública ya chequeada hace un rato: directo al archivo, sin preguntarle a la base (ver fileAccess.ts)
+  if (isKnownPublic(key)) return sendImage(c, key, thumb, false);
   const viewer = c.get("user").id;
   // Foto o video de álbum privado (o la miniatura de un video): solo dueño o gente con acceso vigente
   const [ph] = await db.select().from(photo).where(or(eq(photo.key, key), eq(photo.posterKey, key)));
@@ -62,10 +66,12 @@ meRoutes.get("/files/:key", requireUser, async (c) => {
   // Foto de un grupo: la ve cualquiera con sesión, igual que el nombre del grupo al explorar
   // (la de un grupo dado de baja solo la ve moderación)
   const [grp] = ph || dm ? [] : await db.select({ removedAt: group.removedAt }).from(group).where(eq(group.photoKey, key)).limit(1);
-  const gr = grp && (!grp.removedAt || isAdmin(c.get("user")));
+  // Moderación: quien revisa reportes o suspende puede ver la foto de un grupo dado de baja y las pruebas guardadas
+  const mod = async () => (await accessFor(c.get("user"))).some((a) => a === "reports" || a === "sanctions");
+  const gr = grp && (!grp.removedAt || (await mod()));
   // Archivo que ya no usa ningún mensaje, perfil ni grupo (desenviado, borrado): solo existe como prueba de un reporte,
   // y solo moderación lo puede pedir
-  if (!ph && !dm && !gr && !(isAdmin(c.get("user")) && (await isEvidence(key)))) return c.notFound();
+  if (!ph && !dm && !gr && !((await isEvidence(key)) && (await mod()))) return c.notFound();
   if (dm) {
     const [conv] = await db.select().from(conversation).where(eq(conversation.id, dm.conversationId));
     const inConv = conv && (conv.userA === viewer || conv.userB === viewer);
@@ -73,14 +79,21 @@ meRoutes.get("/files/:key", requireUser, async (c) => {
     // Ya vista: después de unos segundos no se sirve más, aunque el archivo todavía no se haya borrado
     if (dm.expiring && (dm.senderId === viewer || !dm.openedAt || expiringIsOver(dm.openedAt))) return c.notFound();
   }
-  const buf = await readImage(key, c.req.query("s") === "thumb");
+  // Las privadas no se cachean, así revocar el acceso tiene efecto
+  const noStore = Boolean(ph?.isPrivate || dm?.expiring);
+  // Foto de perfil pública o de un grupo activo: la puede ver cualquiera con sesión, se recuerda un minuto
+  if ((ph && !ph.isPrivate) || (grp && !grp.removedAt)) rememberPublic(key);
+  return sendImage(c, key, thumb, noStore);
+});
+
+async function sendImage(c: Context<AppEnv>, key: string, thumb: boolean, noStore: boolean) {
+  const buf = await readImage(key, thumb);
   if (!buf) return c.notFound();
   return c.body(new Uint8Array(buf), 200, {
     "Content-Type": "image/webp",
-    // Las privadas no se cachean, así revocar el acceso tiene efecto
-    "Cache-Control": ph?.isPrivate || dm?.expiring ? "no-store" : "private, max-age=31536000, immutable",
+    "Cache-Control": noStore ? "no-store" : "private, max-age=31536000, immutable",
   });
-});
+}
 
 /** Sirve un video por partes (Range): Safari no reproduce videos sin esto, y así se puede adelantar. */
 async function serveVideo(range: string | undefined, v: VideoSource) {
@@ -111,8 +124,10 @@ meRoutes.get("/me", requireUser, async (c) => {
   const u = c.get("user");
   const p = c.get("profile");
   const photos = await db.select().from(photo).where(eq(photo.userId, u.id)).orderBy(asc(photo.position));
+  const access = await accessFor(u);
   return c.json({
-    user: { id: u.id, email: u.email, name: u.name, isAdmin: isAdmin(u) },
+    // isAdmin: entra al panel de moderación. access: qué puede hacer ahí (ver staff.ts)
+    user: { id: u.id, email: u.email, name: u.name, isAdmin: access.length > 0, access },
     profile: p
       ? (() => {
           const { cellLat, cellLng, ...rest } = p;
@@ -237,6 +252,10 @@ meRoutes.patch("/me/photos/:id", requireUser, async (c) => {
     .where(and(eq(photo.id, c.req.param("id")), eq(photo.userId, u.id)))
     .returning();
   if (!row) return c.notFound();
+  if (isPrivate) {
+    forgetFile(row.key);
+    forgetFile(row.posterKey);
+  }
   return c.json({ ok: true });
 });
 

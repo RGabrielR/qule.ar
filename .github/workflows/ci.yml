@@ -33,3 +33,20 @@ jobs:
       - run: docker build -t qule-ci .
       - name: El API encuentra la marca dentro de la imagen
         run: docker run --rm --entrypoint node qule-ci --import tsx -e "import('@mortero/brand').then((b) => console.log('Marca OK:', b.APP_NAME))"
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-results
+          path: test-results/

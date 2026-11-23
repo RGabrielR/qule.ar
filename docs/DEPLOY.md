@@ -42,8 +42,10 @@ ADMIN_EMAILS=tu-email@ejemplo.com
 # Solo cuenta si el mail está verificado (cuentas de Google). Si entrás con mail y contraseña, usá tu ID de cuenta
 # (se ve en https://DOMINIO/api/me con la sesión iniciada):
 ADMIN_USER_IDS=
-# Opcional, para mandar mails (bienvenida, recuperar contraseña):
-SMTP_URL=smtps://resend:API_KEY@smtp.resend.com:465
+# Opcional, para mandar mails (recuperar contraseña y avisos de moderación). Con Amazon SES:
+SMTP_URL=smtps://USUARIO_SMTP:CLAVE_SMTP@email-smtp.eu-west-1.amazonaws.com:465
+# Tope de mails en 24 horas, entre todos (2000 si no se pone)
+MAIL_DAILY_CAP=2000
 MAIL_FROM=qule.ar <hola@DOMINIO>
 # Opcional, para el login con Google:
 GOOGLE_CLIENT_ID=

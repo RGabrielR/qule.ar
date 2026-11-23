@@ -6,6 +6,7 @@ import { useMe } from "../App";
 import { useTabData } from "../features/navigation/tabData";
 import { InviteToGroups } from "../components/Invite";
 import { ReportDialog } from "../components/ReportDialog";
+import { StaffDialog } from "../components/StaffDialog";
 import { albumCount, AlbumGrid, AlbumViewer, untilLabel } from "../components/AlbumViewer";
 import { ProfileCover, ProfileStats } from "../components/ProfileContent";
 import { ReactionIcon, ReactionPicker } from "../components/Reactions";
@@ -25,7 +26,9 @@ export function ProfilePage() {
   const [missing, setMissing] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [confirmBlock, setConfirmBlock] = useState(false);
+  const [staffing, setStaffing] = useState(false);
   const { me } = useMe();
+  const isOwner = Boolean(me?.user.access?.includes("owner"));
   const { refreshAfterBlock } = useTabData();
   const hasOwnAlbum = Boolean(me?.photos.some((x) => x.isPrivate));
   const [params, setParams] = useSearchParams();
@@ -208,6 +211,7 @@ export function ProfilePage() {
               <div className="row">
                 <button className="btn btn--ghost" onClick={() => setConfirmBlock(true)}>Bloquear</button>
                 <button className="btn btn--ghost" onClick={() => setReporting(true)}>Reportar</button>
+                {isOwner && <button className="btn btn--ghost" onClick={() => setStaffing(true)}>Moderación</button>}
               </div>
             )}
           </div>
@@ -217,6 +221,7 @@ export function ProfilePage() {
         <AlbumViewer items={p.privateAlbum.items} start={viewing} title={`Álbum de ${p.displayName}`} onClose={closeViewer} />
       )}
       {reporting && <ReportDialog userId={p.id} name={p.displayName} onClose={() => setReporting(false)} />}
+      {staffing && <StaffDialog userId={p.id} name={p.displayName} onClose={() => setStaffing(false)} />}
     </div>
   );
 }

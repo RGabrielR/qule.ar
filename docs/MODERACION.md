@@ -10,8 +10,9 @@ En Argentina, una plataforma no responde por lo que publican otras personas **mi
 
 ## Antes de empezar
 
-- **Tiene que haber al menos dos personas moderando**, configuradas en `ADMIN_USER_IDS` (ver `docs/DEPLOY.md`), con las notificaciones activadas en la app. Si nadie modera, los reportes se acumulan sin que nadie los vea.
-- Ante un reporte urgente, la app les manda una notificación a todas ("Hay un reporte urgente para revisar").
+- **Tiene que haber al menos dos personas moderando** (administración general en `ADMIN_USER_IDS`, ver `docs/DEPLOY.md`, o equipo con el permiso Reportes), con las notificaciones activadas en la app. Si nadie modera, los reportes se acumulan sin que nadie los vea.
+- Ante un reporte urgente, la app les manda una notificación a quienes tienen el permiso Reportes ("Reporte urgente"). Ante un pedido de revisión, a quienes tienen Revisiones.
+- Cada persona del equipo puede apagar esos avisos en **Yo → Configuración → Notificaciones → Moderación**. Lo pendiente se sigue viendo en el panel. Que al menos una persona los deje prendidos. Los reportes urgentes por **menor de edad** le llegan siempre a la administración general, aunque lo tenga apagado.
 - El panel está en **Yo → Moderación** y muestra primero lo urgente.
 
 ## Prioridades
@@ -95,6 +96,28 @@ Al reportar, la app guarda una copia de lo reportado: el texto del mensaje y sus
 - **Escribí siempre el motivo** al suspender. Queda registrado y es lo que ve la persona suspendida.
 - **Cuidado con los reportes falsos.** Si muchas cuentas nuevas reportan a la misma persona sin motivo, puede ser un ataque. Descartá esos reportes y, si hace falta, suspendé a quienes los mandan.
 - **Si te equivocaste**, la suspensión se puede levantar desde la pestaña Suspendidas.
+
+## Permisos del equipo
+
+Quien administra en general (las cuentas de `ADMIN_USER_IDS` o `ADMIN_EMAILS` en el servidor) puede todo. Al resto del equipo se le dan permisos chicos de a uno, desde el panel en la pestaña **Equipo** o desde el perfil de la persona con el botón **Moderación** (solo lo ve la administración general):
+
+| Permiso | Qué permite |
+|---|---|
+| Reportes | Ver los reportes, descartarlos y borrar el mensaje reportado |
+| Suspensiones | Suspender y reactivar cuentas |
+| Revisiones | Responder los pedidos de revisión de suspensiones (mantener o levantar) |
+
+Solo la administración general puede dar de baja o reactivar grupos, ver quién mandó cada reporte, dar y sacar permisos, suspender a alguien del equipo y ver el **Registro**. A la administración general no la puede suspender nadie desde la app. Nadie del equipo ve mails, IPs ni datos de salud. Los permisos se chequean en el servidor, no solo escondiendo botones.
+
+Cada acción (descartar, borrar un mensaje, suspender, reactivar, responder una revisión, dar de baja un grupo, cambiar permisos) queda en el **Registro**: quién, cuándo, sobre qué y por qué.
+
+## Pedidos de revisión
+
+Quien está suspendido ve el motivo al entrar y puede **pedir una revisión** desde la app, en privado. Un pedido por suspensión, y puede sumar algo más una sola vez mientras no haya respuesta. Le llega un mail avisando la suspensión (sin el motivo) y otro cuando hay respuesta.
+
+- Lo revisa alguien con el permiso **Revisiones**. Quien suspendió no puede resolverlo si hay otra persona con ese permiso; si no hay nadie más, puede, y queda registrado.
+- El panel muestra el motivo, lo que escribió la persona y los reportes que terminaron en la medida, **sin decir quién reportó**.
+- La respuesta es obligatoria y la persona la lee en la app. Si se levanta, la cuenta vuelve a funcionar enseguida.
 
 ## Pendiente
 

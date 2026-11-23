@@ -1,13 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from "react-router";
-import { api, ApiError, authClient, closeSocket, getSocket, type Me } from "./api";
+import { api, ApiError, closeSocket, getSocket, type Me } from "./api";
 import { Admin } from "./pages/Admin";
+import { Suspended } from "./pages/Suspended";
 import { Login } from "./pages/Login";
 import { NotifyBanner } from "./components/NotifyBanner";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { TermsBanner } from "./components/TermsBanner";
 import { Legal } from "./pages/Legal";
-import { Wordmark } from "./components/Wordmark";
 import { Logo } from "./components/Logo";
 import { TAB_PATHS, useTabSwipe } from "./features/navigation/useTabSwipe";
 import { TabDataProvider, useTabData } from "./features/navigation/tabData";
@@ -90,40 +90,13 @@ export function App() {
 }
 
 function RequireAuth({ children, needProfile }: { children: React.ReactNode; needProfile?: boolean }) {
-  const { me } = useMe();
+  const { me, reload } = useMe();
   const loc = useLocation();
   if (!me) return <Navigate to="/entrar" replace state={{ from: loc.pathname }} />;
-  if (me.profile?.suspendedAt) return <Suspended />;
+  if (me.profile?.suspendedAt) return <Suspended me={me} onSignedOut={reload} />;
   if (needProfile && !me.profile) return <Navigate to="/bienvenida" replace />;
   if (!needProfile && me.profile && loc.pathname === "/bienvenida") return <Navigate to="/yo/editar?nuevo=1" replace />;
   return <>{children}</>;
-}
-
-function Suspended() {
-  const { me, reload } = useMe();
-  return (
-    <div className="auth">
-      <div className="auth__hero">
-        <Logo className="auth__logo" />
-        <Wordmark big />
-      </div>
-      <div className="auth__card">
-        <h2>Tu cuenta está suspendida</h2>
-        {me?.profile?.suspendReason && <p className="muted">Motivo: {me.profile.suspendReason}</p>}
-        <p className="muted small">Mientras esté suspendida no aparecés en la app ni podés usarla. Si creés que es un error, escribinos desde el repositorio del proyecto.</p>
-        <button
-          className="btn"
-          onClick={async () => {
-            await authClient.signOut();
-            closeSocket();
-            await reload();
-          }}
-        >
-          Cerrar sesión
-        </button>
-      </div>
-    </div>
-  );
 }
 
 type Toast = { id: number; text: string; to?: string };

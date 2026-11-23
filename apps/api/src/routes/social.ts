@@ -399,7 +399,7 @@ socialRoutes.post("/reports", async (c) => {
       reason: rest.reason, details: rest.details,
       targetName: g.name, messageBody: [g.name, g.description].filter(Boolean).join(" · "),
     });
-    if (isUrgent(rest.reason)) notifyModeratorsUrgent().catch((e) => console.error("notifyModeratorsUrgent", e));
+    if (isUrgent(rest.reason)) notifyModeratorsUrgent(rest.reason).catch((e) => console.error("notifyModeratorsUrgent", e));
     return c.json({ ok: true });
   }
   if (!maybeUser) throw new HTTPException(400, { message: "Falta a quién reportás" });
@@ -439,6 +439,6 @@ socialRoutes.post("/reports", async (c) => {
     targetName: target?.name ?? null, messageBody, evidenceKeys,
   });
   // Lo urgente (menores, contenido íntimo sin consentimiento, amenazas) le avisa a moderación al instante
-  if (isUrgent(rest.reason)) notifyModeratorsUrgent().catch((e) => console.error("notifyModeratorsUrgent", e));
+  if (isUrgent(rest.reason)) notifyModeratorsUrgent(rest.reason).catch((e) => console.error("notifyModeratorsUrgent", e));
   return c.json({ ok: true });
 });

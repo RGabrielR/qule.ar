@@ -1,10 +1,11 @@
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db, schema } from "./db/index.js";
-import { env } from "./env.js";
 import { pushTo } from "./push.js";
+import { notifyStaff } from "./staff.js";
 import { deleteImage } from "./storage.js";
+import { forgetFile } from "./fileCache.js";
 
-const { report, user } = schema;
+const { report } = schema;
 
 /**
  * Motivos de reporte. Los tres primeros son urgentes: se revisan primero, avisan a moderación al instante
@@ -28,22 +29,16 @@ export const isUrgent = (reason: string) => URGENT_REASONS.includes(reason);
 /** Cuántas personas distintas tienen que reportar algo urgente para ocultar el perfil de la grilla. */
 export const AUTO_HIDE_REPORTERS = 3;
 
-/** Quiénes moderan: por ID de cuenta, o por mail solo si está verificado (igual que isAdmin en routes/admin.ts). */
-export async function moderatorIds(): Promise<string[]> {
-  const ids = new Set(env.ADMIN_USER_IDS);
-  if (env.ADMIN_EMAILS.length) {
-    const rows = await db.select({ id: user.id, email: user.email, verified: user.emailVerified }).from(user)
-      .where(inArray(sql`lower(${user.email})`, env.ADMIN_EMAILS));
-    for (const r of rows) if (r.verified) ids.add(r.id);
-  }
-  return [...ids];
-}
-
-/** Aviso a moderación de un reporte urgente. Discreto, como todas las notificaciones: no dice quién ni por qué. */
-export async function notifyModeratorsUrgent() {
-  for (const id of await moderatorIds()) {
-    pushTo(id, { title: "Reporte urgente", body: "Abrí Moderación para revisarlo.", url: "/admin", tag: "reporte-urgente" }).catch(() => {});
-  }
+/**
+ * Aviso a moderación de un reporte urgente. Discreto, como todas las notificaciones: no dice quién ni por qué.
+ * Si es por menor de edad, a la administración general le llega siempre, aunque haya apagado los avisos de moderación.
+ */
+export async function notifyModeratorsUrgent(reason: string) {
+  await notifyStaff(
+    "reports",
+    { title: "Reporte urgente", body: "Abrí Moderación para revisarlo.", url: "/admin", tag: "reporte-urgente" },
+    { ownersAlways: reason === "menor de edad" },
+  );
 }
 
 /**
@@ -79,6 +74,8 @@ export async function isEvidence(key: string): Promise<boolean> {
 
 /** Borra un archivo, salvo que sea prueba de un reporte (en ese caso queda guardado para moderación). */
 export async function deleteImageUnlessEvidence(key: string) {
+  // Si quedó como prueba, desde ahora solo la ve moderación
+  forgetFile(key);
   if (await isEvidence(key)) return;
   await deleteImage(key);
 }
@@ -207,7 +204,7 @@ export async function checkMinorSignals(
     targetName: target.name,
     messageBody: text,
   });
-  await notifyModeratorsUrgent();
+  await notifyModeratorsUrgent("menor de edad");
 }
 
 // ---------- Nombres y descripciones de grupos que no se permiten ----------
@@ -277,7 +274,7 @@ export async function reportMinorGroupAttempt(user: { id: string; name: string }
     targetName: user.name,
     messageBody: text,
   });
-  await notifyModeratorsUrgent();
+  await notifyModeratorsUrgent("menor de edad");
 }
 
 /**
@@ -304,6 +301,6 @@ export async function scanExistingGroups() {
       targetName: g.name,
       messageBody: text,
     });
-    if (bad.kind === "menores") await notifyModeratorsUrgent();
+    if (bad.kind === "menores") await notifyModeratorsUrgent("menor de edad");
   }
 }

@@ -30,6 +30,12 @@ La regla: **las ideas arrancan en Discusiones**. Cuando una idea se acuerda, se 
 
 Si cambiás la base de datos, editá `apps/api/src/db/schema.ts` y corré `npm run db:generate`. Incluí la migración generada en el PR.
 
+## Organización del frontend
+
+Poné los componentes y la lógica específicos de cada funcionalidad en `apps/web/src/features/<funcionalidad>/`. Por ejemplo, las reglas de grupos están en [`features/groups/groupRules.ts`](apps/web/src/features/groups/groupRules.ts). Las pantallas asociadas a rutas van en `apps/web/src/pages/`. Los componentes que se reutilizan entre varias funcionalidades, como `Avatar` y los íconos, van en `apps/web/src/components/`.
+
+Para reorganizar código existente, mové una funcionalidad por vez en un PR chico. Limitá ese PR a los movimientos y a los cambios de imports necesarios para conservar el comportamiento. Si otro PR abierto toca un archivo que querés mover, esperá a que se resuelva. [Acuerdo de la discusión #72](https://github.com/RGabrielR/qule.ar/discussions/72#discussioncomment-19800640)
+
 ## Cosas que no se negocian
 
 Son la razón de ser de la app. Si un cambio va en contra de alguna, mejor charlarlo antes en Discusiones.
@@ -48,6 +54,10 @@ Son la razón de ser de la app. Si un cambio va en contra de alguna, mejor charl
 - Si toca la pantalla, seguí [docs/LOOK.md](docs/LOOK.md): nada de colores, tamaños ni radios sueltos, todo con las variables de la marca. Antes de mandarlo corré `npm run check` (marca + tipos + build); en el PR lo corre solo.
 - Todos los textos de la app van en español rioplatense, con voseo ("Tenés un mensaje nuevo").
 - Si encontrás un problema de seguridad o privacidad, **no abras un issue público**: escribile a la persona que mantiene el repo por mensaje privado en GitHub.
+
+## Pruebas de navegador
+
+Después de instalar las dependencias, corré `npx playwright install chromium` una vez y luego `npm run test:e2e`. La suite compila la web y levanta su propia instancia con cuentas ficticias y una base temporal. Si el puerto 49926 está ocupado, podés elegir otro con la variable `PLAYWRIGHT_PORT`.
 
 ## Convivencia
 

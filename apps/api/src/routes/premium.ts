@@ -169,3 +169,10 @@ premiumRoutes.delete("/album/grants/:userId", async (c) => {
   await db.delete(albumGrant).where(and(eq(albumGrant.ownerId, u.id), eq(albumGrant.granteeId, c.req.param("userId"))));
   return c.json({ ok: true });
 });
+
+/** Quita de una vez todos los accesos al álbum de quien inició sesión. */
+premiumRoutes.delete("/album/grants", async (c) => {
+  const u = c.get("user");
+  await db.delete(albumGrant).where(eq(albumGrant.ownerId, u.id));
+  return c.json({ ok: true });
+});

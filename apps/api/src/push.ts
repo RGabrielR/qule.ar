@@ -8,10 +8,11 @@ import { env } from "./env.js";
 const { profile, pushSubscription } = schema;
 
 /**
- * Tipos de aviso que cada persona puede apagar desde Yo → Notificaciones.
- * Los de moderación y la notificación de prueba no tienen tipo: llegan siempre.
+ * Tipos de aviso que cada persona puede apagar desde Yo → Configuración → Notificaciones.
+ * "moderacion" (reportes urgentes y pedidos de revisión) solo se muestra a quien es del equipo.
+ * La notificación de prueba no tiene tipo: llega siempre.
  */
-export const NOTIFY_KINDS = ["mensajes", "toques", "respuestas", "grupos", "solicitudes"] as const;
+export const NOTIFY_KINDS = ["mensajes", "toques", "respuestas", "grupos", "solicitudes", "moderacion"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 
 /** Si la persona quiere este tipo de aviso. Lo que no eligió cuenta como "sí". */

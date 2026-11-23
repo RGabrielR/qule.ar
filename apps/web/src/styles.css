@@ -270,6 +270,9 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 /* ---------- Mi perfil ---------- */
 .section { padding: 18px 16px; border-bottom: 1px solid var(--line); }
 .section__title { font-size: var(--text-lg); font-weight: 700; margin-bottom: 12px; display: flex; gap: 8px; align-items: baseline; }
+.profile-editor__form :is(input, select).input { height: 48px; }
+/* iOS WebKit puede sumar el padding al ancho porcentual de los campos de fecha. */
+.profile-editor__form input[type="date"].input { width: auto; min-width: 0; appearance: none; padding-block: 0; }
 .profile-editor__actions, .settings__account-actions { padding-block-start: 12px; }
 .settings__clear-location { margin-block-start: 6px; }
 .welcome { margin: 12px 16px 0; }
@@ -317,6 +320,7 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
 .searchbar { padding: 12px 16px 4px; }
 .glist { list-style: none; margin: 0; padding: 6px 0; }
+.glist__more { display: flex; justify-content: center; padding: 12px 16px 20px; }
 .gcard { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
 a.gcard:hover { background: var(--surface); }
 .gcard__icon { width: 48px; height: 48px; border-radius: var(--radius-xl); flex: none; display: grid; place-items: center; font-family: var(--display); font-weight: 800; font-size: var(--title-xs); background: var(--surface-3); color: var(--text); }
@@ -416,16 +420,23 @@ a.gcard:hover { background: var(--surface); }
 .share-album { display: flex; flex-direction: column; gap: 8px; }
 .share-album p { display: flex; align-items: center; gap: 6px; }
 .share-album__options { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-xl); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.album-access__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
+.album-access__heading .subhead { margin: 0; }
+.album-access__heading .btn { min-height: 44px; }
 .grants__who { display: flex; flex-direction: column; line-height: 1.25; }
 .grants__who a { color: var(--text); font-weight: 600; }
 .lightbox { position: fixed; inset: 0; z-index: var(--z-lightbox); background: var(--media-bg); display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .lightbox__bar { display: flex; align-items: center; justify-content: space-between; padding: calc(10px + env(safe-area-inset-top)) 12px 10px; font-weight: 600; font-size: var(--text-md); color: var(--on-media); }
-.lightbox__stage { flex: 1; min-height: 0; display: grid; place-items: center; padding-bottom: env(safe-area-inset-bottom); }
+.lightbox__stage { flex: 1; min-height: 0; position: relative; overflow: hidden; touch-action: pan-y; }
+.lightbox__track { position: absolute; inset: 0; }
+.lightbox__track--animate { transition: transform 190ms ease-out; }
+.lightbox__slide { position: absolute; top: 0; bottom: 0; width: 100%; display: grid; place-items: center; padding-bottom: env(safe-area-inset-bottom); }
 .lightbox__stage img, .lightbox__stage video { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 .lightbox__nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border: 0; border-radius: var(--radius-lg); background: var(--on-media-faint); color: var(--on-media); font-size: var(--title-3xl); line-height: 1; }
 .lightbox__nav--prev { left: 8px; }
 .lightbox__nav--next { right: 8px; }
 @media (hover: none) { .lightbox__nav { display: none; } }
+@media (prefers-reduced-motion: reduce) { .lightbox__track--animate { transition: none; } }
 .photos__lock { position: absolute; top: 6px; left: 6px; width: 28px; height: 28px; border-radius: var(--radius-pill); border: 0; background: var(--scrim); display: grid; place-items: center; }
 .quicklinks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .quicklink {
@@ -452,6 +463,7 @@ a.gcard:hover { background: var(--surface); }
 .bubble:hover .bubble__more, .bubble__more:focus-visible { opacity: 1; }
 @media (hover: none) { .bubble__more { opacity: 0.6; } }
 .menu--bubble { top: 28px; right: 0; color: var(--text); }
+.menu--above { top: auto; bottom: 100%; }
 .typing-label { display: block; font-size: var(--text-xs); color: var(--ok); }
 .typing { display: flex; gap: 4px; padding: 12px 14px; }
 .typing i { width: 7px; height: 7px; border-radius: var(--radius-pill); background: var(--muted); animation: blink 1.2s infinite; }
@@ -501,6 +513,18 @@ a.gcard:hover { background: var(--surface); }
 .rcard__msg { margin: 0; padding: 10px 12px; border-left: 3px solid var(--danger); background: var(--surface-2); border-radius: 0 var(--radius-md) var(--radius-md) 0; display: flex; flex-direction: column; gap: 4px; }
 .rcard__msg p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .rcard__details { font-style: italic; color: var(--muted); }
+/* Pedido de revisión de una suspensión (pantalla de la cuenta suspendida y panel) */
+.appeal__response { margin: 0; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 var(--radius-md) var(--radius-md) 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.appeal__text { margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.appeal__warn { color: var(--danger); }
+.tabs--scroll { overflow-x: auto; scrollbar-width: none; }
+.tabs--scroll button { flex: none; white-space: nowrap; }
+.admin__subtabs { padding: 12px 16px 0; }
+.admin__team { padding: 12px 16px; }
+.admin__team .reports { padding: 0; }
+.team__perms { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.modlog { list-style: none; margin: 0; padding: 0 12px; display: flex; flex-direction: column; gap: 10px; }
+.modlog li { font-size: var(--text-md); border-bottom: 1px solid var(--line); padding-bottom: 8px; overflow-wrap: anywhere; }
 .rcard__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .rcard__resolution { color: var(--ok); }
 

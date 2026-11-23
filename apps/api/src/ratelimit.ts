@@ -26,6 +26,8 @@ export const LIMITS = {
   report: { max: 15, windowMs: HOUR, message: "Mandaste muchos reportes. Si es urgente, esperá un rato y volvé a intentar." },
   /** Toques a cualquier persona (a una misma ya hay un límite de uno cada 12 horas) */
   toque: { max: 40, windowMs: HOUR, message: "Mandaste muchos toques. Probá de nuevo en un rato." },
+  /** Pedidos de revisión de una suspensión (igual hay uno por suspensión y una sola ampliación) */
+  appeal: { max: 5, windowMs: HOUR, message: "Probá de nuevo en un rato." },
 } satisfies Record<string, Rule>;
 
 /** Cuenta una acción y corta con 429 si la persona pasó el límite. Con varios procesos, cuenta en todos juntos. */

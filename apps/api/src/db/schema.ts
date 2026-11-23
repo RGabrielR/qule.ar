@@ -82,6 +82,8 @@ export const profile = pgTable("profile", {
   // Moderación: una cuenta suspendida no puede usar la app y no aparece en ningún lado
   suspendedAt: timestamp("suspended_at", { withTimezone: true }),
   suspendReason: text("suspend_reason"),
+  // Quién suspendió (para que la apelación la revise, si se puede, otra persona). null en las suspensiones viejas.
+  suspendedBy: text("suspended_by"),
   // Términos y privacidad: qué versión aceptó y cuándo (prueba del consentimiento, Ley 25.326)
   termsVersion: text("terms_version"),
   termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
@@ -336,3 +338,60 @@ export const reaction = pgTable("reaction", {
   kind: text("kind").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.messageId, t.userId] }), index("reaction_msg_idx").on(t.messageId), index("reaction_user_idx").on(t.userId)]);
+
+// ---------- Moderación: permisos, apelaciones y registro ----------
+
+/**
+ * Permisos chicos del panel de moderación. Quien administra en general (ADMIN_USER_IDS / ADMIN_EMAILS en el
+ * servidor) tiene todo; al resto se le dan de a uno desde el panel. Ver STAFF_PERMISSIONS en staff.ts.
+ */
+export const staffPermission = pgTable("staff_permission", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  permission: text("permission").notNull(), // reports | sanctions | appeals
+  grantedBy: text("granted_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.permission] })]);
+
+/**
+ * Pedido de revisión de una suspensión, hecho desde la app por la persona suspendida. Uno por suspensión
+ * (suspendedAt identifica cuál). Si la cuenta se borra, se borra con ella.
+ */
+export const appeal = pgTable("appeal", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  suspendedAt: timestamp("suspended_at", { withTimezone: true }).notNull(),
+  // Copia del motivo y de quién suspendió, por si la suspensión cambia o se levanta
+  suspendReason: text("suspend_reason"),
+  suspendedBy: text("suspended_by"),
+  body: text("body").notNull(),
+  // Una sola ampliación mientras está abierta
+  extra: text("extra"),
+  extraAt: timestamp("extra_at", { withTimezone: true }),
+  status: text("status").notNull().default("open"), // open | upheld | lifted
+  response: text("response"),
+  reviewedBy: text("reviewed_by").references(() => user.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("appeal_suspension_idx").on(t.userId, t.suspendedAt), index("appeal_status_idx").on(t.status, t.createdAt)]);
+
+/** Registro de lo que hace moderación: quién, cuándo, sobre qué y por qué. Lo ve solo quien administra. */
+export const modAction = pgTable("mod_action", {
+  id: text("id").primaryKey(),
+  actorId: text("actor_id").references(() => user.id, { onDelete: "set null" }),
+  action: text("action").notNull(),
+  // Cuenta, grupo o reporte sobre el que se actuó (sin FK: el registro queda aunque se borren)
+  targetId: text("target_id"),
+  details: text("details"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("mod_action_created_idx").on(t.createdAt)]);
+
+/**
+ * Mails mandados, para los topes (general por día y por dirección). No guarda la dirección: solo un hash.
+ * Se borra lo de más de 2 días.
+ */
+export const mailLog = pgTable("mail_log", {
+  id: text("id").primaryKey(),
+  toHash: text("to_hash").notNull(),
+  kind: text("kind").notNull(), // reset | account
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("mail_log_created_idx").on(t.createdAt), index("mail_log_to_idx").on(t.toHash, t.createdAt)]);

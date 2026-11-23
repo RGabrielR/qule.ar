@@ -75,10 +75,23 @@ export type Profile = {
 };
 
 /** Tipos de aviso que se pueden apagar. Tienen que coincidir con NOTIFY_KINDS de la API (push.ts). */
-export type NotifyKind = "mensajes" | "toques" | "respuestas" | "grupos" | "solicitudes";
+export type NotifyKind = "mensajes" | "toques" | "respuestas" | "grupos" | "solicitudes" | "moderacion";
+
+export type StaffAccess = "owner" | "reports" | "sanctions" | "appeals";
+
+/** Pedido de revisión de una suspensión, como lo ve la persona suspendida. */
+export type Appeal = {
+  status: "open" | "upheld" | "lifted";
+  body: string;
+  extra: string | null;
+  response: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+};
 
 export type Me = {
-  user: { id: string; email: string; name: string; isAdmin: boolean };
+  /** isAdmin: entra al panel de moderación. access: qué puede hacer ahí ("owner" es la administración general). */
+  user: { id: string; email: string; name: string; isAdmin: boolean; access: StaffAccess[] };
   profile: (Profile & {
     hasLocation: boolean;
     showDistance: boolean;
@@ -192,6 +205,7 @@ export type GroupInfo = GroupListing & {
 
 export type JoinRequest = { id: string; message: string | null; createdAt: string; user: Author };
 export type Member = Author & { role: Role; joinedAt: string };
+export type MemberPage = { members: Member[]; nextOffset: number | null };
 
 /** Dónde está una persona respecto de un grupo, para invitarla. */
 export type InviteState = "member" | "invited" | "requested" | "declined" | null;

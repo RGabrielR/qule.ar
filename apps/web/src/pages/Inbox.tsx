@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
@@ -14,18 +15,38 @@ function ago(iso: string) {
 export function Inbox() {
   const { me } = useMe();
   const { conversations: list } = useTabData();
+  const [query, setQuery] = useState("");
+  const [unread, setUnread] = useState(false);
+  const normalize = (value: string) => value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
+  const words = normalize(query).split(/\s+/).filter(Boolean);
+  const filtered = list?.filter((chat) => (!unread || chat.unread > 0)
+    && words.every((word) => normalize(chat.other?.name ?? "").includes(word)));
 
   return (
     <div className="page">
       <header className="topbar"><h1 className="topbar__title">Mensajes</h1></header>
+      {!!list?.length && (
+        <div className="searchbar form">
+          <label className="field">
+            <span>Buscar por nombre</span>
+            <input className="input" type="search" value={query} maxLength={60} onChange={(e) => setQuery(e.target.value)} />
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={unread} onChange={(e) => setUnread(e.target.checked)} />
+            <span>Solo no leídas</span>
+          </label>
+        </div>
+      )}
       {list === null ? null : list.length === 0 ? (
         <div className="empty">
           <p className="empty__title">Sin mensajes por ahora</p>
           <p className="muted">Tocá la foto de alguien en el chat general para ver su perfil y escribirle.</p>
         </div>
+      ) : filtered?.length === 0 ? (
+        <div className="empty" role="status"><p className="empty__title">No hay conversaciones que coincidan.</p></div>
       ) : (
         <ul className="inbox">
-          {list.map((c) => {
+          {filtered?.map((c) => {
             const mine = c.last.senderId === me?.user.id;
             const preview =
               c.last.kind === "album" ? "🔒 Álbum privado compartido"

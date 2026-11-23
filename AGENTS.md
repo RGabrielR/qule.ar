@@ -12,6 +12,12 @@ Si usás una IA para colaborar en qule.ar, estas son las reglas que tiene que se
 - Lo nuevo tiene que verse bien en los dos temas (Oscuro y Penumbra) y en 375 px de ancho.
 - Íconos de la interfaz: en `apps/web/src/components/Icons.tsx`, de línea, base 24, trazo 2, `currentColor`.
 
+## Organización del frontend
+
+- Cuando agregues componentes o lógica específicos de una funcionalidad, ponelos en `apps/web/src/features/<funcionalidad>/`. Las pantallas de rutas van en `apps/web/src/pages/` y los componentes reutilizables en `apps/web/src/components/`.
+- Mové el código existente de a una funcionalidad por vez, en PRs chicos dedicados a mover archivos y actualizar sus imports. Postergá los archivos que estén tocando otros PRs abiertos hasta que se resuelvan.
+- Consultá la [guía de organización del frontend](CONTRIBUTING.md#organización-del-frontend) para ver un ejemplo y el acuerdo original.
+
 ## Textos
 
 - Español rioplatense con voseo, cortos y cálidos, sin emojis en la interfaz, sin culpar a quien usa la app.

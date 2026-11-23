@@ -131,8 +131,15 @@
     {
       "idx": 18,
       "version": "7",
-      "when": 1795389619353,
-      "tag": "0018_message_idempotency",
+      "when": 1795371414176,
+      "tag": "0018_moderacion_permisos_apelaciones",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795424894839,
+      "tag": "0019_message_idempotency",
       "breakpoints": true
     }
   ]
