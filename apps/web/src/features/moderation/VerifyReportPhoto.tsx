@@ -224,13 +224,11 @@ function VerificationImage({ title, source, crop, disabled, onCrop }: {
 }) {
   const start = useRef<{ x: number; y: number } | null>(null);
   const [size, setSize] = useState<{ width: number; height: number }>();
-  const [url, setUrl] = useState("");
+  const preview = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
-    let objectUrl = "";
-    setUrl("");
     setSize(undefined);
     setFailed(false);
     start.current = null;
@@ -254,33 +252,39 @@ function VerificationImage({ title, source, crop, disabled, onCrop }: {
       if (!["image/jpeg", "image/png", "image/webp"].includes(blob.type)) {
         throw new Error("Formato de imagen inválido");
       }
-      if (controller.signal.aborted) return;
-      objectUrl = URL.createObjectURL(blob);
-      setUrl(objectUrl);
+      const bitmap = await createImageBitmap(blob);
+      try {
+        const canvas = preview.current;
+        if (controller.signal.aborted || !canvas) return;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("No pudimos dibujar la imagen");
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        context.drawImage(bitmap, 0, 0);
+        setSize({ width: bitmap.width, height: bitmap.height });
+      } finally {
+        bitmap.close();
+      }
     }
 
     void load().catch(() => { if (!controller.signal.aborted) setFailed(true); });
-    return () => {
-      controller.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
+    return () => controller.abort();
   }, [source]);
 
-  function point(image: HTMLImageElement, clientX: number, clientY: number) {
+  function point(image: HTMLCanvasElement, clientX: number, clientY: number) {
     const rect = image.getBoundingClientRect();
     return {
-      x: Math.round(image.naturalWidth * Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))),
-      y: Math.round(image.naturalHeight * Math.max(0, Math.min(1, (clientY - rect.top) / rect.height))),
+      x: Math.round(image.width * Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))),
+      y: Math.round(image.height * Math.max(0, Math.min(1, (clientY - rect.top) / rect.height))),
     };
   }
 
   return (
     <figure>
       <figcaption>{title}</figcaption>
-      {url && !failed ? (
+      {source && !failed ? (
         <div className="verify-photo__image">
-          <img alt={title} src={url} draggable={false} onError={() => setFailed(true)}
-            onLoad={(e) => setSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
+          <canvas ref={preview} role="img" aria-label={title} hidden={!size}
             onPointerDown={(e) => {
               if (disabled || !size || e.button !== 0) return;
               start.current = point(e.currentTarget, e.clientX, e.clientY);
@@ -297,6 +301,7 @@ function VerificationImage({ title, source, crop, disabled, onCrop }: {
               if (width >= 8 && height >= 8) onCrop({ left: Math.min(from.x, to.x), top: Math.min(from.y, to.y), width, height });
             }}
           />
+          {!size && <p className="muted small">Cargando imagen…</p>}
           {crop && size && (
             <span className="verify-photo__selection" aria-hidden="true" style={{
               left: `${100 * crop.left / size.width}%`, top: `${100 * crop.top / size.height}%`,
@@ -304,7 +309,7 @@ function VerificationImage({ title, source, crop, disabled, onCrop }: {
             }} />
           )}
         </div>
-      ) : <p className="muted small">{failed ? "No pudimos abrir la imagen." : source ? "Cargando imagen…" : "Todavía no elegiste una imagen."}</p>}
+      ) : <p className="muted small">{failed ? "No pudimos abrir la imagen." : "Todavía no elegiste una imagen."}</p>}
       {size && !failed && (
         <details>
           <summary className="muted small">Ajustar recorte</summary>

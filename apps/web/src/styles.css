@@ -847,13 +847,15 @@ button.quote:hover { background: var(--surface-3); }
   border-radius: var(--radius-md);
 }
 
-.verify-photo__image img {
+.verify-photo__image canvas {
   display: block;
   width: 100%;
   height: auto;
   touch-action: none;
   cursor: crosshair;
 }
+
+.verify-photo__image canvas[hidden] { display: none; }
 
 .verify-photo__selection {
   position: absolute;
