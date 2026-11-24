@@ -156,6 +156,8 @@ export type GroupMessage = {
   author: Pick<Author, "id" | "name" | "photo">;
   replyTo: { id: string; authorName: string; body: string | null } | null;
   reactions: { kind: string; by: string[] }[];
+  /** Si los links se pueden tocar: la cuenta que lo mandó tenía más de 24 h (ver canOpenLinks en el API). */
+  canOpenLinks?: boolean;
 };
 
 export type Dm = {

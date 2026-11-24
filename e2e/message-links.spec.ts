@@ -3,7 +3,7 @@ import { createAccount, openProfile, signIn } from "./fixtures";
 
 test.use({ viewport: { width: 375, height: 812 } });
 
-test("los enlaces de grupos muestran el dominio y se abren solo al confirmar", async ({ page, context, baseURL }) => {
+test("los enlaces de grupos piden 24 h de cuenta, muestran el dominio y se abren solo al confirmar", async ({ page, context, baseURL }) => {
   const sender = await createAccount(baseURL!, "Ana Enlaces");
   await signIn(page, sender);
   const headers = { Origin: baseURL! };
@@ -31,6 +31,20 @@ test("los enlaces de grupos muestran el dominio y se abren solo al confirmar", a
   const path = `/grupos/${id}`;
   await page.goto(path);
   const message = page.getByRole("log").getByText("El texto sigue:", { exact: false });
+
+  // Una cuenta de menos de 24 h no manda links tocables, tampoco en los grupos (ni en el general)
+  await expect(message).toHaveCount(1);
+  await expect(message.getByRole("button")).toHaveCount(0);
+
+  // Probá el diálogo con un mensaje habilitado, sin esperar a que la cuenta cumpla 24 h
+  await page.route(`**/api/groups/${id}/messages`, async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    const response = await route.fetch();
+    const history = await response.json();
+    for (const m of history.messages) m.canOpenLinks = true;
+    await route.fulfill({ response, json: history });
+  });
+  await page.reload();
   const external = message.getByRole("button", { name: destination, exact: true });
   const www = message.getByRole("button", { name: "www.example.test/otra", exact: true });
   await expect(message).toHaveCount(1);

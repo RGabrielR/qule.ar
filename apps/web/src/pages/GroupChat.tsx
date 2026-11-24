@@ -522,7 +522,7 @@ export function GroupChat() {
                     <span className="quote__body">{m.replyTo.body ?? "Mensaje borrado"}</span>
                   </button>
                 )}
-                <p className="gmsg__body"><MessageText text={m.body} /></p>
+                <p className="gmsg__body">{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>
                 <ReactionBar reactions={m.reactions ?? []} myId={me?.user.id} onToggle={(k) => react(m, k)} />
               </div>
               <button className="iconbtn gmsg__more" aria-label="Opciones del mensaje" aria-expanded={menuFor === m.id} aria-controls={menuFor === m.id ? `message-options-${m.id}` : undefined} onClick={() => setMenuFor(menuFor === m.id ? null : m.id)}>

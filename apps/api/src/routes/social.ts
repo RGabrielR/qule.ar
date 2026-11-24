@@ -6,7 +6,7 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { db, schema } from "../db/index.js";
 import {
-  ageFrom, authorsFor, imageUrl, isBlocked, mediaOut, newId, reactionsFor, requireProfile, requireUser, serializeDm, type AppEnv, type ReactionSummary,
+  ageFrom, authorsFor, canOpenLinks, imageUrl, isBlocked, mediaOut, newId, reactionsFor, requireProfile, requireUser, serializeDm, type AppEnv, type ReactionSummary,
 } from "../lib.js";
 import { emitToUser, isOnline } from "../realtime.js";
 import { distanceLabel, visibleKm } from "../geo.js";
@@ -102,12 +102,6 @@ socialRoutes.get("/users/:id", async (c) => {
 // ---------- Mensajes privados ----------
 
 const pair = (a: string, b: string) => (a < b ? { userA: a, userB: b } : { userA: b, userB: a });
-
-const DM_LINK_MIN_ACCOUNT_AGE_MS = 24 * 60 * 60 * 1000;
-
-function canOpenDmLinks(sentAt: Date, senderCreatedAt: Date) {
-  return sentAt.getTime() - senderCreatedAt.getTime() >= DM_LINK_MIN_ACCOUNT_AGE_MS;
-}
 
 async function myConversation(convId: string, userId: string) {
   const [conv] = await db.select().from(conversation).where(eq(conversation.id, convId));
@@ -325,7 +319,7 @@ socialRoutes.get("/conversations/:id/messages", async (c) => {
     .orderBy(desc(directMessage.createdAt), desc(directMessage.id))
     .limit(50);
   const loaded = rows.map(({ message }) => message);
-  const linksOk = new Map(rows.map(({ message, senderCreatedAt }) => [message.id, canOpenDmLinks(message.createdAt, senderCreatedAt)]));
+  const linksOk = new Map(rows.map(({ message, senderCreatedAt }) => [message.id, canOpenLinks(message.createdAt, senderCreatedAt)]));
   const [reactions, states] = await Promise.all([
     reactionsFor(loaded.map((m) => m.id)),
     albumNoticeStates(me.id, loaded.map((message) => ({ message, otherId }))),
@@ -377,7 +371,7 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
     .set({ lastMessageAt: sql`greatest(${conversation.lastMessageAt}, ${now.toISOString()})` })
     .where(eq(conversation.id, conv.id));
   const [serialized] = await serializeDms([row]);
-  const msg = { ...serialized, canOpenLinks: canOpenDmLinks(row.createdAt, me.createdAt) };
+  const msg = { ...serialized, canOpenLinks: canOpenLinks(row.createdAt, me.createdAt) };
   emitToUser(me.id, DM_EVENTS.message, msg);
   emitToUser(otherId, DM_EVENTS.message, msg);
   // Notificación discreta (sin nombre ni contenido). Se manda siempre: si la app está abierta y a la vista,

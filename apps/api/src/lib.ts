@@ -64,6 +64,15 @@ export async function firstPublicPhotoKeys(ids: string[]): Promise<Map<string, s
   return new Map(photos.map((p) => [p.userId, p.key]));
 }
 
+/**
+ * Los links de un mensaje se pueden tocar solo si la cuenta que lo mandó tenía más de 24 horas en ese momento.
+ * Frena a las cuentas recién creadas (bots) que entran a mandar links a todo el mundo. Vale para el chat privado y
+ * para los grupos, incluido el general.
+ */
+export const LINKS_MIN_ACCOUNT_AGE_MS = 24 * 60 * 60 * 1000;
+export const canOpenLinks = (sentAt: Date, accountCreatedAt: Date) =>
+  sentAt.getTime() - accountCreatedAt.getTime() >= LINKS_MIN_ACCOUNT_AGE_MS;
+
 /** Nombre, edad y foto principal (pública) de varios usuarios. */
 export async function authorsFor(ids: string[], options: { presence?: boolean } = {}): Promise<Map<string, Author>> {
   const unique = [...new Set(ids)];

@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from "react";
 import { ExternalLinkDialog } from "./ExternalLinkDialog";
 
-const links = /(?:^|(?<=[\s([{<"'“‘¿¡]))(?:https?:\/\/|www\.)[^\s<>"'“”‘’]+/gi;
+// Sin "lookbehind" (?<=…): Safari lo soporta recién desde iOS 16.4, y en versiones anteriores una expresión así rompe
+// la carga de toda la app. El carácter de antes del link se captura aparte (grupo 1) y se deja como texto.
+const links = /(^|[\s([{<"'“‘¿¡])((?:https?:\/\/|www\.)[^\s<>"'“”‘’]+)/gi;
 
 const closingPairs: Record<string, string> = { ")": "(", "]": "[", "}": "{" };
 
@@ -34,8 +36,8 @@ export function MessageText({ text }: { text: string | null }) {
   let cursor = 0;
 
   for (const match of text.matchAll(links)) {
-    const start = match.index;
-    const label = trimTrailingPunctuation(match[0]);
+    const start = match.index + match[1].length;
+    const label = trimTrailingPunctuation(match[2]);
     const url = toExternalUrl(label);
     if (!url) continue;
 
