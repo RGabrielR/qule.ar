@@ -17,8 +17,19 @@ test("los usuarios de X e Instagram se validan, se publican y se pueden quitar",
   await field.pressSequentially("ana maria");
   await expect(field).toHaveValue("ana maria");
   await expect(navigation).toBeInViewport();
+  await field.evaluate((input) => {
+    const editor = input.closest<HTMLElement>(".profile-editor")!;
+    editor.scrollTop += input.getBoundingClientRect().bottom - 650;
+  });
   await page.setViewportSize({ width: 375, height: 490 });
   await expect(navigation).toBeHidden();
+  await expect(field).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => field.evaluate((el) => el.getBoundingClientRect().bottom)).toBeCloseTo(490, 0);
+  const editor = page.locator(".profile-editor");
+  const scroll = await editor.evaluate((el) => el.scrollTop);
+  await page.getByRole("textbox", { name: "Sobre mí" }).focus();
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  expect(await editor.evaluate((el) => el.scrollTop)).toBe(scroll);
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(navigation).toBeInViewport();
   await field.blur();
