@@ -1,13 +1,24 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
-import { RefreshIcon } from "../../components/Icons";
+import { RefreshIcon, TrashIcon } from "../../components/Icons";
 import { ApiError, type Dm, type GroupMessage } from "../../api";
+
+export function newMessageKey(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  // En una IP local por HTTP solo está disponible getRandomValues.
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join("-");
+}
 
 type Entry<M> = {
   scope: string;
   message: M;
-  submit?: () => Promise<M>;
+  waitForConfirmation?: boolean;
+  submit?: () => Promise<M | null>;
   release?: () => void;
-  failure?: { retryable: boolean };
+  failure?: { retryable: boolean; message?: string };
 };
 
 class Outbox<M extends { id: string; idempotencyKey?: string | null }> {
@@ -27,7 +38,7 @@ class Outbox<M extends { id: string; idempotencyKey?: string | null }> {
 
   snapshot = () => this.entries;
 
-  add(entry: Entry<M> & { submit: () => Promise<M> }) {
+  add(entry: Entry<M> & { submit: () => Promise<M | null> }) {
     this.update([...this.entries, entry]);
     void this.send(entry);
   }
@@ -68,6 +79,10 @@ class Outbox<M extends { id: string; idempotencyKey?: string | null }> {
     try {
       const saved = await entry.submit();
       if (!this.entries.includes(entry)) return;
+      if (saved === null) {
+        this.dismiss(entry);
+        return;
+      }
       this.confirmations.forEach((listener) => listener(entry.scope, saved));
       this.acknowledge(entry.scope, saved);
     } catch (error) {
@@ -75,7 +90,7 @@ class Outbox<M extends { id: string; idempotencyKey?: string | null }> {
       const retryable = !(error instanceof ApiError) || error.status >= 500 || error.status === 408 || error.status === 429;
       if (!retryable) entry.release?.();
       const failed = retryable ? entry : { scope: entry.scope, message: entry.message };
-      this.update(this.entries.map((e) => e === entry ? { ...failed, failure: { retryable } } : e));
+      this.update(this.entries.map((e) => e === entry ? { ...failed, failure: { retryable, message: error instanceof ApiError && error.status === 429 ? error.message : undefined } } : e));
     }
   }
 }
@@ -95,7 +110,7 @@ export function useTimeline<M extends Dm | GroupMessage>(
 ) {
   const localTimes = useRef(new Map<string, number>());
   const lastTime = useRef(0);
-  const pendingByMessage = useMemo(() => new Map(pending.map((entry) => [entry.message, entry])), [pending]);
+  const pendingByMessage = useMemo(() => new Map(pending.filter((entry) => !entry.waitForConfirmation || entry.failure).map((entry) => [entry.message, entry])), [pending]);
   const messages = useMemo(() => {
     function time(message: M) {
       const sender = "senderId" in message ? message.senderId : message.author.id;
@@ -119,9 +134,9 @@ export function useTimeline<M extends Dm | GroupMessage>(
 export function SendFailure({ failure, retry, dismiss }: { failure: Entry<unknown>["failure"]; retry: () => void; dismiss: () => void }) {
   if (!failure) return null;
   return <div className="send-failure small" role="alert">
-    <span>Error al enviar el mensaje.</span>
-    {failure.retryable ? <button type="button" className="iconbtn send-failure__retry" aria-label="Reintentar" title="Reintentar" onClick={retry}><RefreshIcon /></button>
-      : <button type="button" className="btn btn--small" onClick={dismiss}>Descartar</button>}
+    <span>{failure.message ?? "No se pudo enviar."}</span>
+    {failure.retryable ? <button type="button" className="iconbtn" aria-label="Reintentar" title="Reintentar" onClick={retry}><RefreshIcon /></button> : null}
+    {(!failure.retryable || failure.message) && <button type="button" className="iconbtn" aria-label="Descartar mensaje" title="Descartar mensaje" onClick={dismiss}><TrashIcon /></button>}
   </div>;
 }
 

@@ -78,6 +78,15 @@ test("reintentos de mensajes privados, fotos temporales y turnos de grupo", asyn
   assert.equal(replies[0].message.status, "queued");
   assert.equal((await db.select().from(schema.groupMessage)).length, 3);
 
+  const burst = await Promise.all(Array.from({ length: 4 }, () => app.request(group, {
+    method: "POST", headers: { cookie: sender.cookie, "Idempotency-Key": crypto.randomUUID(), "content-type": "application/json" },
+    body: JSON.stringify({ body: "Otro de la ráfaga" }),
+  })));
+  assert.deepEqual(burst.map((r) => r.status).sort(), [200, 200, 429, 429]);
+  for (const response of burst.filter((r) => r.status === 429)) {
+    assert.match(await response.text(), /3 mensajes en cola/);
+  }
+
   const collision = await app.request(dm, { method: "POST", headers: {
     cookie: recipient.cookie, "Idempotency-Key": key, "content-type": "application/json",
   }, body: JSON.stringify({ body: "Otro mensaje" }) });

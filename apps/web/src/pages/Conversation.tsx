@@ -1,5 +1,5 @@
 import { compareDmOrder, DM_EVENTS, type DmReadReceipt } from "@mortero/shared/realtime";
-import { privateOutbox, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
+import { privateOutbox, newMessageKey, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, getSocket, upload, type Author, type Dm, type ReactionEvent } from "../api";
@@ -173,7 +173,7 @@ function ConversationThread({ id }: { id: string }) {
 
   function enqueue(body: string | null, file?: File) {
     if (!myId) return;
-    const idempotencyKey = crypto.randomUUID();
+    const idempotencyKey = newMessageKey();
     remember(idempotencyKey);
     const headers = { "Idempotency-Key": idempotencyKey };
     const expiring = Boolean(file && expiringNext.current);

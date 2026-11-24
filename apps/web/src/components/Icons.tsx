@@ -57,6 +57,9 @@ export const InfoIcon = () => (
 export const PlusIcon = () => (
   <svg {...base}><path d="M12 5v14M5 12h14" /></svg>
 );
+export const TrashIcon = () => (
+  <svg {...base}><path d="M3 6h18M9 6V3h6v3M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14M10 10v7m4-7v7" /></svg>
+);
 export const RefreshIcon = () => (
   <svg {...base}><path d="M20 4v6h-6m6 0a8 8 0 1 0-.7 6" /></svg>
 );

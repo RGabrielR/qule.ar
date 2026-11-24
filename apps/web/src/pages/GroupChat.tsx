@@ -1,7 +1,7 @@
-import { groupOutbox, mergeHistory, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
+import { groupOutbox, newMessageKey, mergeHistory, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { api, getSocket, type GroupInfo, type GroupMessage, type ReactionEvent } from "../api";
+import { api, ApiError, getSocket, type GroupInfo, type GroupMessage, type ReactionEvent } from "../api";
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
@@ -39,6 +39,7 @@ function GroupChatThread({ id }: { id: string }) {
   const [confirmed, setMessages] = useState<GroupMessage[]>([]);
   const { messages, pendingByMessage, remember, forget } = useTimeline(confirmed, pending, me?.user.id);
   const [queued, setQueued] = useState<GroupMessage[]>([]);
+  const [historyReady, setHistoryReady] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [text, setText] = useDraft(`group:${me?.user.id ?? ""}:${id}`, editing === null);
@@ -115,6 +116,7 @@ function GroupChatThread({ id }: { id: string }) {
   useEffect(() => {
     if (!isMember) return;
     let alive = true;
+    setHistoryReady(false);
     setMessages([]);
     setQueued([]);
     api<{ messages: GroupMessage[]; queued: GroupMessage[]; hasMore: boolean }>(`/groups/${id}/messages`)
@@ -126,6 +128,7 @@ function GroupChatThread({ id }: { id: string }) {
         }
         setMessages((list) => mergeHistory(d.messages, list));
         setQueued((list) => mergeHistory(d.queued, list));
+        setHistoryReady(true);
         setHasMore(d.hasMore);
       })
       .catch((e) => setNotice({ kind: "error", text: e.message }));
@@ -217,6 +220,10 @@ function GroupChatThread({ id }: { id: string }) {
     if (!body || !me) return;
     // Mandar con el botón le saca el foco al campo y cierra el teclado. Se lo devolvemos.
     inputRef.current?.focus();
+    if (!editing && info && queued.length >= info.rules.maxQueued) {
+      setNotice({ kind: "info", text: "Tu cola está llena. Esperá a que salga un mensaje o cancelá uno." });
+      return;
+    }
     setNotice(null);
     setText("");
     const quote = replyTo;
@@ -234,11 +241,14 @@ function GroupChatThread({ id }: { id: string }) {
       return;
     }
 
-    const idempotencyKey = crypto.randomUUID();
+    const idempotencyKey = newMessageKey();
     remember(idempotencyKey);
     stickToBottom.current = true;
+    // Durante una ráfaga todavía no sabemos cuáles de los envíos van a ocupar un turno.
+    const inFlight = pending.filter((entry) => !entry.failure).length;
     groupOutbox.add({
       scope,
+      waitForConfirmation: !historyReady || !info || queued.length + inFlight >= info.rules.maxQueued,
       message: {
         id: idempotencyKey, idempotencyKey, groupId: id, body, status: "published", scheduledAt: new Date().toISOString(),
         author: { id: me.user.id, name: me.profile?.displayName ?? me.user.name, photo: me.photos.find((p) => !p.isPrivate)?.thumb ?? null },
@@ -246,10 +256,17 @@ function GroupChatThread({ id }: { id: string }) {
         reactions: [],
       },
       submit: async () => {
-        const result = await api<{ message: GroupMessage }>(`/groups/${id}/messages`, {
-          method: "POST", headers: { "Idempotency-Key": idempotencyKey }, json: { body, replyToId: quote?.id },
-        });
-        return result.message;
+        try {
+          const result = await api<{ message: GroupMessage }>(`/groups/${id}/messages`, {
+            method: "POST", headers: { "Idempotency-Key": idempotencyKey }, json: { body, replyToId: quote?.id },
+          });
+          return result.message;
+        } catch (error) {
+          if (!(error instanceof ApiError && error.status === 429)) throw error;
+          setNotice({ kind: "info", text: error.message });
+          setText((draft) => draft || body);
+          return null;
+        }
       },
     });
   }
@@ -404,13 +421,13 @@ function GroupChatThread({ id }: { id: string }) {
           const ms = new Date(m.scheduledAt).getTime() - now;
           return (
             <div key={m.idempotencyKey ?? m.id} className="queued">
+              <div className="queued__head">
+                <ClockIcon /> En cola · sale en <b>{fmtCountdown(ms)}</b>
+              </div>
               <p className="queued__body">{m.body}</p>
-              <div className="queued__footer">
-                <span className="queued__time"><ClockIcon /> Sale en {fmtCountdown(ms)}</span>
-                <div className="queued__actions">
-                  <button className="linkbtn" onClick={() => { setReplyTo(null); setEditing(m.id); setText(m.body ?? ""); }}>Editar</button>
-                  <button className="linkbtn linkbtn--danger" onClick={() => cancel(m)}>Cancelar</button>
-                </div>
+              <div className="queued__actions">
+                <button className="linkbtn" onClick={() => { setReplyTo(null); setEditing(m.id); setText(m.body ?? ""); }}>Editar</button>
+                <button className="linkbtn linkbtn--danger" onClick={() => cancel(m)}>Cancelar</button>
               </div>
             </div>
           );
