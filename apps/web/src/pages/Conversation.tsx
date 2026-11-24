@@ -8,6 +8,7 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { BackIcon, DotsIcon, ImageIcon, LockIcon, SendIcon, TimerIcon } from "../components/Icons";
 import { useSectionBack } from "../useSectionBack";
+import { useMessageActions } from "../features/chat/useMessageActions";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
@@ -57,6 +58,7 @@ export function Conversation() {
   const [photoMessageId, setPhotoMessageId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ src: string; seconds: number } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const messageActions = useMessageActions(msgMenu, setMsgMenu);
   const positionMessageMenu = useMessageMenuPosition(listRef, setMsgMenu);
   const stickToBottom = useRef(true);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -340,7 +342,7 @@ export function Conversation() {
           const expiry = albumExpiryLabel(m, albumNoticeTime);
           const quoted = m.replyTo;
           const bubble = (
-            <div id={`dm-${m.id}`} className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""}`}>
+            <div id={`dm-${m.id}`} className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : "message-gesture"}`} {...(!albumNotice && messageActions(m.id))}>
               {quoted && (quoted.authorName && loadedMessageIds.has(quoted.id) ? (
                 <button
                   type="button"
@@ -395,8 +397,8 @@ export function Conversation() {
                 <time dateTime={m.createdAt}>{sentAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</time>
               </div>
               <ReactionBar reactions={m.reactions ?? []} myId={myId} mine={mine} onToggle={(k) => react(m, k)} />
-              {(
-                <>
+              <>
+                {albumNotice && (
                   <button
                     className="iconbtn bubble__more"
                     aria-label="Reaccionar u opciones del mensaje" aria-expanded={msgMenu === m.id} aria-controls={msgMenu === m.id ? `message-options-${m.id}` : undefined}
@@ -407,15 +409,15 @@ export function Conversation() {
                   >
                     <DotsIcon />
                   </button>
-                  {msgMenu === m.id && (
-                    <div className={`menu menu--bubble ${mine ? "" : "menu--bubble-theirs"}`} id={`message-options-${m.id}`} role="menu" ref={positionMessageMenu}>
-                      <ReactionPicker current={myReaction(m.reactions ?? [], myId)} onPick={(k) => react(m, k)} />
-                      {!albumNotice && <button role="menuitem" onClick={() => startReply(m)}>Responder</button>}
-                      {mine && !albumNotice && <button role="menuitem" className="danger" onClick={() => unsend(m)}>Desenviar (se borra para los dos)</button>}
-                    </div>
-                  )}
-                </>
-              )}
+                )}
+                {msgMenu === m.id && (
+                  <div className={`menu menu--bubble ${mine ? "" : "menu--bubble-theirs"}`} id={`message-options-${m.id}`} role="menu" ref={positionMessageMenu} onClick={(e) => e.stopPropagation()}>
+                    <ReactionPicker current={myReaction(m.reactions ?? [], myId)} onPick={(k) => react(m, k)} />
+                    {!albumNotice && <button role="menuitem" onClick={() => startReply(m)}>Responder</button>}
+                    {mine && !albumNotice && <button role="menuitem" className="danger" onClick={() => unsend(m)}>Desenviar (se borra para los dos)</button>}
+                  </div>
+                )}
+              </>
             </div>
           );
           return (

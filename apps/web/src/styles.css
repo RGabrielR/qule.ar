@@ -210,7 +210,10 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .chat__jump-button:hover { background: transparent; }
 .chat__jump-button:is(:hover, :focus-visible, :active) svg { background: var(--surface-2); border-color: var(--accent); }
 .chat__older { display: block; margin: 0 auto 12px; }
-.gmsg { display: grid; grid-template-columns: 44px 1fr auto; gap: 0 8px; padding: 6px 8px 2px; border-radius: var(--radius-md); position: relative; }
+.gmsg { display: grid; grid-template-columns: 44px 1fr; gap: 0 8px; padding: 6px 8px 2px; border-radius: var(--radius-md); position: relative; }
+.message-gesture { -webkit-touch-callout: none; }
+.bubble > p, .bubble time, .gmsg__body, .gmsg__time,
+.message-gesture > .menu, .message-gesture > .menu * { user-select: none; -webkit-user-select: none; }
 .gmsg:hover { background: var(--surface); }
 .gmsg--grouped { padding-top: 0; }
 .gmsg__avatar { padding-top: 2px; display: flex; justify-content: center; }
@@ -220,10 +223,6 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .gmsg__name:hover { text-decoration: underline; }
 .gmsg__time { color: var(--muted); font-size: var(--text-xs); margin-left: auto; padding-left: 6px; }
 .gmsg__body { white-space: pre-wrap; overflow-wrap: anywhere; }
-.gmsg__more, .bubble__more { padding: 0; }
-.gmsg__more { width: 30px; height: 30px; opacity: 0; }
-.gmsg:hover .gmsg__more, .gmsg__more:focus-visible { opacity: 1; }
-@media (hover: none) { .gmsg__more { opacity: 0.6; } }
 
 .menu { position: absolute; right: 8px; top: 34px; z-index: var(--z-menu); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 6px; min-width: 180px; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); }
 .menu > * { text-align: left; padding: 10px 12px; border-radius: var(--radius-sm); background: none; border: 0; font-size: var(--text-md); }
@@ -716,7 +715,6 @@ button.quote:hover { background: var(--surface-3); }
 .reaction-chip { display: inline-flex; align-items: center; gap: 3px; height: 26px; padding: 0 7px; border-radius: var(--radius-pill); background: var(--surface-3); border: 1px solid var(--line); font-size: var(--text-xs); font-weight: 600; color: var(--text); }
 /* Fondo sólido: sobre la burbuja naranja propia, un fondo translúcido se perdía */
 .reaction-chip--on { background: var(--surface); border-color: var(--accent); color: var(--accent-2); }
-.bubble:not(.bubble--mine) .bubble__more { left: auto; right: -26px; }
 .menu--bubble-theirs { right: auto; left: 0; }
 .btn--toque { display: grid; place-items: center; }
 .btn--toque-sent { border-color: var(--accent-line); background: var(--accent-soft); }
