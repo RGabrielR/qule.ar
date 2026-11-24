@@ -65,7 +65,6 @@ function VerificationForm({ report, canSuspend, measure, onMeasure, onMatch, onC
   const [matchedTarget, setMatchedTarget] = useState(false);
   const [reply, setReply] = useState<ReportReply>({ response: null, respondedAt: null });
   const [file, setFile] = useState<File | null>(null);
-  const [captureUrl, setCaptureUrl] = useState("");
   const [originalCrop, setOriginalCrop] = useState<Crop>();
   const [captureCrop, setCaptureCrop] = useState<Crop>();
   const [result, setResult] = useState<Result | null>(null);
@@ -90,17 +89,10 @@ function VerificationForm({ report, canSuspend, measure, onMeasure, onMatch, onC
     return () => controller.abort();
   }, [path]);
 
-  useEffect(() => {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setCaptureUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-
   const chosen = photos?.find((photo) => photo.id === photoId);
   const originalUrl = chosen ? `/api${path}/${encodeURIComponent(chosen.id)}/${variant}` : "";
 
-  const comparisonUrl = hasCapture ? `/api${path}/capture` : captureUrl;
+  const comparisonSource = hasCapture ? `/api${path}/capture` : file;
   const canVerify = chosen && (hasCapture || file) && viewerId.trim();
 
   async function verify(e: FormEvent) {
@@ -145,7 +137,7 @@ function VerificationForm({ report, canSuspend, measure, onMeasure, onMatch, onC
               <>
                 <p className="muted small">No hay una foto original disponible en los álbumes de este reporte.</p>
                 {hasCapture && <div className="verify-photo__comparison">
-                  <VerificationImage title="Captura recibida" url={comparisonUrl} disabled onCrop={setCaptureCrop} />
+                  <VerificationImage title="Captura recibida" source={comparisonSource} disabled onCrop={setCaptureCrop} />
                 </div>}
               </>
             )}
@@ -166,15 +158,15 @@ function VerificationForm({ report, canSuspend, measure, onMeasure, onMatch, onC
                   {!hasCapture && <label className="field">
                     <span>Captura recibida</span>
                     <input className="input" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(e) => {
-                      setFile(e.target.files?.[0] ?? null); setCaptureUrl(""); setCaptureCrop(undefined); setResult(null);
+                      setFile(e.target.files?.[0] ?? null); setCaptureCrop(undefined); setResult(null);
                     }} />
                   </label>}
                 </div>
 
                 <div className="verify-photo__comparison">
-                  <VerificationImage key={originalUrl} title="Foto original" url={originalUrl} crop={originalCrop} disabled={busy}
+                  <VerificationImage key={originalUrl} title="Foto original" source={originalUrl} crop={originalCrop} disabled={busy}
                     onCrop={(crop) => { setOriginalCrop(crop); setResult(null); }} />
-                  <VerificationImage key={comparisonUrl} title="Captura recibida" url={comparisonUrl} crop={captureCrop} disabled={busy}
+                  <VerificationImage title="Captura recibida" source={comparisonSource} crop={captureCrop} disabled={busy}
                     onCrop={(crop) => { setCaptureCrop(crop); setResult(null); }} />
                 </div>
 
@@ -227,12 +219,52 @@ function VerificationForm({ report, canSuspend, measure, onMeasure, onMatch, onC
   );
 }
 
-function VerificationImage({ title, url, crop, disabled, onCrop }: {
-  title: string; url: string; crop?: Crop; disabled: boolean; onCrop: (crop?: Crop) => void;
+function VerificationImage({ title, source, crop, disabled, onCrop }: {
+  title: string; source: string | File | null; crop?: Crop; disabled: boolean; onCrop: (crop?: Crop) => void;
 }) {
   const start = useRef<{ x: number; y: number } | null>(null);
   const [size, setSize] = useState<{ width: number; height: number }>();
+  const [url, setUrl] = useState("");
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let objectUrl = "";
+    setUrl("");
+    setSize(undefined);
+    setFailed(false);
+    start.current = null;
+    if (!source) return;
+
+    async function load() {
+      let blob: Blob;
+      if (source instanceof File) {
+        blob = source;
+      } else if (source) {
+        const previewUrl = new URL(source, window.location.origin);
+        if (previewUrl.origin !== window.location.origin || !previewUrl.pathname.startsWith("/api/admin/reports/")) {
+          throw new Error("Ruta de imagen inválida");
+        }
+        const response = await fetch(previewUrl, { signal: controller.signal, cache: "no-store" });
+        if (!response.ok) throw new Error("No pudimos abrir la imagen");
+        blob = await response.blob();
+      } else {
+        return;
+      }
+      if (!["image/jpeg", "image/png", "image/webp"].includes(blob.type)) {
+        throw new Error("Formato de imagen inválido");
+      }
+      if (controller.signal.aborted) return;
+      objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
+    }
+
+    void load().catch(() => { if (!controller.signal.aborted) setFailed(true); });
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [source]);
 
   function point(image: HTMLImageElement, clientX: number, clientY: number) {
     const rect = image.getBoundingClientRect();
@@ -272,7 +304,7 @@ function VerificationImage({ title, url, crop, disabled, onCrop }: {
             }} />
           )}
         </div>
-      ) : <p className="muted small">{failed ? "No pudimos abrir la imagen." : "Todavía no elegiste una imagen."}</p>}
+      ) : <p className="muted small">{failed ? "No pudimos abrir la imagen." : source ? "Cargando imagen…" : "Todavía no elegiste una imagen."}</p>}
       {size && !failed && (
         <details>
           <summary className="muted small">Ajustar recorte</summary>
