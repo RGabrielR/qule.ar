@@ -118,6 +118,9 @@ input[type="date"].input { width: auto; min-width: 0; height: 48px; appearance: 
 .notice--info { background: var(--queue-soft); color: var(--queue); border: 1px solid var(--queue-line); }
 .notice--error { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
 .notice .linkbtn { color: inherit; }
+/* Aviso dentro de la tarjeta de entrada (al volver de Google con un error) */
+.auth__notice { margin: 0; flex-direction: column; gap: 4px; }
+.auth__notice .linkbtn { align-self: flex-start; padding-left: 0; text-decoration: underline; }
 
 .divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: var(--text-sm); }
 .divider::before, .divider::after { content: ""; height: 1px; background: var(--line); flex: 1; }
