@@ -206,7 +206,7 @@ export function Conversation() {
     if (!body) return;
     const wasReplying = replyTo;
     // Mandar con el botón le saca el foco al campo y cierra el teclado. Se lo devolvemos.
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
     setError("");
     setText("");
     setReplyTo(null);

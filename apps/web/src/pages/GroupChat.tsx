@@ -52,7 +52,7 @@ export function GroupChat() {
     setMenuFor(null);
     setEditing(null);
     setReplyTo(m);
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
   }
 
   function highlightMessage(messageId: string) {
@@ -342,7 +342,7 @@ export function GroupChat() {
     const body = text.trim();
     if (!body) return;
     // Mandar con el botón le saca el foco al campo y cierra el teclado. Se lo devolvemos.
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
     setNotice(null);
     // Se vacía al toque; si falla, se devuelve el texto
     setText("");
@@ -592,7 +592,7 @@ export function GroupChat() {
           </div>
         )}
         {phrasesOpen && (
-          <SavedPhrasesMenu text={text} onClose={() => setPhrasesOpen(false)} onPick={(p) => { setText(p); setPhrasesOpen(false); inputRef.current?.focus(); }} />
+          <SavedPhrasesMenu text={text} onClose={() => setPhrasesOpen(false)} onPick={(p) => { setText(p); setPhrasesOpen(false); inputRef.current?.focus({ preventScroll: true }); }} />
         )}
         <div className="composer__row">
           <div className="composer__action">
