@@ -1,4 +1,4 @@
-import { compareDmOrder, DM_EVENTS, INBOX_LIMIT, type DmReadReceipt } from "@mortero/shared/realtime";
+import { compareDmOrder, DM_EVENTS, INBOX_LIMIT, type DmReadReceipt, type DmSettingsChange } from "@mortero/shared/realtime";
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { api, ApiError, getSocket, type ConversationSummary, type Dm } from "../../api";
 
@@ -149,6 +149,10 @@ export function useLiveInbox(
       if (receipt.audience === "reader") refreshAfterRead(receipt.conversationId, receipt.receiptId);
     }
 
+    function onSettings({ conversationId, change }: DmSettingsChange) {
+      void refreshConversation(conversationId, change === "cleared" && currentData.current?.length === INBOX_LIMIT);
+    }
+
     reconcileInitialChanges.current = () => {
       if (!currentData.current) return;
       for (const id of initialChanges.current) void refreshConversation(id);
@@ -167,6 +171,7 @@ export function useLiveInbox(
     socket.on(DM_EVENTS.updated, onUpdated);
     socket.on(DM_EVENTS.read, onRead);
     socket.on(DM_EVENTS.deleted, onDeleted);
+    socket.on(DM_EVENTS.settings, onSettings);
     socket.on(DM_EVENTS.access, reset);
     socket.io.on("reconnect", reset);
     return () => {
@@ -175,6 +180,7 @@ export function useLiveInbox(
       socket.off(DM_EVENTS.updated, onUpdated);
       socket.off(DM_EVENTS.read, onRead);
       socket.off(DM_EVENTS.deleted, onDeleted);
+      socket.off(DM_EVENTS.settings, onSettings);
       socket.off(DM_EVENTS.access, reset);
       socket.io.off("reconnect", reset);
       cancelRequests();

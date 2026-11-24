@@ -79,6 +79,7 @@ type TabData = {
   invites: MyInvite[] | null;
   conversations: ConversationSummary[] | null;
   refreshGroups: (mode?: Refresh) => void;
+  refreshConversations: (mode?: Refresh) => void;
   refreshAfterBlock: () => void;
 };
 
@@ -132,7 +133,7 @@ export function TabDataProvider({ children, onUnauthorized, userId }: { children
   }
 
   return (
-    <TabDataContext.Provider value={{ groups, invites, conversations, refreshGroups, refreshAfterBlock }}>
+    <TabDataContext.Provider value={{ groups, invites, conversations, refreshGroups, refreshConversations: loadConversations, refreshAfterBlock }}>
       {children}
     </TabDataContext.Provider>
   );

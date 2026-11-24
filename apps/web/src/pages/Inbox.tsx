@@ -1,10 +1,13 @@
 import { ChatPresenceDot } from "../features/messages/chatPresence";
 import { useRef, useState } from "react";
-import { Link } from "react-router";
 import { useMe } from "../App";
 import { albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { Avatar } from "../components/Avatar";
+import { BellOffIcon } from "../components/Icons";
+import { useConversationActions } from "../features/messages/ConversationActions";
+import { ConversationMenuRow } from "../features/messages/ConversationMenuRow";
 import { useTabData } from "../features/navigation/tabData";
+import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { useRememberScroll } from "../features/navigation/viewMemory";
 
 function ago(iso: string) {
@@ -21,16 +24,19 @@ export function Inbox() {
   const albumNoticeTime = useAlbumNoticeTime(list?.map(({ last }) => last) ?? []);
   const [query, setQuery] = useState("");
   const [unread, setUnread] = useState(false);
+  const { act, dialog, errorNotice } = useConversationActions();
+  const pageRef = useRef<HTMLDivElement>(null);
+  const positionMenu = useMessageMenuPosition(pageRef);
   const normalize = (value: string) => value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
   const words = normalize(query).split(/\s+/).filter(Boolean);
   const filtered = list?.filter((chat) => (!unread || chat.unread > 0)
     && words.every((word) => normalize(chat.other?.name ?? "").includes(word)));
-  const pageRef = useRef<HTMLDivElement>(null);
   useRememberScroll(pageRef, list != null);
 
   return (
     <div className="page" ref={pageRef}>
       <header className="topbar"><h1 className="topbar__title">Mensajes</h1></header>
+      {errorNotice}
       {!!list?.length && (
         <div className="searchbar form">
           <label className="field">
@@ -63,23 +69,23 @@ export function Inbox() {
               : kind === "photo" || c.last.photo ? "📷 Foto"
               : c.last.body;
             return (
-              <li key={c.id}>
-                <Link to={`/mensajes/${c.id}`} className={`inbox__item ${c.unread ? "inbox__item--unread" : ""}`}>
-                  <Avatar src={c.other?.photo ?? null} name={c.other?.name ?? "?"} size={52} />
-                  <div className="inbox__text">
-                    <div className="inbox__top">
-                      <b className="chat-contact-name"><ChatPresenceDot state={c.other?.presence} /><span>{c.other?.name ?? "Cuenta borrada"}</span></b>
-                      <time>{ago(c.last.createdAt)}</time>
-                    </div>
-                    <p className="inbox__preview">{mine && "Vos: "}{preview}</p>
+              <ConversationMenuRow key={c.id} chat={c} positionMenu={positionMenu} onAction={(action) => void act(action, c)}>
+                <Avatar src={c.other?.photo ?? null} name={c.other?.name ?? "?"} size={52} />
+                <div className="inbox__text">
+                  <div className="inbox__top">
+                    <b className="chat-contact-name"><ChatPresenceDot state={c.other?.presence} /><span>{c.other?.name ?? "Cuenta borrada"}</span></b>
+                    <time>{ago(c.last.createdAt)}</time>
                   </div>
-                  {c.unread > 0 && <span className="badge badge--inline">{c.unread}</span>}
-                </Link>
-              </li>
+                  <p className="inbox__preview">{mine && "Vos: "}{preview}</p>
+                </div>
+                {c.muted && <span className="inbox__muted" role="img" aria-label="Chat silenciado"><BellOffIcon /></span>}
+                {c.unread > 0 && <span className="badge badge--inline">{c.unread}</span>}
+              </ConversationMenuRow>
             );
           })}
         </ul>
       )}
+      {dialog}
     </div>
   );
 }

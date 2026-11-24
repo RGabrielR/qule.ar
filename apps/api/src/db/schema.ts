@@ -319,6 +319,13 @@ export const conversation = pgTable("conversation", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("conv_pair_idx").on(t.userA, t.userB), index("conv_user_b_idx").on(t.userB)]);
 
+export const conversationSettings = pgTable("conversation_settings", {
+  conversationId: text("conversation_id").notNull().references(() => conversation.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  muted: boolean("muted").notNull().default(false),
+  clearedAt: timestamp("cleared_at", { withTimezone: true }),
+}, (t) => [primaryKey({ columns: [t.userId, t.conversationId] }), index("conv_settings_conversation_idx").on(t.conversationId)]);
+
 export const directMessage = pgTable("direct_message", {
   id: text("id").primaryKey(),
   conversationId: text("conversation_id").notNull().references(() => conversation.id, { onDelete: "cascade" }),
