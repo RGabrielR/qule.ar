@@ -292,7 +292,6 @@ export function Conversation() {
               <span className="chat-contact-name">
                 <ChatPresenceDot state={other.presence} />
                 <b>{other.name}</b>
-                <span className="muted">{other.age}</span>
               </span>
               {typing && <span className="typing-label">escribiendo…</span>}
             </span>
