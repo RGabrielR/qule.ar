@@ -3,4 +3,4 @@
  * Si cambiás algo importante de los textos, subí la fecha en los dos lados: a todas las personas les aparece
  * el cartel para aceptar la versión nueva.
  */
-export const TERMS_VERSION = "2026-11-21";
+export const TERMS_VERSION = "2026-11-24";
