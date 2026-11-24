@@ -122,17 +122,17 @@ export function Conversation() {
     }
   }
 
-  useLayoutEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, typing]);
+  function followLatestMessage() {
+    const list = listRef.current;
+    if (list && stickToBottom.current) list.scrollTop = list.scrollHeight;
+  }
+
+  useLayoutEffect(followLatestMessage, [messages, typing]);
 
   useLayoutEffect(() => {
     const list = listRef.current;
     if (!list) return;
-    const observer = new ResizeObserver(() => {
-      if (stickToBottom.current) list.scrollTop = list.scrollHeight;
-    });
+    const observer = new ResizeObserver(followLatestMessage);
     observer.observe(list);
     return () => observer.disconnect();
   }, []);
@@ -157,6 +157,7 @@ export function Conversation() {
     setText("");
     try {
       const m = await api<Dm>(`/conversations/${id}/messages`, { method: "POST", json: { body } });
+      stickToBottom.current = true;
       setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
     } catch (err) {
       setText((t) => t || body);
@@ -175,6 +176,7 @@ export function Conversation() {
     setError("");
     try {
       const m = await upload<Dm>(`/conversations/${id}/messages`, file, expiringNext.current ? { expiring: "1" } : {});
+      stickToBottom.current = true;
       setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
     } catch (err) {
       setError((err as Error).message);
@@ -245,7 +247,7 @@ export function Conversation() {
                 )
               ) : (
                 <>
-                  {m.photo && <img className="bubble__photo" src={m.photo} alt="Foto enviada" loading="lazy" />}
+                  {m.photo && <img className="bubble__photo" src={m.photo} alt="Foto enviada" loading="lazy" onLoad={followLatestMessage} />}
                   {m.body && <p>{m.body}</p>}
                 </>
               )}
