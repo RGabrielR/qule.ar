@@ -420,7 +420,7 @@ function GroupChatThread({ id }: { id: string }) {
         {queued.map((m) => {
           const ms = new Date(m.scheduledAt).getTime() - now;
           return (
-            <div key={m.idempotencyKey ?? m.id} className="queued">
+            <div key={m.id} className="queued">
               <div className="queued__head">
                 <ClockIcon /> En cola · sale en <b>{fmtCountdown(ms)}</b>
               </div>
