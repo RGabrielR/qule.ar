@@ -155,6 +155,13 @@
       "when": 1795443305149,
       "tag": "0021_albumes_privados",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795487343921,
+      "tag": "0022_perfil_usuarios_x_instagram",
+      "breakpoints": true
     }
   ]
 }

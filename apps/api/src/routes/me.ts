@@ -30,7 +30,10 @@ const shortText = z.string().trim().max(60);
 const profileInput = z.object({
   displayName: z.string().trim().min(1, "Poné un nombre").max(40),
   birthdate: z.iso.date().optional(),
+  xUsername: z.string().max(15).regex(/^[A-Za-z0-9_]+$/, "Usá letras, números o guion bajo para tu usuario de X").nullish(),
   about: z.string().trim().max(500).nullish(),
+  instagramUsername: z.string().max(30, "Usá hasta 30 caracteres para tu usuario de Instagram")
+    .regex(/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*$/, "Usá letras, números o guiones bajos, con puntos entre ellos").nullish(),
   heightCm: z.number().int().min(120).max(230).nullish(),
   weightKg: z.number().int().min(35).max(250).nullish(),
   bodyType: shortText.nullish(),
