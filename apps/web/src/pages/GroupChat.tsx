@@ -7,13 +7,14 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { MessageText } from "../features/chat/MessageText";
 import { GroupAvatar } from "../components/GroupAvatar";
-import { BackIcon, ChevronDownIcon, ClockIcon, DotsIcon, SendIcon } from "../components/Icons";
+import { BackIcon, ChevronDownIcon, ClockIcon, SendIcon } from "../components/Icons";
 import { JoinButton } from "../components/JoinButton";
 import { ReportDialog } from "../components/ReportDialog";
 import { GroupActions } from "../features/groups/GroupActions";
 import { slowModeText } from "../features/groups/groupRules";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
+import { useMessageActions } from "../features/chat/useMessageActions";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { useSectionBack } from "../useSectionBack";
 
@@ -142,6 +143,7 @@ export function GroupChat() {
   const [reportingGroupId, setReportingGroupId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const listRef = useRef<HTMLDivElement>(null);
+  const messageActions = useMessageActions(menuFor, setMenuFor);
   const positionMessageMenu = useMessageMenuPosition(listRef, setMenuFor);
   const [findingQuote, setFindingQuote] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -501,7 +503,7 @@ export function GroupChat() {
             new Date(m.scheduledAt).getTime() - new Date(prev.scheduledAt).getTime() < 5 * 60_000;
           const mine = m.author.id === me?.user.id;
           return (
-            <div key={m.id} id={`gm-${m.id}`} className={`gmsg ${grouped && !m.replyTo ? "gmsg--grouped" : ""}`}>
+            <div key={m.id} id={`gm-${m.id}`} className={`gmsg message-gesture ${grouped && !m.replyTo ? "gmsg--grouped" : ""}`} {...messageActions(m.id)}>
               <div className="gmsg__avatar">
                 {!(grouped && !m.replyTo) && (
                   <Link to={`/perfil/${m.author.id}`} aria-label={`Ver perfil de ${m.author.name}`}>
@@ -525,11 +527,8 @@ export function GroupChat() {
                 <p className="gmsg__body">{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>
                 <ReactionBar reactions={m.reactions ?? []} myId={me?.user.id} onToggle={(k) => react(m, k)} />
               </div>
-              <button className="iconbtn gmsg__more" aria-label="Opciones del mensaje" aria-expanded={menuFor === m.id} aria-controls={menuFor === m.id ? `message-options-${m.id}` : undefined} onClick={() => setMenuFor(menuFor === m.id ? null : m.id)}>
-                <DotsIcon />
-              </button>
               {menuFor === m.id && (
-                <div className="menu" id={`message-options-${m.id}`} role="menu" ref={positionMessageMenu}>
+                <div className="menu" id={`message-options-${m.id}`} role="menu" ref={positionMessageMenu} onClick={(e) => e.stopPropagation()}>
                   {m.status === "published" && <ReactionPicker current={myReaction(m.reactions ?? [], me?.user.id)} onPick={(k) => react(m, k)} />}
                   {m.status === "published" && <button role="menuitem" onClick={() => startReply(m)}>Responder</button>}
                   {mine ? (
