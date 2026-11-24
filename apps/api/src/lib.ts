@@ -4,6 +4,8 @@ import { HTTPException } from "hono/http-exception";
 import { auth, type AuthUser } from "./auth.js";
 import { db, schema } from "./db/index.js";
 
+import { isOnline } from "./shared.js";
+
 const { profile, photo, block } = schema;
 
 export type Profile = typeof profile.$inferSelect;
@@ -63,17 +65,26 @@ export async function firstPublicPhotoKeys(ids: string[]): Promise<Map<string, s
 }
 
 /** Nombre, edad y foto principal (pública) de varios usuarios. */
-export async function authorsFor(ids: string[]): Promise<Map<string, Author>> {
+export async function authorsFor(ids: string[], options: { presence?: boolean } = {}): Promise<Map<string, Author>> {
   const unique = [...new Set(ids)];
   const map = new Map<string, Author>();
   if (!unique.length) return map;
   const [profiles, firstPhoto] = await Promise.all([
-    db.select({ userId: profile.userId, displayName: profile.displayName, birthdate: profile.birthdate })
+    db.select({
+      userId: profile.userId, displayName: profile.displayName, birthdate: profile.birthdate,
+      ...(options.presence && { incognito: profile.incognito, suspendedAt: profile.suspendedAt, lastSeenAt: profile.lastSeenAt }),
+    })
       .from(profile).where(inArray(profile.userId, unique)),
     firstPublicPhotoKeys(unique),
   ]);
   for (const p of profiles) {
+    let presence: "online" | "recent" | undefined;
+    if (options.presence && p.incognito === false && !p.suspendedAt && p.lastSeenAt) {
+      if (isOnline(p.userId)) presence = "online";
+      else if (Date.now() - p.lastSeenAt.getTime() < 15 * 60_000) presence = "recent";
+    }
     map.set(p.userId, {
+      ...(presence && { presence }),
       id: p.userId,
       name: p.displayName,
       age: ageFrom(p.birthdate),

@@ -235,7 +235,7 @@ socialRoutes.get("/conversations", async (c) => {
     .where(eq(directMessage.conversationId, conversation.id))
     .orderBy(desc(directMessage.createdAt), desc(directMessage.id)).limit(1).as("last_message");
   const [authors, latest, unreadCounts] = await Promise.all([
-    authorsFor(visible.map(otherIdFor)),
+    authorsFor(visible.map(otherIdFor), { presence: true }),
     db.select().from(conversation).innerJoinLateral(lastMessage, sql`true`).where(inArray(conversation.id, ids)),
     db.select({ id: directMessage.conversationId, unread: sql<number>`count(*)::int` }).from(directMessage)
       .where(and(inArray(directMessage.conversationId, ids), ne(directMessage.senderId, me.id), isNull(directMessage.readAt)))
@@ -282,7 +282,7 @@ socialRoutes.get("/conversations/:id", async (c) => {
   const me = c.get("user");
   const { conv, otherId } = await myConversation(c.req.param("id"), me.id);
   if (await isBlocked(me.id, otherId)) return c.notFound();
-  const authors = await authorsFor([otherId]);
+  const authors = await authorsFor([otherId], { presence: true });
   return c.json({ id: conv.id, other: authors.get(otherId) });
 });
 
@@ -304,7 +304,7 @@ socialRoutes.get("/conversations/:id/summary", async (c) => {
   if (!last) return c.json(null);
   const [states, authors] = await Promise.all([
     albumNoticeStates(me.id, [{ message: last.message, otherId }]),
-    authorsFor([otherId]),
+    authorsFor([otherId], { presence: true }),
   ]);
   return c.json({
     id: conv.id, lastMessageAt: new Date(Math.max(conv.lastMessageAt.getTime(), last.message.createdAt.getTime())).toISOString(),
