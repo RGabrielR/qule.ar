@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect } from "react";
 
 function scrollToField() {
   const viewport = window.visualViewport;
@@ -19,12 +19,6 @@ function scrollToField() {
 }
 
 export function useEditorKeyboard() {
-  const [open, setOpen] = useState(false);
-
-  useLayoutEffect(() => {
-    if (open) scrollToField();
-  }, [open]);
-
   useEffect(() => {
     if (!window.matchMedia("(any-pointer: coarse)").matches) return;
     const viewport = window.visualViewport;
@@ -53,9 +47,7 @@ export function useEditorKeyboard() {
       keyboardOpen = Boolean((editing || keyboardOpen) && restingHeight - current > 100);
       if (!editing && !keyboardOpen) restingHeight = current;
       else restingHeight = Math.max(restingHeight, current);
-      setOpen(keyboardOpen);
-      // Al abrir, el efecto de layout espera a que la barra inferior deje su espacio.
-      if (document.querySelector(".profile-editor[data-keyboard-open]")) revealField();
+      revealField();
     }
 
     viewport?.addEventListener("resize", resize);
@@ -70,6 +62,4 @@ export function useEditorKeyboard() {
       cancelAnimationFrame(frame);
     };
   }, []);
-
-  return open;
 }

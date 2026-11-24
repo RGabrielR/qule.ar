@@ -12,28 +12,24 @@ test("los usuarios de X e Instagram se validan, se publican y se pueden quitar",
   await expect(session).toBeOK();
   await page.goto("/yo/editar");
   const field = page.getByRole("textbox", { name: "Usuario de X" });
-  const navigation = page.getByRole("navigation", { name: "Secciones", includeHidden: true });
-  await expect(navigation).toBeVisible();
   await field.pressSequentially("ana maria");
   await expect(field).toHaveValue("ana maria");
-  await expect(navigation).toBeInViewport();
   await field.evaluate((input) => {
     const editor = input.closest<HTMLElement>(".profile-editor")!;
     editor.scrollTop += input.getBoundingClientRect().bottom - 650;
   });
   await page.setViewportSize({ width: 375, height: 490 });
-  await expect(navigation).toBeHidden();
   await expect(field).toBeInViewport({ ratio: 1 });
-  await expect.poll(() => field.evaluate((el) => el.getBoundingClientRect().bottom)).toBeCloseTo(490, 0);
+  await expect.poll(() => field.evaluate((el) =>
+    el.getBoundingClientRect().bottom - el.closest(".profile-editor")!.getBoundingClientRect().bottom,
+  )).toBeCloseTo(0, 0);
   const editor = page.locator(".profile-editor");
   const scroll = await editor.evaluate((el) => el.scrollTop);
   await page.getByRole("textbox", { name: "Sobre mí" }).focus();
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   expect(await editor.evaluate((el) => el.scrollTop)).toBe(scroll);
   await page.setViewportSize({ width: 375, height: 812 });
-  await expect(navigation).toBeInViewport();
   await field.blur();
-  await expect(navigation).toBeVisible();
   expect(await field.evaluate((input: HTMLInputElement) => input.validity.patternMismatch)).toBe(true);
   for (const xUsername of ["a".repeat(16), "https://x.com/a", "otro/test", "<b>", "x\ny"]) {
     const response = await page.request.put("/api/me/profile", {
@@ -64,7 +60,6 @@ test("los usuarios de X e Instagram se validan, se publican y se pueden quitar",
   await field.fill("  " + handle + "  ");
   await instagram.focus();
   await page.setViewportSize({ width: 375, height: 490 });
-  await expect(navigation).toBeHidden();
   const save = page.getByRole("button", { name: "Guardar cambios" });
   const saved = page.waitForResponse((response) =>
     response.url().endsWith("/api/me/profile") && response.request().method() === "PUT");

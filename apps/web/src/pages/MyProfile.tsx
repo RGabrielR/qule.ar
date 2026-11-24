@@ -107,7 +107,7 @@ export function EditProfile() {
 
 function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; photos: Photos; albums: MyAlbum[]; reload: () => Promise<void> }) {
   const navigate = useNavigate();
-  const keyboardOpen = useEditorKeyboard();
+  useEditorKeyboard();
   const [params] = useSearchParams();
   const isNew = params.get("nuevo") === "1";
   const [initialForm] = useState(() => profileForm(profile));
@@ -350,7 +350,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
   const photoNotice = photoError && <div className="toast toast--upload-error" role="alert">{photoError}</div>;
 
   return (
-    <div className="page profile-editor" data-keyboard-open={keyboardOpen || undefined}>
+    <div className="page profile-editor">
       <header className="topbar topbar--thread">
         <button type="button" className="iconbtn" aria-label="Volver a Mi perfil" onClick={leave} disabled={mediaLocked}><BackIcon /></button>
         <h1 className="topbar__title">Editar perfil</h1>
