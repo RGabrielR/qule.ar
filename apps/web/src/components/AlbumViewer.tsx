@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 import type { Media } from "../api";
+import { Watermark } from "../features/photos/Watermark";
 
 /** "por 3 h más", "hasta el lunes 14:30", etc. Para mostrar cuánto falta para que venza un acceso. */
 export function untilLabel(iso: string | null) {
@@ -24,9 +25,12 @@ type Gesture = { x: number; y: number; at: number; width: number; horizontal: bo
  * Visor del álbum a pantalla completa: fotos y videos, con flechas, teclado y arrastre horizontal.
  * Mientras se arrastra, la foto sigue al dedo; al soltar, cambia si pasó el umbral o si fue un flick.
  * Las fotos de al lado se cargan de antemano para que el cambio no parpadee.
- * No se puede evitar una captura de pantalla, pero al menos no se ofrece descargar.
+ * No se puede evitar una captura de pantalla, pero al menos no se ofrece descargar. Con `watermark` (álbum ajeno), lleva
+ * la marca de quién mira y se esconde cuando la app pierde el foco (ver features/photos/Watermark.tsx).
  */
-export function AlbumViewer({ items, start = 0, title, onClose }: { items: Media[]; start?: number; title?: string; onClose: () => void }) {
+export function AlbumViewer({ items, start = 0, title, onClose, watermark = false }: {
+  items: Media[]; start?: number; title?: string; onClose: () => void; watermark?: boolean;
+}) {
   const n = items.length;
   const [i, setI] = useState(Math.max(0, Math.min(start, n - 1)));
   const [drag, setDrag] = useState(0);
@@ -179,7 +183,7 @@ export function AlbumViewer({ items, start = 0, title, onClose }: { items: Media
   if (!n) return null;
   const dragCss = `calc(${-i * 100}% ${drag < 0 ? "-" : "+"} ${Math.abs(drag)}px)`;
   return (
-    <div className="lightbox" role="dialog" aria-modal="true" aria-label={title ?? "Álbum"} onContextMenu={(e) => e.preventDefault()}>
+    <div className={`lightbox${watermark ? " private-media" : ""}`} role="dialog" aria-modal="true" aria-label={title ?? "Álbum"} onContextMenu={(e) => e.preventDefault()}>
       <header className="lightbox__bar">
         <span>{title}{n > 1 && <span className="muted"> · {i + 1} de {n}</span>}</span>
         <button className="iconbtn" onClick={onClose} aria-label="Cerrar">✕</button>
@@ -226,6 +230,7 @@ export function AlbumViewer({ items, start = 0, title, onClose }: { items: Media
             );
           })}
         </div>
+        {watermark && <Watermark />}
       </div>
       {i > 0 && (
         <button className="lightbox__nav lightbox__nav--prev" onClick={() => go(-1)} aria-label="Anterior">‹</button>
@@ -238,15 +243,16 @@ export function AlbumViewer({ items, start = 0, title, onClose }: { items: Media
 }
 
 /** Grilla de miniaturas del álbum (los videos llevan un ▶ y la duración). */
-export function AlbumGrid({ items, onOpen }: { items: Media[]; onOpen: (i: number) => void }) {
+export function AlbumGrid({ items, onOpen, watermark = false }: { items: Media[]; onOpen: (i: number) => void; watermark?: boolean }) {
   return (
-    <div className="album__grid">
+    <div className={`album__grid${watermark ? " private-media" : ""}`}>
       {items.map((m, i) => (
         <button key={m.url} className="album__cell" onClick={() => onOpen(i)} aria-label={`${m.kind === "video" ? "Video" : "Foto"} ${i + 1}`}>
           {m.thumb ? <img src={m.thumb} alt="" loading="lazy" draggable={false} /> : <span className="album__nothumb" />}
           {m.kind === "video" && <span className="album__play">▶ {duration(m.seconds)}</span>}
         </button>
       ))}
+      {watermark && <Watermark />}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { NotifyBanner } from "./components/NotifyBanner";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { TermsBanner } from "./components/TermsBanner";
 import { VerifyEmailBanner } from "./features/auth/VerifyEmailBanner";
+import { useHidePrivateMediaWhenAway } from "./features/photos/Watermark";
 import { Legal } from "./pages/Legal";
 import { Logo } from "./components/Logo";
 import { TAB_PATHS, useTabSwipe } from "./features/navigation/useTabSwipe";
@@ -55,6 +56,9 @@ export function App() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // Las fotos privadas se esconden cuando la app pierde el foco (ver features/photos/Watermark.tsx)
+  useHidePrivateMediaWhenAway();
 
   if (loading) return <div className="splash"><Logo className="splash__logo" /></div>;
 

@@ -138,8 +138,8 @@ function ProfileView({ id }: { id: string }) {
             <h3 className="album__title">
               <LockIcon /> {a.name} · {albumCount(a.count, a.videos)}
             </h3>
-            {!p.isMe && <p className="muted small album__until">Lo podés ver {untilLabel(a.expiresAt)}.</p>}
-            <AlbumGrid items={a.items} onOpen={(start) => setViewing({ items: a.items, start, title: p.isMe ? a.name : `${a.name} · ${p.displayName}` })} />
+            {!p.isMe && <p className="muted small album__until">Lo podés ver {untilLabel(a.expiresAt)}. Las fotos llevan tu nombre encima: no las compartas.</p>}
+            <AlbumGrid items={a.items} watermark={!p.isMe} onOpen={(start) => setViewing({ items: a.items, start, title: p.isMe ? a.name : `${a.name} · ${p.displayName}` })} />
           </section>
         )) : (
           <section className="album">
@@ -183,7 +183,7 @@ function ProfileView({ id }: { id: string }) {
           </div>
         )}
       </div>
-      {viewing && <AlbumViewer items={viewing.items} start={viewing.start} title={viewing.title} onClose={closeViewer} />}
+      {viewing && <AlbumViewer items={viewing.items} start={viewing.start} title={viewing.title} onClose={closeViewer} watermark={!p.isMe} />}
       {reporting && <ReportDialog userId={p.id} name={p.displayName} onClose={() => setReporting(false)} />}
       {staffing && <StaffDialog userId={p.id} name={p.displayName} onClose={() => setStaffing(false)} />}
     </>
