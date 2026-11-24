@@ -10,6 +10,7 @@ import { useSectionBack } from "../useSectionBack";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
+import { MessageText } from "../features/chat/MessageText";
 import { batchReadReceipts } from "../features/messages/readReceipts";
 import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
@@ -339,7 +340,7 @@ export function Conversation() {
                       <img className="bubble__photo" src={m.photo} alt="" loading="lazy" />
                     </button>
                   )}
-                  {m.body && <p>{m.body}</p>}
+                  {m.body && <p>{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>}
                 </>
               )}
               <div className="bubble__meta">

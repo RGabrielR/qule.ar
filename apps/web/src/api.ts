@@ -168,6 +168,7 @@ export type Dm = {
   // Solo en avisos de álbum activos: hasta cuándo vale el acceso (ISO) o null si es sin límite.
   expiresAt?: string | null;
   body: string | null;
+  canOpenLinks?: boolean;
   photo: string | null;
   expiring: boolean;
   opened: boolean;
