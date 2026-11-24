@@ -2,11 +2,13 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
 import type { GroupInfo } from "../../api";
 import { DotsIcon } from "../../components/Icons";
+import { groupPath } from "./groupLink";
 import { setGroupMuted } from "./groupNotifications";
 
-export function GroupActions({ group, onMutedChange, onError }: {
+export function GroupActions({ group, onMutedChange, onLinkCopied, onError }: {
   group: GroupInfo;
   onMutedChange: (muted: boolean) => void;
+  onLinkCopied: () => void;
   onError: (message: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -17,6 +19,22 @@ export function GroupActions({ group, onMutedChange, onError }: {
   const infoPath = `/grupos/${group.id}/info`;
   const canManageRequests = !group.isGeneral && (group.role === "owner" || group.role === "moderator");
   const hasPendingRequests = canManageRequests && group.pendingCount > 0;
+
+  async function share() {
+    setOpen(false);
+    const url = new URL(groupPath(group.id), window.location.origin).href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: group.name, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        onLinkCopied();
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      onError("No se pudo compartir el grupo. Probá de nuevo.");
+    }
+  }
 
   async function toggleNotifications() {
     if (saving) return;
@@ -79,6 +97,7 @@ export function GroupActions({ group, onMutedChange, onError }: {
           </Link>
         )}
         <Link to={infoPath} state={{ fromGroupChat: true }} onClick={() => setOpen(false)}>Ver detalles</Link>
+        <button type="button" onClick={share}>Compartir grupo</button>
         <button type="button" aria-disabled={saving} onClick={toggleNotifications}>
           {group.muted ? "Reactivar notificaciones" : "Silenciar notificaciones"}
         </button>

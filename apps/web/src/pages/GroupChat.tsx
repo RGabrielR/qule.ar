@@ -482,6 +482,7 @@ export function GroupChat() {
           key={id}
           group={info}
           onMutedChange={(muted) => setInfo((current) => current?.id === id ? { ...current, muted } : current)}
+          onLinkCopied={() => setNotice({ kind: "info", text: "Enlace copiado." })}
           onError={(message) => setNotice({ kind: "error", text: message })}
         />
       </header>
