@@ -25,6 +25,7 @@ Para todo lo demás están las [Discusiones del proyecto](https://github.com/RGa
 **Tu perfil (todo opcional, lo completás si querés):**
 
 - Descripción, altura, peso, tipo de cuerpo, posición, tribus, qué buscás, situación sentimental y pronombres.
+- Tus nombres de usuario de X e Instagram, si los agregás. Los guardamos para mostrar enlaces a esas cuentas en tu perfil. Podés cambiarlos o quitarlos desde **Yo → Editar perfil**.
 - **Estado serológico y fecha del último test.** Es un dato de salud: mirá el punto 3.
 - Fotos y videos. Al subirlos les borramos los metadatos, incluida la ubicación GPS.
 
@@ -64,7 +65,7 @@ Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, m
 
 **Quién los ve:**
 
-- **Otras personas de la app:** ven tu perfil, tus fotos públicas y tu distancia aproximada, si no la ocultaste. Tus álbumes privados los ve solo quien vos elijas.
+- **Otras personas de la app:** ven tu perfil, tus fotos públicas y tu distancia aproximada, si no la ocultaste. Quienes puedan ver tu perfil también pueden ver y abrir los enlaces a X e Instagram que agregaste. Al abrir uno de esos enlaces, se aplica la política de privacidad de esa plataforma. Tus álbumes privados los ve solo quien vos elijas.
 - **Moderación:** para revisar un reporte, quien modera puede ver el mensaje o el perfil reportado, y la copia que se guarda al reportarlo (mirá el punto 6).
 - **Quienes mantienen el servidor:** técnicamente pueden acceder a la base de datos y a los archivos. Hoy los mensajes **no están cifrados de punta a punta**: los privados, las fotos, los videos y los datos de salud se guardan cifrados, pero la clave está en el mismo servidor y la app los descifra ahí para mostrártelos. Solo acceden cuando hace falta para arreglar un problema o por una orden judicial.
 - **Proveedores que usamos para que la app funcione:**

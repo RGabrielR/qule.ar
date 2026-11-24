@@ -1,5 +1,5 @@
 import {
-  pgTable, text, timestamp, boolean, integer, date, jsonb, uniqueIndex, index, primaryKey, doublePrecision,
+  pgTable, varchar, text, timestamp, boolean, integer, date, jsonb, uniqueIndex, index, primaryKey, doublePrecision,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { encryptedMessageText, encryptedText } from "../crypt.js";
@@ -61,6 +61,8 @@ export const profile = pgTable("profile", {
   userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
   displayName: text("display_name").notNull(),
   birthdate: date("birthdate").notNull(),
+  xUsername: varchar("x_username", { length: 15 }),
+  instagramUsername: varchar("instagram_username", { length: 30 }),
   about: text("about"),
   heightCm: integer("height_cm"),
   weightKg: integer("weight_kg"),

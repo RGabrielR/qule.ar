@@ -61,6 +61,8 @@ socialRoutes.get("/users/:id", async (c) => {
     displayName: p.displayName,
     age: ageFrom(p.birthdate),
     about: p.about,
+    xUsername: p.xUsername,
+    instagramUsername: p.instagramUsername,
     heightCm: p.heightCm,
     weightKg: p.weightKg,
     bodyType: p.bodyType,

@@ -1,6 +1,6 @@
 # Términos y condiciones
 
-**Versión beta · 21 de noviembre de 2026**
+**Versión beta · 24 de noviembre de 2026**
 
 Te damos la bienvenida a qule.ar. Al crear tu cuenta aceptás estos términos y la [Política de privacidad](/privacidad). Los escribimos en criollo para que se entiendan.
 
@@ -40,6 +40,7 @@ qule.ar es un espacio para la comunidad LGBTIQ+ y las personas aliadas. Al usarl
 - Respetar el nombre y los pronombres de cada persona.
 - **No compartir fotos, mensajes ni datos de otra persona sin su permiso**, ni capturas del álbum privado o de las fotos temporales.
 - No hacerte pasar por otra persona ni crear perfiles falsos.
+- Si agregás tu usuario de X o Instagram a tu perfil de qule.ar, usá solo cuentas propias. No agregues cuentas de otras personas. Si ves que alguien usa una cuenta ajena, reportá el perfil desde la app con el motivo «Perfil falso».
 - No mandar spam, publicidad, estafas ni pedidos de plata.
 - No ofrecer ni pedir servicios sexuales pagos ni nada ilegal.
 - **No vender ni ofrecer drogas.** Hablar de consumo cuidado y de reducción de daños sí se puede: esos grupos son bienvenidos.
