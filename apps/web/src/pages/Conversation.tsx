@@ -10,6 +10,7 @@ import { useSectionBack } from "../useSectionBack";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
+import { MessageText } from "../features/chat/MessageText";
 import { batchReadReceipts } from "../features/messages/readReceipts";
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
 
@@ -246,7 +247,7 @@ export function Conversation() {
               ) : (
                 <>
                   {m.photo && <img className="bubble__photo" src={m.photo} alt="Foto enviada" loading="lazy" />}
-                  {m.body && <p>{m.body}</p>}
+                  {m.body && <p><MessageText text={m.body} /></p>}
                 </>
               )}
               <time>{new Date(m.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</time>

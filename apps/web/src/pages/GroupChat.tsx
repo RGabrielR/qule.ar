@@ -4,6 +4,7 @@ import { api, getSocket, type GroupInfo, type GroupMessage, type ReactionEvent }
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
+import { MessageText } from "../features/chat/MessageText";
 import { GroupAvatar } from "../components/GroupAvatar";
 import { BackIcon, ClockIcon, DotsIcon, InfoIcon, SendIcon } from "../components/Icons";
 import { JoinButton } from "../components/JoinButton";
@@ -346,7 +347,7 @@ export function GroupChat() {
                     <span className="quote__body">{m.replyTo.body ?? "Mensaje borrado"}</span>
                   </button>
                 )}
-                <p className="gmsg__body">{m.body}</p>
+                <p className="gmsg__body"><MessageText text={m.body} /></p>
                 <ReactionBar reactions={m.reactions ?? []} myId={me?.user.id} onToggle={(k) => react(m, k)} />
               </div>
               <button className="iconbtn gmsg__more" aria-label="Opciones del mensaje" onClick={() => setMenuFor(menuFor === m.id ? null : m.id)}>
