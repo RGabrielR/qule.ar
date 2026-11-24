@@ -106,37 +106,73 @@ export function GroupChat() {
 
   useEffect(() => {
     if (!isMember) return;
-    let alive = true;
+    let request: AbortController | undefined;
+    type Update = (list: GroupMessage[]) => GroupMessage[];
+    let publishedChanges: Update[] | null = [];
+    let queuedChanges: Update[] | null = [];
+    function updatePublished(change: Update) {
+      publishedChanges?.push(change);
+      setMessages(change);
+    }
+    function updateQueued(change: Update) {
+      queuedChanges?.push(change);
+      setQueued(change);
+    }
     setMessages([]);
     setQueued([]);
-    api<{ messages: GroupMessage[]; queued: GroupMessage[]; hasMore: boolean }>(`/groups/${id}/messages`)
-      .then((d) => {
-        if (!alive) return;
-        stickToBottom.current = true;
-        setMessages(d.messages);
-        setQueued(d.queued);
+    async function refreshHistory() {
+      request?.abort();
+      const controller = new AbortController();
+      request = controller;
+      const published: Update[] = [];
+      const queued: Update[] = [];
+      publishedChanges = published;
+      queuedChanges = queued;
+      try {
+        const d = await api<{ messages: GroupMessage[]; queued: GroupMessage[]; hasMore: boolean }>(
+          `/groups/${id}/messages`, { signal: controller.signal, cache: "no-store" },
+        );
+        if (controller.signal.aborted) return;
+        const oldest = d.messages[0];
+        setMessages((current) => {
+          const overlap = oldest && current.some((m) => m.id === oldest.id);
+          const older = d.hasMore && overlap ? current.filter((m) => m.scheduledAt < oldest.scheduledAt) : [];
+          return published.reduce((list, change) => change(list), [...older, ...d.messages]);
+        });
+        setQueued(queued.reduce((list, change) => change(list), d.queued));
         setHasMore(d.hasMore);
-      })
-      .catch((e) => setNotice({ kind: "error", text: e.message }));
+      } catch (error) {
+        if (!controller.signal.aborted) setNotice({ kind: "error", text: (error as Error).message });
+      } finally {
+        if (request === controller) {
+          publishedChanges = null;
+          queuedChanges = null;
+        }
+      }
+    }
 
     const s = getSocket();
+    s.on("connect", refreshHistory);
+    void refreshHistory();
     const onMessage = (m: GroupMessage) => {
       if (m.groupId !== id) return;
-      setQueued((q) => q.filter((x) => x.id !== m.id));
-      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
+      updateQueued((q) => q.filter((x) => x.id !== m.id));
+      updatePublished((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
     };
     const onQueued = (m: GroupMessage) => {
       if (m.groupId !== id) return;
-      setQueued((q) => {
+      updateQueued((q) => {
         const rest = q.filter((x) => x.id !== m.id);
         return [...rest, m].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
       });
     };
     const onCancelled = (p: { id: string; groupId: string }) => {
-      if (p.groupId === id) setQueued((q) => q.filter((x) => x.id !== p.id));
+      if (p.groupId !== id) return;
+      updateQueued((q) => q.filter((x) => x.id !== p.id));
     };
     const onDeleted = (p: { id: string; groupId: string }) => {
-      if (p.groupId === id) setMessages((list) => list.filter((x) => x.id !== p.id));
+      if (p.groupId !== id) return;
+      updatePublished((list) => list.filter((x) => x.id !== p.id));
     };
     s.on("group:message", onMessage);
     s.on("group:queued", onQueued);
@@ -144,11 +180,12 @@ export function GroupChat() {
     s.on("group:deleted", onDeleted);
     const onReaction = (p: ReactionEvent) => {
       if (p.scope !== "group" || p.groupId !== id) return;
-      setMessages((list) => list.map((x) => (x.id === p.messageId ? { ...x, reactions: p.reactions } : x)));
+      updatePublished((list) => list.map((x) => (x.id === p.messageId ? { ...x, reactions: p.reactions } : x)));
     };
     s.on("reaction", onReaction);
     return () => {
-      alive = false;
+      request?.abort();
+      s.off("connect", refreshHistory);
       s.off("group:message", onMessage);
       s.off("group:queued", onQueued);
       s.off("group:cancelled", onCancelled);
