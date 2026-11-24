@@ -139,6 +139,7 @@ export type NearbyPerson = {
   name: string;
   age: number;
   photo: string | null;
+  coverPhoto: string | null;
   online: boolean;
   recent: boolean;
   distance: string | null;
@@ -155,6 +156,8 @@ export type GroupMessage = {
   author: Pick<Author, "id" | "name" | "photo">;
   replyTo: { id: string; authorName: string; body: string | null } | null;
   reactions: { kind: string; by: string[] }[];
+  /** Si los links se pueden tocar: la cuenta que lo mandó tenía más de 24 h (ver canOpenLinks en el API). */
+  canOpenLinks?: boolean;
 };
 
 export type Dm = {
@@ -166,6 +169,7 @@ export type Dm = {
   // Solo en avisos de álbum activos: hasta cuándo vale el acceso (ISO) o null si es sin límite.
   expiresAt?: string | null;
   body: string | null;
+  canOpenLinks?: boolean;
   photo: string | null;
   expiring: boolean;
   opened: boolean;
@@ -241,6 +245,7 @@ export type MyInvite = {
 
 export const ROLE_LABEL: Record<Role, string> = { owner: "Dueño", moderator: "Moderador", member: "Miembro" };
 
-export type ConversationSummary = { id: string; lastMessageAt: string; other: Author; last: Dm; unread: number };
+export type ChatContact = Author & { presence?: "online" | "recent" };
+export type ConversationSummary = { id: string; lastMessageAt: string; other: ChatContact; last: Dm; unread: number };
 
 export type Viewer = Author & { viewedAt: string };

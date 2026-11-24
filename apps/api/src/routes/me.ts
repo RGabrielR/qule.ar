@@ -67,9 +67,10 @@ meRoutes.get("/signup-challenge", (c) => {
 // Archivos: solo para gente con sesión, así no se pueden scrapear las fotos desde afuera
 meRoutes.get("/files/:key", requireUserForFiles, async (c) => {
   const key = c.req.param("key");
-  const thumb = c.req.query("s") === "thumb";
+  const size = c.req.query("s");
+  const variant = size === "thumb" || size === "cover" ? size : undefined;
   // Foto pública ya chequeada hace un rato: directo al archivo, sin preguntarle a la base (ver fileAccess.ts)
-  if (isKnownPublic(key)) return sendImage(c, key, thumb, false);
+  if (isKnownPublic(key)) return sendImage(c, key, variant, false);
   const viewer = c.get("user").id;
   // Foto o video de álbum privado (o la miniatura de un video): solo dueño o gente con acceso vigente
   const [ph] = await db.select().from(photo).where(or(eq(photo.key, key), eq(photo.posterKey, key)));
@@ -103,16 +104,18 @@ meRoutes.get("/files/:key", requireUserForFiles, async (c) => {
   // Foto de perfil pública o de un grupo activo: la puede ver cualquiera con sesión, se recuerda un minuto
   if ((ph && !ph.isPrivate) || (grp && !grp.removedAt)) rememberPublic(key);
   const watermark = albumWatermarkKey && ph?.isPrivate && ph.kind === "photo" && ph.userId !== viewer
-    ? { secret: albumWatermarkKey, fileKey: key, viewerId: viewer, thumb }
+    ? { secret: albumWatermarkKey, fileKey: key, viewerId: viewer, thumb: variant === "thumb" }
     : undefined;
-  return sendImage(c, key, thumb, noStore, watermark);
+  // La portada es para perfiles. En un álbum compartido servimos la variante completa
+  // marcada para que la señal corresponda a una referencia que Moderación puede verificar.
+  return sendImage(c, key, watermark && variant === "cover" ? undefined : variant, noStore, watermark);
 });
 
 async function sendImage(
-  c: Context<AppEnv>, key: string, thumb: boolean, noStore: boolean,
+  c: Context<AppEnv>, key: string, variant: Parameters<typeof readImage>[1], noStore: boolean,
   watermark?: Watermark,
 ) {
-  const buf = await readImage(key, thumb);
+  const buf = await readImage(key, variant);
   if (!buf) return c.notFound();
   const body = watermark ? await markAlbumImage(buf, watermark) : buf;
   return c.body(new Uint8Array(body), 200, {

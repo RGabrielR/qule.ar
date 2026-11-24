@@ -11,6 +11,7 @@ import { PhotoCrop } from "../components/PhotoCrop";
 import { preparePhotoForCrop } from "../features/photos/preparePhoto";
 import { HasPlaceSelect } from "../features/place/hasPlace";
 import { AlbumHeader, MoveTo, NewAlbum } from "../features/photos/AlbumHeader";
+import { useEditorKeyboard } from "../features/profile/useEditorKeyboard";
 import { BODY_TYPES, HIV_STATUS, LOOKING_FOR, POSITIONS, PRONOUNS, RELATIONSHIP, TRIBES } from "../options";
 
 type Form = Omit<Profile, "birthdate" | "age">;
@@ -106,6 +107,7 @@ export function EditProfile() {
 
 function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; photos: Photos; albums: MyAlbum[]; reload: () => Promise<void> }) {
   const navigate = useNavigate();
+  const keyboardOpen = useEditorKeyboard();
   const [params] = useSearchParams();
   const isNew = params.get("nuevo") === "1";
   const [initialForm] = useState(() => profileForm(profile));
@@ -348,7 +350,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
   const photoNotice = photoError && <div className="toast toast--upload-error" role="alert">{photoError}</div>;
 
   return (
-    <div className="page">
+    <div className="page profile-editor" data-keyboard-open={keyboardOpen || undefined}>
       <header className="topbar topbar--thread">
         <button type="button" className="iconbtn" aria-label="Volver a Mi perfil" onClick={leave} disabled={mediaLocked}><BackIcon /></button>
         <h1 className="topbar__title">Editar perfil</h1>
@@ -393,7 +395,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
       <section className="section">
         <h2 className="section__title"><LockIcon /> Álbumes privados <span className="muted">{privatePhotos.length}/{MAX_ALBUM_ITEMS}</span></h2>
         <p className="muted small lead">
-          Fotos y videos (hasta 1 minuto) que solo ve la gente a la que le compartís cada álbum desde su perfil, por 1 hora, 24 horas, 7 días o sin límite. Podés tener hasta {MAX_ALBUMS} álbumes y {MAX_ALBUM_ITEMS} archivos entre todos, y quitar el acceso cuando quieras.
+          Fotos y videos (hasta 1 minuto) que solo ve la gente a la que le compartís cada álbum desde su perfil, por 1 hora, 24 horas, 7 días o sin límite. Podés tener hasta {MAX_ALBUMS} álbumes y {MAX_ALBUM_ITEMS} archivos entre todos, y quitar el acceso cuando quieras. No podemos impedir capturas de pantalla, pero quien mira tus fotos las ve con su nombre encima: si saca una captura, se sabe quién fue.
         </p>
         {(albums.length ? albums : [null]).map((a) => {
           const items = a ? privatePhotos.filter((p) => p.albumId === a.id) : [];

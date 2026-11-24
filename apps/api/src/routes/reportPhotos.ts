@@ -116,7 +116,7 @@ const variant = z.enum(["photo", "thumb"]);
 
 async function readReference(r: Awaited<ReturnType<typeof verifiableReport>>, photoId: string, thumb: boolean) {
   const [selected] = await referencePhotos(r, photoId);
-  const original = selected && await readImage(selected.key, thumb);
+  const original = selected && await readImage(selected.key, thumb ? "thumb" : undefined);
   if (!original) throw new HTTPException(404, { message: "La foto original ya no está disponible" });
   return { selected, original };
 }

@@ -5,7 +5,7 @@ import { createAdapter } from "@socket.io/cluster-adapter";
 import { Server } from "socket.io";
 import { auth } from "./auth.js";
 import { db, schema } from "./db/index.js";
-import { authorsFor, blockedWith, reactionsFor } from "./lib.js";
+import { authorsFor, blockedWith, canOpenLinks, reactionsFor } from "./lib.js";
 import { notifyGroupMessage } from "./groupNotify.js";
 import { clustered, socketClosed, socketOpened } from "./shared.js";
 
@@ -115,6 +115,12 @@ export async function serializeGroupMessages(rows: (typeof groupMessage.$inferSe
   const quotedById = new Map(quoted.map((q) => [q.id, q]));
   const authors = await authorsFor([...rows.map((r) => r.userId), ...quoted.map((q) => q.userId)]);
   const reactions = await reactionsFor(rows.filter((r) => r.status === "published").map((r) => r.id));
+  // Cuándo se creó cada cuenta, para saber si sus links se pueden tocar (ver canOpenLinks en lib.ts)
+  const senderIds = [...new Set(rows.map((r) => r.userId))];
+  const created = senderIds.length
+    ? new Map((await db.select({ id: schema.user.id, createdAt: schema.user.createdAt }).from(schema.user)
+        .where(inArray(schema.user.id, senderIds))).map((u) => [u.id, u.createdAt]))
+    : new Map<string, Date>();
   // En los grupos se muestra solo el nombre y la foto, sin la edad
   const author = (id: string) => {
     const a = authors.get(id);
@@ -130,6 +136,7 @@ export async function serializeGroupMessages(rows: (typeof groupMessage.$inferSe
       scheduledAt: r.scheduledAt.toISOString(),
       author: author(r.userId),
       reactions: reactions.get(r.id) ?? [],
+      canOpenLinks: created.has(r.userId) && canOpenLinks(r.scheduledAt, created.get(r.userId)!),
       replyTo: q
         ? { id: q.id, authorName: author(q.userId).name, body: q.status === "published" ? q.body.slice(0, 160) : null }
         : null,

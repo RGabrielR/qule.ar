@@ -8,6 +8,7 @@ import { NotifyBanner } from "./components/NotifyBanner";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { TermsBanner } from "./components/TermsBanner";
 import { VerifyEmailBanner } from "./features/auth/VerifyEmailBanner";
+import { useHidePrivateMediaWhenAway } from "./features/photos/Watermark";
 import { Legal } from "./pages/Legal";
 import { Logo } from "./components/Logo";
 import { TAB_PATHS, useTabSwipe } from "./features/navigation/useTabSwipe";
@@ -15,6 +16,7 @@ import { TabDataProvider, useTabData } from "./features/navigation/tabData";
 import { APP_NAME } from "./brand";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
 import { Onboarding } from "./pages/Onboarding";
+import { useChatViewport } from "./features/messages/useChatViewport";
 import { GroupChat } from "./pages/GroupChat";
 import { Groups } from "./pages/Groups";
 import { GroupInfo } from "./pages/GroupInfo";
@@ -55,6 +57,9 @@ export function App() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // Las fotos privadas se esconden cuando la app pierde el foco (ver features/photos/Watermark.tsx)
+  useHidePrivateMediaWhenAway();
 
   if (loading) return <div className="splash"><Logo className="splash__logo" /></div>;
 
@@ -171,11 +176,12 @@ function ShellContent() {
 
   // En una conversación abierta, la barra de abajo se esconde para dejar lugar al teclado
   const inThread = /^\/mensajes\/.+/.test(loc.pathname) || /^\/grupos\/[^/]+\/?$/.test(loc.pathname);
+  const chatShell = useChatViewport(inThread);
   const inMyProfile = /^\/yo(?:\/|$)/.test(loc.pathname);
   const nearbyEntry = loc.pathname.startsWith("/perfil/") ? loc.state?.nearbyEntry : undefined;
 
   return (
-    <div className={`shell${inThread ? " shell--thread" : ""}${canSwipeTabs ? " shell--swipe" : ""}`}>
+    <div ref={chatShell} className={`shell${inThread ? " shell--thread" : ""}${canSwipeTabs ? " shell--swipe" : ""}`}>
       <main className="shell__main" ref={main} {...swipeHandlers}>
         <Outlet />
       </main>

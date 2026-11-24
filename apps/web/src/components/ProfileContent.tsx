@@ -1,43 +1,55 @@
 import { useState, type ReactNode } from "react";
 import type { PublicProfile } from "../api";
 import { hasPlaceLabel } from "../features/place/hasPlace";
+import { ProfileCoverImage } from "../features/profile/ProfileCoverImage";
 
 type CoverProps = {
-  photos: string[];
-  displayName: string;
-  age: number;
+  photos?: string[];
+  coverPhoto?: string | null;
+  displayName?: string;
+  age?: number;
   status?: Pick<PublicProfile, "online" | "recent" | "distance">;
   back?: ReactNode;
   /** Algo más sobre la foto, abajo a la derecha (por ejemplo, pasar al perfil siguiente). */
   aside?: ReactNode;
 };
 
-export function ProfileCover({ photos, displayName, age, status, back, aside }: CoverProps) {
+export function ProfileCover({ photos, coverPhoto, displayName, age, status, back, aside }: CoverProps) {
   const [selected, setSelected] = useState(0);
-  const index = Math.min(selected, photos.length - 1);
+  const count = photos?.length ?? 0;
+  const index = Math.min(selected, count - 1);
+  const source = photos ? photos[index] : coverPhoto;
+  const preview = source && source === coverPhoto ? `${source}?s=cover` : undefined;
+  const fallback = displayName && <div className="profile__nophoto">{displayName.charAt(0).toUpperCase()}</div>;
   return (
     <div className="profile__photo">
-      {photos.length ? (
-        <img src={photos[index]} alt={`Foto de ${displayName}`} />
+      {source || !photos ? (
+        <ProfileCoverImage
+          key={source}
+          photo={photos ? source ?? undefined : undefined}
+          preview={preview}
+          alt={displayName ? `Foto de ${displayName}` : ""}
+          fallback={fallback}
+        />
       ) : (
-        <div className="profile__nophoto">{displayName.charAt(0).toUpperCase()}</div>
+        fallback
       )}
       {back}
-      {photos.length > 1 && (
+      {photos && count > 1 && (
         <div className={back ? "profile__dots profile__dots--with-back" : "profile__dots"}>
           {photos.map((_, i) => (
             <button key={i} aria-label={`Foto ${i + 1}`} aria-current={i === index ? "true" : undefined} className={i === index ? "on" : ""} onClick={() => setSelected(i)} />
           ))}
         </div>
       )}
-      {photos.length > 1 && (
+      {count > 1 && (
         <>
-          <button className="profile__tap profile__tap--prev" aria-label="Foto anterior" onClick={() => setSelected((index - 1 + photos.length) % photos.length)} />
-          <button className="profile__tap profile__tap--next" aria-label="Foto siguiente" onClick={() => setSelected((index + 1) % photos.length)} />
+          <button className="profile__tap profile__tap--prev" aria-label="Foto anterior" onClick={() => setSelected((index - 1 + count) % count)} />
+          <button className="profile__tap profile__tap--next" aria-label="Foto siguiente" onClick={() => setSelected((index + 1) % count)} />
         </>
       )}
       {aside}
-      <div className={aside ? "profile__name profile__name--with-aside" : "profile__name"}>
+      {displayName && <div className={aside ? "profile__name profile__name--with-aside" : "profile__name"}>
         <div className="profile__nameline">
           <h1>{displayName}</h1>
           <span>{age}</span>
@@ -49,7 +61,7 @@ export function ProfileCover({ photos, displayName, age, status, back, aside }: 
             {status.distance}
           </p>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

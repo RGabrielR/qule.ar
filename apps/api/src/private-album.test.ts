@@ -169,7 +169,7 @@ test("accesos al álbum privado", async (t) => {
     await giveAccess(owner, other);
     const fileKey = photoItem.url.split("/").at(-1)!;
     for (const [url, thumb] of [[photoItem.url, false], [photoItem.thumb, true]] as const) {
-      const original = await readImage(fileKey, thumb);
+      const original = await readImage(fileKey, thumb ? "thumb" : undefined);
       assert.ok(original);
       const fetchImage = async (viewer: Account) => {
         const response = await request(url, viewer);
@@ -186,8 +186,14 @@ test("accesos al álbum privado", async (t) => {
       assert.equal((await verifyAlbumImage(original, second, mark)).match, false);
       assert.equal((await verifyAlbumImage(original, original, mark)).match, false);
       assert.equal((await verifyAlbumImage(original, first, { ...mark, thumb: !thumb })).match, false);
-      assert.deepEqual(await readImage(fileKey, thumb), original);
+      assert.deepEqual(await readImage(fileKey, thumb ? "thumb" : undefined), original);
     }
+    const cover = await request(`${photoItem.url}?s=cover`, person);
+    const full = await request(photoItem.url, person);
+    assert.equal(cover.status, 200);
+    assert.equal(cover.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await cover.arrayBuffer(), await full.arrayBuffer());
+    assert.equal((await request(`${photoItem.url}?s=cover`, undefined)).status, 401);
     const ownerPoster = await request(videoItem.thumb, owner);
     const sharedPoster = await request(videoItem.thumb, person);
     assert.deepEqual(await sharedPoster.arrayBuffer(), await ownerPoster.arrayBuffer());
