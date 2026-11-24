@@ -67,7 +67,9 @@ async function getBlob(key: string): Promise<Buffer | null> {
 }
 
 export async function deleteThumb(key: string) {
-  if (KEY_RE.test(key)) await deleteBlob(`thumbs/${key}`);
+  if (!KEY_RE.test(key)) return;
+  await deleteBlob(`thumbs/${key}`);
+  await deleteBlob(`thumbs/cover-${key}`);
 }
 
 async function deleteBlob(key: string) {
