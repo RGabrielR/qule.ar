@@ -202,7 +202,7 @@ export function GroupChat() {
     setMessages([]);
     setQueued([]);
 
-    /** Pide el historial y la cola. Se repite al reconectar, por si se perdieron eventos. */
+    /** Pide el historial y la cola. */
     async function refreshHistory() {
       request?.abort();
       const controller = new AbortController();
@@ -237,7 +237,16 @@ export function GroupChat() {
     }
 
     const s = getSocket();
-    s.on("connect", refreshHistory);
+    // Al volver la conexión después de un corte, se pide todo de nuevo por si se perdieron eventos
+    let lostConnection = false;
+    const onDisconnect = () => { lostConnection = true; };
+    const onReconnect = () => {
+      if (!lostConnection) return;
+      lostConnection = false;
+      void refreshHistory();
+    };
+    s.on("disconnect", onDisconnect);
+    s.on("connect", onReconnect);
     void refreshHistory();
     const onMessage = (m: GroupMessage) => {
       if (m.groupId !== id) return;
@@ -268,7 +277,8 @@ export function GroupChat() {
     s.on("reaction", onReaction);
     return () => {
       request?.abort();
-      s.off("connect", refreshHistory);
+      s.off("disconnect", onDisconnect);
+      s.off("connect", onReconnect);
       historyRequest.current?.abort();
       historyRequest.current = null;
       s.off("group:message", onMessage);

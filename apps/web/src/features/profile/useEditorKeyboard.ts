@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 function scrollToField() {
   const viewport = window.visualViewport;
@@ -65,6 +65,11 @@ export function useEditorKeyboard() {
       cancelAnimationFrame(frame);
     };
   }, []);
+
+  // Al esconderse la barra de abajo cambia el alto del editor: se vuelve a acomodar el campo
+  useLayoutEffect(() => {
+    if (open) scrollToField();
+  }, [open]);
 
   return open;
 }

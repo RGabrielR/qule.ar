@@ -20,9 +20,11 @@ test("los usuarios de X e Instagram se validan, se publican y se pueden quitar",
   });
   await page.setViewportSize({ width: 375, height: 490 });
   await expect(field).toBeInViewport({ ratio: 1 });
+  // Con el teclado abierto se esconde la barra de abajo (#193): el campo tiene que quedar entero dentro del editor
   await expect.poll(() => field.evaluate((el) =>
     el.getBoundingClientRect().bottom - el.closest(".profile-editor")!.getBoundingClientRect().bottom,
-  )).toBeCloseTo(0, 0);
+  )).toBeLessThanOrEqual(0.5);
+  await expect(page.locator(".tabbar")).toBeHidden();
   const editor = page.locator(".profile-editor");
   const scroll = await editor.evaluate((el) => el.scrollTop);
   await page.getByRole("textbox", { name: "Sobre mí" }).focus();
