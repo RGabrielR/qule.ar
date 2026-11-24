@@ -82,6 +82,9 @@ test("accesos al álbum privado", async (t) => {
   data.set("private", "1");
   const photo = await request("/api/me/photos", owner, { method: "POST", body: data });
   assert.equal(photo.status, 200);
+  // Lo que se sube sin elegir álbum va al álbum por defecto
+  const { albumId } = await photo.json() as { albumId: string };
+  assert.ok(albumId);
 
   // La ruta sirve bytes por rango; la prueba no necesita un códec ni ffmpeg.
   const videoBytes = Buffer.from("video de prueba");
@@ -89,7 +92,7 @@ test("accesos al álbum privado", async (t) => {
   const posterKey = await saveImage(sample);
   await writeFile(path.join(dataDir, "uploads", videoKey), videoBytes);
   await db.insert(schema.photo).values({
-    id: randomUUID(), userId: owner.id, position: 1, key: videoKey, posterKey, kind: "video", isPrivate: true,
+    id: randomUUID(), userId: owner.id, position: 1, key: videoKey, posterKey, kind: "video", isPrivate: true, albumId,
   });
 
   async function albumFor(viewer: Account) {

@@ -8,6 +8,7 @@ import { DEFAULT_SPAM_RULES } from "../db/schema.js";
 import { ageFrom, authorsFor, blockedWith, messageKey, newId, requireProfile, requireUser, thumbUrl, type AppEnv } from "../lib.js";
 import { distanceLabel, visibleKm } from "../geo.js";
 import { autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, forbiddenGroupText, groupIsEvidence, reportMinorGroupAttempt } from "../moderation.js";
+import { BULK_MAX, bulkInput, pendingConds, requestFilters, requestPage } from "../joinRequests.js";
 import { limit } from "../ratelimit.js";
 import { MAX_UPLOAD_BYTES, saveImage } from "../storage.js";
 import { emitPublishedMessage, emitToGroup, emitToUser, isOnline, serializeGroupMessages, syncGroupRoom } from "../realtime.js";
@@ -16,7 +17,7 @@ import { pushTo } from "../push.js";
 import { notifyGroupMessage } from "../groupNotify.js";
 import { forgetFile } from "../fileCache.js";
 
-const { group, groupMember, groupMessage, groupJoinRequest, groupInvite } = schema;
+const { group, groupMember, groupMessage, groupJoinRequest, groupInvite, profile, user } = schema;
 
 /** Días que tiene que esperar alguien rechazado o expulsado para volver a pedir ingreso. */
 const REAPPLY_DAYS = 7;
@@ -423,22 +424,90 @@ groupRoutes.delete("/groups/:id/requests/mine", async (c) => {
   return c.json({ ok: true });
 });
 
-/** Solicitudes pendientes (dueño y moderadores). */
+/**
+ * Solicitudes pendientes (dueño y moderadores), de la más nueva a la más vieja,
+ * de a REQUESTS_PAGE por página. Filtros opcionales: con/sin foto pública,
+ * cuenta nueva y rango de edad. `total` viene solo en la primera página.
+ */
 groupRoutes.get("/groups/:id/requests", async (c) => {
   const u = c.get("user");
   const { group: g } = await requireMod(c.req.param("id"), u.id);
-  const rows = await db
-    .select()
-    .from(groupJoinRequest)
-    .where(and(eq(groupJoinRequest.groupId, g.id), eq(groupJoinRequest.status, "pending")))
-    .orderBy(asc(groupJoinRequest.createdAt));
-  const authors = await authorsFor(rows.map((r) => r.userId));
-  return c.json(rows.map((r) => ({
-    id: r.id,
-    message: r.message,
-    createdAt: r.createdAt.toISOString(),
-    user: authors.get(r.userId) ?? { id: r.userId, name: "Cuenta borrada", age: 0, photo: null },
-  })));
+  const parsed = requestFilters.safeParse(c.req.query());
+  if (!parsed.success) throw new HTTPException(400, { message: "Filtro inválido" });
+  const page = await requestPage(g.id, parsed.data);
+  if (!page) throw new HTTPException(400, { message: "Página inválida" });
+  return c.json(page);
+});
+
+/**
+ * Aceptar o rechazar muchas solicitudes de una (dueño y moderadores), para grupos con cientos pendientes.
+ * Con `ids`, solo las de este grupo que sigan pendientes (las demás se ignoran). Con `filtros`, las más
+ * nuevas que coinciden, hasta BULK_MAX; `remaining` dice cuántas quedan para el próximo pedido.
+ * Mismos efectos que de a una: membresía, invitaciones cerradas, avisos y período de espera al rechazar.
+ */
+groupRoutes.post("/groups/:id/requests/bulk", async (c) => {
+  const u = c.get("user");
+  const { group: g } = await requireMod(c.req.param("id"), u.id);
+  const body = parse(bulkInput, await c.req.json().catch(() => null));
+  await limit(u.id, "bulkRequests");
+  const accept = body.action === "accept";
+  const now = new Date();
+  const conds = body.ids
+    ? [eq(groupJoinRequest.groupId, g.id), eq(groupJoinRequest.status, "pending"), inArray(groupJoinRequest.id, body.ids)]
+    : pendingConds(g.id, body.filtros!, now);
+
+  const userIds = await db.transaction(async (tx) => {
+    await lockActiveGroup(tx, g.id);
+    await lockModerator(tx, g.id, u.id);
+    const picked = await tx
+      .select({ id: groupJoinRequest.id })
+      .from(groupJoinRequest)
+      .innerJoin(user, eq(user.id, groupJoinRequest.userId))
+      .leftJoin(profile, eq(profile.userId, groupJoinRequest.userId))
+      .where(and(...conds))
+      .orderBy(desc(groupJoinRequest.createdAt), desc(groupJoinRequest.id))
+      .limit(BULK_MAX)
+      .for("update", { of: groupJoinRequest });
+    if (!picked.length) return [];
+    const resolved = await tx
+      .update(groupJoinRequest)
+      .set({ status: accept ? "accepted" : "rejected", resolvedBy: u.id, resolvedAt: now })
+      .where(and(inArray(groupJoinRequest.id, picked.map((r) => r.id)), eq(groupJoinRequest.status, "pending")))
+      .returning({ userId: groupJoinRequest.userId });
+    const ids = [...new Set(resolved.map((r) => r.userId))];
+    if (accept && ids.length) {
+      await tx.insert(groupMember).values(ids.map((userId) => ({ groupId: g.id, userId }))).onConflictDoNothing();
+      await tx
+        .update(groupInvite)
+        .set({ status: "accepted", resolvedAt: now })
+        .where(and(eq(groupInvite.groupId, g.id), inArray(groupInvite.userId, ids), eq(groupInvite.status, "pending")));
+    }
+    return ids;
+  });
+
+  if (userIds.length) {
+    if (accept) {
+      forgetMemberCount(g.id);
+      for (const id of userIds) {
+        syncGroupRoom(id, g.id, true);
+        notifyRequestAccepted(g, id);
+      }
+    } else {
+      for (const id of userIds) emitToUser(id, "group:rejected", { groupId: g.id, name: g.name });
+    }
+    await notifyAdmissionMods(g.id);
+  }
+  let remaining = 0;
+  if (body.filtros) {
+    const [r] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(groupJoinRequest)
+      .innerJoin(user, eq(user.id, groupJoinRequest.userId))
+      .leftJoin(profile, eq(profile.userId, groupJoinRequest.userId))
+      .where(and(...pendingConds(g.id, body.filtros, now)));
+    remaining = r?.n ?? 0;
+  }
+  return c.json({ resolved: userIds.length, remaining });
 });
 
 groupRoutes.post("/groups/:id/requests/:rid/:decision{accept|reject}", async (c) => {

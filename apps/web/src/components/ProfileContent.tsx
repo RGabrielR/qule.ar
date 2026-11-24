@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { PublicProfile } from "../api";
+import { hasPlaceLabel } from "../features/place/hasPlace";
 
 type CoverProps = {
   photos: string[];
@@ -7,9 +8,11 @@ type CoverProps = {
   age: number;
   status?: Pick<PublicProfile, "online" | "recent" | "distance">;
   back?: ReactNode;
+  /** Algo más sobre la foto, abajo a la derecha (por ejemplo, pasar al perfil siguiente). */
+  aside?: ReactNode;
 };
 
-export function ProfileCover({ photos, displayName, age, status, back }: CoverProps) {
+export function ProfileCover({ photos, displayName, age, status, back, aside }: CoverProps) {
   const [selected, setSelected] = useState(0);
   const index = Math.min(selected, photos.length - 1);
   return (
@@ -33,7 +36,8 @@ export function ProfileCover({ photos, displayName, age, status, back }: CoverPr
           <button className="profile__tap profile__tap--next" aria-label="Foto siguiente" onClick={() => setSelected((index + 1) % photos.length)} />
         </>
       )}
-      <div className="profile__name">
+      {aside}
+      <div className={aside ? "profile__name profile__name--with-aside" : "profile__name"}>
         <div className="profile__nameline">
           <h1>{displayName}</h1>
           <span>{age}</span>
@@ -50,7 +54,7 @@ export function ProfileCover({ photos, displayName, age, status, back }: CoverPr
   );
 }
 
-type StatsInput = Pick<PublicProfile, "about" | "heightCm" | "weightKg" | "bodyType" | "position" | "relationship" | "pronouns" | "hivStatus" | "lastTested" | "tribes" | "lookingFor">;
+type StatsInput = Pick<PublicProfile, "about" | "heightCm" | "weightKg" | "bodyType" | "position" | "relationship" | "pronouns" | "hasPlace" | "hivStatus" | "lastTested" | "tribes" | "lookingFor">;
 
 export function ProfileStats({ p, empty = null }: { p: StatsInput; empty?: ReactNode }) {
   const rows: [string, string | null][] = [
@@ -60,6 +64,7 @@ export function ProfileStats({ p, empty = null }: { p: StatsInput; empty?: React
     ["Rol", p.position],
     ["Relación", p.relationship],
     ["Pronombres", p.pronouns],
+    ["Lugar", hasPlaceLabel(p.hasPlace)],
     ["Estado serológico", p.hivStatus],
     ["Último test", p.lastTested ? new Date(p.lastTested + "T12:00").toLocaleDateString("es-AR", { month: "long", year: "numeric" }) : null],
   ];

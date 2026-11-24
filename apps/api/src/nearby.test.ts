@@ -58,6 +58,7 @@ before(async () => {
         bodyType: maybe(pick(BODY)),
         position: maybe(pick(POS)),
         relationship: maybe(pick(REL)),
+        hasPlace: maybe(pick(["si", "no"]), 0.6),
         tribes: some(TRIBES),
         lookingFor: some(LOOKING),
         // Varias personas en la misma celda, para que se desempate por última vez visto
@@ -121,6 +122,7 @@ async function reference(me: { userId: string; cellLat: number | null; cellLng: 
     .filter(({ p, age }) =>
       inRange(age, f.ageMin, f.ageMax) && inRange(p.heightCm, f.heightMin, f.heightMax) && inRange(p.weightKg, f.weightMin, f.weightMax) &&
       anyOf(f.bodyType, p.bodyType) && anyOf(f.position, p.position) && anyOf(f.relationship, p.relationship) &&
+      anyOf(f.hasPlace, p.hasPlace) &&
       overlap(f.tribes, p.tribes) && overlap(f.lookingFor, p.lookingFor) && (!f.withPhoto || first.has(p.userId)) && !f.online)
     .sort((a, b) => (a.km ?? Infinity) - (b.km ?? Infinity) || b.p.lastSeenAt.getTime() - a.p.lastSeenAt.getTime());
   const page = list.slice(f.offset, f.offset + 60);
@@ -145,6 +147,11 @@ const CASES: Record<string, string>[] = [
   { ageMax: "40", heightMin: "170", weightMax: "80" },
   { bodyType: "atletico,grande", position: "versatil" },
   { relationship: "soltero" },
+  { hasPlace: "si" },
+  { hasPlace: "no", offset: "60" },
+  { hasPlace: "si,no" },
+  { hasPlace: "inventado" }, // un valor que no existe se ignora: no filtra
+  { hasPlace: "no", position: "activo", ageMax: "50" },
   { tribes: "oso,geek" },
   { lookingFor: "citas", tribes: "nutria" },
   { withPhoto: "1" },
@@ -160,6 +167,43 @@ const MES = {
   "sin ubicación": { userId: ME, cellLat: null, cellLng: null, showDistance: true },
   "distancia escondida": { userId: ME, cellLat: -34.6, cellLng: -58.4, showDistance: false },
 };
+
+test("acomoda los filtros raros en vez de rechazarlos y conserva el texto como valor literal", async () => {
+  // Quedan guardados en el celu: un valor raro no tiene que dar error cada vez que se abre Gente
+  const fixed = (q: Record<string, string>) => {
+    const f = parseNearbyFilters(q);
+    return { ageMin: f.ageMin, ageMax: f.ageMax, heightMin: f.heightMin, heightMax: f.heightMax, weightMin: f.weightMin, weightMax: f.weightMax };
+  };
+  const none = { ageMin: undefined, ageMax: undefined, heightMin: undefined, heightMax: undefined, weightMin: undefined, weightMax: undefined };
+  assert.deepEqual(fixed({ ageMin: "999999999" }), { ...none, ageMin: 99 });
+  assert.deepEqual(fixed({ ageMin: "16", ageMax: "300" }), { ...none, ageMin: 18, ageMax: 99 });
+  assert.deepEqual(fixed({ ageMin: "40", ageMax: "30" }), { ...none, ageMin: 30, ageMax: 40 });
+  assert.deepEqual(fixed({ heightMin: "210", heightMax: "150" }), { ...none, heightMin: 150, heightMax: 210 });
+  assert.deepEqual(fixed({ weightMin: "80.5", weightMax: "1000" }), { ...none, weightMin: 81, weightMax: 250 });
+  assert.deepEqual(fixed({ ageMin: "", heightMax: "" }), none);
+  // Listas: las primeras 20 opciones, sin las de más de 60 caracteres
+  assert.deepEqual(parseNearbyFilters({ tribes: `oso,${"a".repeat(61)},nutria` }).tribes, ["oso", "nutria"]);
+  assert.equal(parseNearbyFilters({ position: Array(25).fill("versatil").join(",") }).position.length, 20);
+  assert.equal(parseNearbyFilters({ lookingFor: "x,".repeat(100_000) }).lookingFor.length, 20);
+  // Lo que no es un número sí da error
+  const notNumbers: Record<string, string>[] = [{ ageMin: "abc" }, { heightMax: "Infinity" }, { offset: "-1" }];
+  for (const q of notNumbers) assert.throws(() => parseNearbyFilters(q));
+
+  const id = "filtros-literales";
+  await db.insert(schema.user).values({ id, name: "Ana", email: "literal@example.test" });
+  await db.insert(schema.profile).values({
+    userId: id, displayName: "Ana", birthdate: "1990-01-01",
+    bodyType: "D'Angelo", lookingFor: ["Música 100%"],
+  });
+  try {
+    const found = await nearbyPage(MES["sin ubicación"], parseNearbyFilters({ bodyType: "D'Angelo", lookingFor: "Música 100%" }));
+    assert.deepEqual(found.people.map((p) => p.id), [id]);
+    const partial = await nearbyPage(MES["sin ubicación"], parseNearbyFilters({ bodyType: "D'An", lookingFor: "Música %" }));
+    assert.equal(partial.total, 0);
+  } finally {
+    await db.delete(schema.user).where(inArray(schema.user.id, [id]));
+  }
+});
 
 for (const [label, me] of Object.entries(MES)) {
   test(`grilla de Cerca igual a la cuenta en memoria (${label})`, async () => {
@@ -183,4 +227,14 @@ test("no aparecen bloqueos, ocultos por reportes, incógnito ni suspendidos", as
   assert.equal(seen.size, got.total);
   for (const id of ["u3", "u22", "u40", "u59", "u700", ME]) assert.ok(!seen.has(id), id);
   assert.ok(seen.has("u800"), "dos reportes no alcanzan para ocultar");
+});
+
+test("tener lugar: sin filtro no deja a nadie afuera, y con los dos solo quedan quienes lo dijeron", async () => {
+  const me = MES["con ubicación"];
+  const all = await nearbyPage(me, parseNearbyFilters({}));
+  const si = await nearbyPage(me, parseNearbyFilters({ hasPlace: "si" }));
+  const no = await nearbyPage(me, parseNearbyFilters({ hasPlace: "no" }));
+  const both = await nearbyPage(me, parseNearbyFilters({ hasPlace: "si,no" }));
+  assert.equal(both.total, si.total + no.total);
+  assert.ok(all.total > both.total, "quien no lo dijo aparece sin filtro");
 });

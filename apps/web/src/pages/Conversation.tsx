@@ -1,4 +1,5 @@
-import { privateOutbox, mergeHistory, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
+import { compareDmOrder, DM_EVENTS, type DmReadReceipt } from "@mortero/shared/realtime";
+import { privateOutbox, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, getSocket, upload, type Author, type Dm, type ReactionEvent } from "../api";
@@ -10,6 +11,8 @@ import { useSectionBack } from "../useSectionBack";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
+import { batchReadReceipts } from "../features/messages/readReceipts";
+import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
 
 export function Conversation() {
   const { id = "" } = useParams();
@@ -25,11 +28,12 @@ function ConversationThread({ id }: { id: string }) {
   const [other, setOther] = useState<Author | null>(null);
   const [confirmed, setMessages] = useState<Dm[]>([]);
   const { messages, pendingByMessage, remember } = useTimeline(confirmed, pending, me?.user.id);
+  const [seen, setSeen] = useState<{ conversationId: string; ids: Set<string>; through?: Pick<Dm, "createdAt" | "id"> }>();
   const [text, setText] = useDraft(`dm:${me?.user.id ?? ""}:${id}`);
   const [phrasesOpen, setPhrasesOpen] = useState(false);
   const [error, setError] = useState("");
   const [typing, setTyping] = useState(false);
-  const [photoMenu, setPhotoMenu] = useState(false);
+  const [photoMenu, setPhotoMenu] = useState<false | "options" | "album">(false);
   const [msgMenu, setMsgMenu] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ src: string; seconds: number } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -43,39 +47,51 @@ function ConversationThread({ id }: { id: string }) {
 
   useEffect(() => {
     let alive = true;
-    const markRead = () =>
-      api(`/conversations/${id}/read`, { method: "POST" })
-        .then(() => window.dispatchEvent(new Event("mortero:read")))
-        .catch(() => {});
+    let beforeHistory: Array<(messages: Dm[]) => Dm[]> | null = [];
+    const receipts = batchReadReceipts(id);
+    const applyMessageUpdate = (update: (messages: Dm[]) => Dm[]) => {
+      beforeHistory?.push(update);
+      setMessages(update);
+    };
     api<{ other: Author }>(`/conversations/${id}`)
       .then((c) => alive && setOther(c.other))
       .catch(() => nav("/mensajes", { replace: true }));
-    api<{ messages: Dm[] }>(`/conversations/${id}/messages`).then((d) => {
+    api<{ messages: Dm[]; hasMore: boolean }>(`/conversations/${id}/messages`).then((d) => {
       if (!alive) return;
       for (const m of d.messages) {
         if (m.senderId === myId) privateOutbox.acknowledge(scope, m);
       }
-      setMessages((list) => mergeHistory(d.messages, list));
-      markRead();
-    }).catch(() => { if (alive) setError("No se pudo cargar la charla."); });
+      const history = beforeHistory?.reduce((list, update) => update(list), d.messages) ?? d.messages;
+      const loaded = [...history].sort(compareDmOrder);
+      beforeHistory = null;
+      setMessages(loaded);
+      // Al abrir el chat, marcá también los mensajes anteriores a la página de historial.
+      const oldestLoaded = d.messages[0];
+      if (oldestLoaded && d.hasMore) receipts.includeOlderMessages(oldestLoaded.id);
+      receipts.schedule(...loaded.filter((message) => message.senderId !== myId && !message.readAt).map(({ id }) => id));
+    }).catch(() => { beforeHistory = null; if (alive) setError("No se pudo cargar la charla."); });
     const s = getSocket();
     const onMsg = (m: Dm) => {
       if (m.conversationId !== id) return;
       if (m.senderId === myId) privateOutbox.acknowledge(scope, m);
       setTyping(false);
-      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
-      if (m.senderId !== myId) markRead();
+      applyMessageUpdate((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
+      if (m.senderId !== myId && !m.readAt) receipts.schedule(m.id);
     };
-    const onRead = (p: { conversationId: string; readAt: string }) => {
-      if (p.conversationId !== id) return;
-      setMessages((list) => list.map((m) => (m.senderId === myId && !m.readAt ? { ...m, readAt: p.readAt } : m)));
+    const onRead = (p: DmReadReceipt) => {
+      if (p.audience === "reader" || p.conversationId !== id || !p.messageIds) return;
+      setSeen((previous) => {
+        const current = previous?.conversationId === id ? previous : undefined;
+        const through = p.through && (!current?.through || compareDmOrder(p.through, current.through) > 0)
+          ? p.through : current?.through;
+        return { conversationId: id, ids: new Set([...(current?.ids ?? []), ...p.messageIds]), through };
+      });
     };
     const onDeleted = (p: { conversationId: string; id: string }) => {
-      if (p.conversationId !== id) return;
-      setMessages((list) => list.filter((m) => m.id !== p.id));
+      if (p.conversationId === id) applyMessageUpdate((list) => list.filter((m) => m.id !== p.id));
     };
     const onOpened = (p: { conversationId: string; id: string }) => {
-      if (p.conversationId === id) setMessages((list) => list.map((m) => (m.id === p.id ? { ...m, opened: true } : m)));
+      if (p.conversationId === id) applyMessageUpdate((list) => list.map((m) => (m.id === p.id ? { ...m, opened: true } : m)));
     };
     const onTyping = (p: { conversationId: string }) => {
       if (p.conversationId !== id) return;
@@ -85,24 +101,25 @@ function ConversationThread({ id }: { id: string }) {
     };
     const onReaction = (p: ReactionEvent) => {
       if (p.scope !== "dm" || p.conversationId !== id) return;
-      setMessages((list) => list.map((m) => (m.id === p.messageId ? { ...m, reactions: p.reactions } : m)));
+      applyMessageUpdate((list) => list.map((m) => (m.id === p.messageId ? { ...m, reactions: p.reactions } : m)));
     };
     const stopWatching = privateOutbox.watchConfirmations(scope, onMsg);
     s.on("reaction", onReaction);
-    s.on("dm:message", onMsg);
-    s.on("dm:read", onRead);
-    s.on("dm:deleted", onDeleted);
-    s.on("dm:opened", onOpened);
-    s.on("dm:typing", onTyping);
+    s.on(DM_EVENTS.message, onMsg);
+    s.on(DM_EVENTS.read, onRead);
+    s.on(DM_EVENTS.deleted, onDeleted);
+    s.on(DM_EVENTS.opened, onOpened);
+    s.on(DM_EVENTS.typing, onTyping);
     return () => {
       stopWatching();
       alive = false;
+      receipts.close();
       s.off("reaction", onReaction);
-      s.off("dm:message", onMsg);
-      s.off("dm:read", onRead);
-      s.off("dm:deleted", onDeleted);
-      s.off("dm:opened", onOpened);
-      s.off("dm:typing", onTyping);
+      s.off(DM_EVENTS.message, onMsg);
+      s.off(DM_EVENTS.read, onRead);
+      s.off(DM_EVENTS.deleted, onDeleted);
+      s.off(DM_EVENTS.opened, onOpened);
+      s.off(DM_EVENTS.typing, onTyping);
       clearTimeout(typingTimer.current);
     };
   }, [id, myId, nav, scope]);
@@ -140,7 +157,7 @@ function ConversationThread({ id }: { id: string }) {
 
   function onType(v: string) {
     setText(v);
-    if (v.trim()) getSocket().emit("dm:typing", { conversationId: id });
+    if (v.trim()) getSocket().emit(DM_EVENTS.typing, { conversationId: id });
   }
 
   function send(e?: React.FormEvent) {
@@ -198,6 +215,9 @@ function ConversationThread({ id }: { id: string }) {
   }
 
   const lastMine = [...messages].reverse().find((m) => m.senderId === myId);
+
+  const lastSeen = lastMine && (lastMine.readAt || (seen?.conversationId === id &&
+    (seen.ids.has(lastMine.id) || (seen.through && compareDmOrder(lastMine, seen.through) <= 0))));
 
   return (
     <div className="chat">
@@ -269,18 +289,24 @@ function ConversationThread({ id }: { id: string }) {
             </Fragment>
           );
         })}
-        {lastMine?.readAt && messages[messages.length - 1]?.id === lastMine.id && <p className="seen">Visto</p>}
+        {lastSeen && messages[messages.length - 1]?.id === lastMine.id && <p className="seen">Visto</p>}
         {typing && <div className="bubble typing" aria-label="Está escribiendo"><i /><i /><i /></div>}
       </div>
 
       {error && <div className="notice notice--error" role="alert">{error}</div>}
 
       <form className="composer" onSubmit={send}>
-        {photoMenu && (
+        {photoMenu === "album" && other && (
+          <ShareAlbumMenu userId={other.id} name={other.name} onBack={() => setPhotoMenu("options")} />
+        )}
+        {photoMenu === "options" && (
           <div className="photo-menu" role="menu">
             <button type="button" role="menuitem" onClick={() => pickPhoto(false)}><ImageIcon /> Foto</button>
             <button type="button" role="menuitem" onClick={() => pickPhoto(true)}>
               <TimerIcon /> Foto temporal <span className="muted small">se ve una vez, {10} s</span>
+            </button>
+            <button type="button" role="menuitem" onClick={() => setPhotoMenu("album")}>
+              <LockIcon /> Álbum privado <span className="muted small">compartilo</span>
             </button>
           </div>
         )}
@@ -288,7 +314,7 @@ function ConversationThread({ id }: { id: string }) {
           <SavedPhrasesMenu text={text} onClose={() => setPhrasesOpen(false)} onPick={(p) => { onType(p); setPhrasesOpen(false); }} />
         )}
         <div className="composer__row">
-          <button type="button" className="iconbtn" aria-label="Mandar foto" aria-expanded={photoMenu} onClick={() => { setPhotoMenu((v) => !v); setPhrasesOpen(false); }}>
+          <button type="button" className="iconbtn" aria-label="Mandar foto" aria-expanded={Boolean(photoMenu)} onClick={() => { setPhotoMenu((v) => (v ? false : "options")); setPhrasesOpen(false); }}>
             <ImageIcon />
           </button>
           <SavedPhrasesButton open={phrasesOpen} onToggle={() => { setPhrasesOpen((v) => !v); setPhotoMenu(false); }} />

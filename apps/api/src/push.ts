@@ -10,9 +10,10 @@ const { profile, pushSubscription } = schema;
 /**
  * Tipos de aviso que cada persona puede apagar desde Yo → Configuración → Notificaciones.
  * "moderacion" (reportes urgentes y pedidos de revisión) solo se muestra a quien es del equipo.
+ * "moderacion_urgente" (menores de edad y suspensiones preventivas) solo se muestra a la administración general.
  * La notificación de prueba no tiene tipo: llega siempre.
  */
-export const NOTIFY_KINDS = ["mensajes", "toques", "respuestas", "grupos", "solicitudes", "moderacion"] as const;
+export const NOTIFY_KINDS = ["mensajes", "toques", "respuestas", "grupos", "solicitudes", "moderacion", "moderacion_urgente"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 
 /** Si la persona quiere este tipo de aviso. Lo que no eligió cuenta como "sí". */
@@ -53,6 +54,9 @@ if (pushEnabled) {
 // kind: qué tipo de aviso es; si la persona lo apagó, no se manda. Sin kind se manda siempre.
 export type PushPayload = { title: string; body: string; url: string; tag?: string; always?: boolean; kind?: NotifyKind };
 
+/** Los avisos de moderación llevan otro ícono, así se distinguen de un vistazo de los mensajes y toques. */
+const MODERATION_LOOK = { icon: "/aviso-moderacion-192.png", badge: "/badge-moderacion-96.png" };
+
 /**
  * Manda una notificación a todos los dispositivos de alguien.
  * Los textos son discretos a propósito: aparecen en la pantalla bloqueada.
@@ -61,13 +65,14 @@ export async function pushTo(userId: string, { kind, ...payload }: PushPayload):
   if (!pushEnabled) return 0;
   if (kind && !(await wantsNotice(userId, kind))) return 0;
   const subs = await db.select().from(pushSubscription).where(eq(pushSubscription.userId, userId));
+  const body = JSON.stringify(kind?.startsWith("moderacion") ? { ...payload, ...MODERATION_LOOK } : payload);
   let sent = 0;
   await Promise.all(
     subs.map(async (s) => {
       try {
         await sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-          JSON.stringify(payload),
+          body,
           { TTL: 60 * 60 * 24 },
         );
         sent++;

@@ -5,6 +5,7 @@
 //   dar y sacar permisos.
 // - Permisos chicos, que la administración general da desde el panel, de a uno:
 //   · reports: revisar reportes, descartarlos y borrar el mensaje reportado.
+//     Ante un reporte abierto por menor de edad, también suspender de forma preventiva (la revisa alguien con sanctions).
 //   · sanctions: suspender y reactivar cuentas.
 //   · appeals: revisar pedidos de revisión de suspensiones (mantener o levantar la medida).
 // Nadie con permisos chicos ve mails, IPs ni datos de salud, ni puede tocar grupos o permisos.
@@ -78,7 +79,8 @@ export async function grant(userId: string, perms: StaffPermission[], by: string
 /**
  * Aviso discreto (push) a quienes tienen un permiso. No dice quién ni por qué.
  * Cada persona del equipo lo puede apagar (aviso "moderacion"); lo pendiente se sigue viendo en el panel.
- * ownersAlways: a la administración general le llega igual aunque lo haya apagado (menores de edad).
+ * ownersAlways: lo urgente (menores de edad, suspensiones preventivas). A la administración general le llega como
+ * "moderacion_urgente", un aviso aparte que también puede apagar, aunque haya apagado el resto de moderación.
  */
 export async function notifyStaff(
   p: StaffPermission,
@@ -87,6 +89,6 @@ export async function notifyStaff(
 ) {
   const owners = ownersAlways ? new Set(await ownerIds()) : new Set<string>();
   for (const id of await staffIdsWith(p)) {
-    pushTo(id, owners.has(id) ? msg : { ...msg, kind: "moderacion" }).catch(() => {});
+    pushTo(id, { ...msg, kind: owners.has(id) ? "moderacion_urgente" : "moderacion" }).catch(() => {});
   }
 }

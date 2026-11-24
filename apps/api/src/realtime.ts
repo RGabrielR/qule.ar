@@ -1,3 +1,4 @@
+import { DM_EVENTS } from "@mortero/shared/realtime";
 import type { Server as HttpServer } from "node:http";
 import { and, eq, inArray, lte } from "drizzle-orm";
 import { createAdapter } from "@socket.io/cluster-adapter";
@@ -59,7 +60,7 @@ export function attachRealtime(server: HttpServer, opts: { publishQueued: boolea
     // "Escribiendo…": lo único que el socket acepta del cliente. Se verifica que sea parte de la charla.
     const convOther = new Map<string, string | null>();
     let lastTyping = 0;
-    socket.on("dm:typing", async (p: unknown) => {
+    socket.on(DM_EVENTS.typing, async (p: unknown) => {
       const conversationId = typeof p === "object" && p && "conversationId" in p ? String((p as { conversationId: unknown }).conversationId) : "";
       if (!conversationId || Date.now() - lastTyping < 1000) return;
       lastTyping = Date.now();
@@ -69,7 +70,7 @@ export function attachRealtime(server: HttpServer, opts: { publishQueued: boolea
         convOther.set(conversationId, other ?? null);
       }
       const other = convOther.get(conversationId);
-      if (other) io?.to(userRoom(other)).emit("dm:typing", { conversationId });
+      if (other) io?.to(userRoom(other)).emit(DM_EVENTS.typing, { conversationId });
     });
     socket.on("disconnect", () => {
       socketClosed(userId);

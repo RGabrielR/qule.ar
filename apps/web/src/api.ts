@@ -1,3 +1,4 @@
+import type { HasPlace } from "./features/place/hasPlace";
 import { createAuthClient } from "better-auth/react";
 import { io, type Socket } from "socket.io-client";
 
@@ -54,8 +55,14 @@ export type ReactionEvent = { scope: "dm" | "group"; messageId: string; conversa
 /** Una foto o video del perfil o del álbum. `thumb` es la miniatura (en los videos, un fotograma). */
 export type Media = { url: string; kind: "photo" | "video"; thumb: string | null; seconds: number | null };
 
-/** Alguien con acceso a mi álbum. expiresAt null = sin límite. */
-export type AlbumGrant = Author & { expiresAt: string | null };
+/** Alguien con acceso a uno de mis álbumes (una fila por persona y álbum). expiresAt null = sin límite. */
+export type AlbumGrant = Author & { expiresAt: string | null; albumId: string; albumName: string };
+
+/** Uno de mis álbumes privados. El primero es el álbum por defecto. */
+export type MyAlbum = { id: string; name: string };
+
+/** Un álbum privado de otra persona que me compartieron (o mío, en mi propio perfil). */
+export type SharedAlbum = { id: string; name: string; count: number; videos: number; items: Media[]; expiresAt: string | null };
 
 export type Profile = {
   displayName: string;
@@ -70,12 +77,14 @@ export type Profile = {
   lookingFor: string[];
   relationship: string | null;
   pronouns: string | null;
+  /** "si", "no" o null (sin decir). Ver features/place. */
+  hasPlace: HasPlace | null;
   hivStatus: string | null;
   lastTested: string | null;
 };
 
 /** Tipos de aviso que se pueden apagar. Tienen que coincidir con NOTIFY_KINDS de la API (push.ts). */
-export type NotifyKind = "mensajes" | "toques" | "respuestas" | "grupos" | "solicitudes" | "moderacion";
+export type NotifyKind = "mensajes" | "toques" | "respuestas" | "grupos" | "solicitudes" | "moderacion" | "moderacion_urgente";
 
 export type StaffAccess = "owner" | "reports" | "sanctions" | "appeals";
 
@@ -103,7 +112,8 @@ export type Me = {
     /** Versión de los términos que aceptó (null: cuenta anterior a los términos) */
     termsVersion: string | null;
   }) | null;
-  photos: (Media & { id: string; position: number; isPrivate: boolean })[];
+  photos: (Media & { id: string; position: number; isPrivate: boolean; albumId: string | null })[];
+  albums: MyAlbum[];
 };
 
 export type PublicProfile = Omit<Profile, "birthdate"> & {
@@ -114,10 +124,12 @@ export type PublicProfile = Omit<Profile, "birthdate"> & {
   recent: boolean;
   distance: string | null;
   favorite: boolean;
-  // items es null si no te lo compartieron; expiresAt es hasta cuándo lo podés ver (null = sin límite)
-  privateAlbum: { count: number; videos: number; items: Media[] | null; expiresAt: string | null } | null;
+  // count y videos suman todos sus álbumes; albums son solo los que te compartió (items junta su contenido, null si ninguno)
+  privateAlbum: { count: number; videos: number; items: Media[] | null; expiresAt: string | null; albums: SharedAlbum[] } | null;
   iSharedAlbum: boolean;
   sharedUntil: string | null;
+  // Qué álbumes míos le compartí y hasta cuándo (expiresAt null = sin límite)
+  myShares: { albumId: string; expiresAt: string | null }[];
   // El último toque que le mandé, si fue hace menos de 12 horas
   myToque: { kind: string; at: string } | null;
 };
@@ -203,7 +215,9 @@ export type GroupInfo = GroupListing & {
   pendingCount: number;
 };
 
-export type JoinRequest = { id: string; message: string | null; createdAt: string; user: Author };
+export type JoinRequest = { id: string; message: string | null; createdAt: string; newAccount: boolean; user: Author };
+/** Una página de solicitudes: `total` (con los filtros puestos) viene solo en la primera. */
+export type JoinRequestPage = { items: JoinRequest[]; nextCursor: string | null; total: number | null };
 export type Member = Author & { role: Role; joinedAt: string };
 export type MemberPage = { members: Member[]; nextOffset: number | null };
 
@@ -225,6 +239,6 @@ export type MyInvite = {
 
 export const ROLE_LABEL: Record<Role, string> = { owner: "Dueño", moderator: "Moderador", member: "Miembro" };
 
-export type ConversationSummary = { id: string; other: Author; last: Dm; unread: number };
+export type ConversationSummary = { id: string; lastMessageAt: string; other: Author; last: Dm; unread: number };
 
 export type Viewer = Author & { viewedAt: string };

@@ -1,0 +1,8 @@
+{
+  "name": "@mortero/shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./realtime": "./src/realtime.ts"
+  }
+}

@@ -9,6 +9,8 @@ import { syncGroupRoom } from "../realtime.js";
 import { deleteImage, MAX_UPLOAD_BYTES, MAX_VIDEO_BYTES, readImage, saveImage, saveVideo, videoEnabled, videoFile, type VideoSource } from "../storage.js";
 import { googleEnabled } from "../auth.js";
 import { hasAlbumAccess } from "./premium.js";
+import { defaultAlbum, MAX_ALBUM_ITEMS, myAlbums, renumberPhotos } from "../albums.js";
+
 import { accessFor } from "../staff.js";
 import { APP_NAME } from "../brand.js";
 import { expiringIsOver } from "../expiring.js";
@@ -16,10 +18,13 @@ import { checkMinorSignals, deleteImageUnlessEvidence, isEvidence } from "../mod
 import { limit } from "../ratelimit.js";
 import { TERMS_VERSION } from "../legal.js";
 import { NOTIFY_KINDS } from "../push.js";
+import { HAS_PLACE } from "../db/schema.js";
 import { forgetFile, isKnownPublic, rememberPublic, requireUserForFiles } from "../fileAccess.js";
 
 const { profile, photo, user, group, groupMember, directMessage, conversation } = schema;
 const MAX_PHOTOS = 6;
+/** El tope de archivos privados es por persona, sumando todos sus álbumes. */
+const albumFullMessage = `Entre todos tus álbumes podés tener hasta ${MAX_ALBUM_ITEMS} fotos y videos`;
 
 const shortText = z.string().trim().max(60);
 const profileInput = z.object({
@@ -34,6 +39,8 @@ const profileInput = z.object({
   lookingFor: z.array(shortText).max(10).default([]),
   relationship: shortText.nullish(),
   pronouns: shortText.nullish(),
+  // Tengo lugar / No tengo lugar; null lo borra (sin decir)
+  hasPlace: z.enum(HAS_PLACE, { message: "Elegí si tenés lugar o no" }).nullish(),
   hivStatus: shortText.nullish(),
   lastTested: z.iso.date().nullish(),
   // Solo cuenta en el alta del perfil
@@ -55,7 +62,8 @@ meRoutes.get("/files/:key", requireUserForFiles, async (c) => {
   const viewer = c.get("user").id;
   // Foto o video de álbum privado (o la miniatura de un video): solo dueño o gente con acceso vigente
   const [ph] = await db.select().from(photo).where(or(eq(photo.key, key), eq(photo.posterKey, key)));
-  if (ph?.isPrivate && !(await hasAlbumAccess(ph.userId, viewer))) return c.notFound();
+  // Cada álbum se comparte por separado: con acceso a uno no se ven los archivos de otro
+  if (ph?.isPrivate && !(await hasAlbumAccess(ph.userId, viewer, ph.albumId))) return c.notFound();
   const video = await videoFile(key);
   if (video) {
     if (!ph) return c.notFound();
@@ -124,6 +132,7 @@ meRoutes.get("/me", requireUser, async (c) => {
   const u = c.get("user");
   const p = c.get("profile");
   const photos = await db.select().from(photo).where(eq(photo.userId, u.id)).orderBy(asc(photo.position));
+  const albums = await myAlbums(u.id);
   const access = await accessFor(u);
   return c.json({
     // isAdmin: entra al panel de moderación. access: qué puede hacer ahí (ver staff.ts)
@@ -135,7 +144,9 @@ meRoutes.get("/me", requireUser, async (c) => {
           return { ...rest, age: ageFrom(p.birthdate), hasLocation: cellLat != null && cellLng != null };
         })()
       : null,
-    photos: photos.map((x) => ({ id: x.id, position: x.position, isPrivate: x.isPrivate, ...mediaOut(x) })),
+    photos: photos.map((x) => ({ id: x.id, position: x.position, isPrivate: x.isPrivate, albumId: x.albumId, ...mediaOut(x) })),
+    // Álbumes privados, en orden (el primero es el álbum por defecto)
+    albums: albums.map((a) => ({ id: a.id, name: a.name })),
   });
 });
 
@@ -200,17 +211,18 @@ meRoutes.put("/me/notificaciones", requireUser, requireProfile, async (c) => {
   return c.json({ notifyPrefs: prefs });
 });
 
-/** Hasta cuántas fotos y videos puede tener el álbum privado. */
-const MAX_ALBUM = 40;
-
-/** Subir una foto (al perfil o al álbum) o un video (solo al álbum). Se sube de a un archivo; la web manda varios seguidos. */
+/**
+ * Subir una foto (al perfil o a un álbum privado) o un video (solo a un álbum). Se sube de a un archivo; la web manda varios seguidos.
+ * `album` elige el álbum privado; con `private=1` y sin `album`, va al álbum por defecto.
+ */
 meRoutes.post("/me/photos", requireUser, requireProfile, async (c) => {
   const u = c.get("user");
   await limit(u.id, "upload");
   const body = await c.req.parseBody();
   const file = body.file;
   if (!(file instanceof File)) throw new HTTPException(400, { message: "Falta el archivo" });
-  const isPrivate = body.private === "1";
+  const albumField = typeof body.album === "string" && body.album ? body.album : null;
+  const isPrivate = body.private === "1" || albumField !== null;
   const isVideo = file.type.startsWith("video/");
   if (isVideo && !isPrivate) throw new HTTPException(400, { message: "Los videos solo van en el álbum privado" });
   if (isVideo && !videoEnabled) throw new HTTPException(400, { message: "Por ahora no se pueden subir videos" });
@@ -219,8 +231,9 @@ meRoutes.post("/me/photos", requireUser, requireProfile, async (c) => {
   }
   const mine = await db.select({ isPrivate: photo.isPrivate }).from(photo).where(eq(photo.userId, u.id));
   const same = mine.filter((x) => x.isPrivate === isPrivate).length;
-  if (isPrivate && same >= MAX_ALBUM) throw new HTTPException(400, { message: `Tu álbum puede tener hasta ${MAX_ALBUM} fotos y videos` });
+  if (isPrivate && same >= MAX_ALBUM_ITEMS) throw new HTTPException(400, { message: albumFullMessage });
   if (!isPrivate && same >= MAX_PHOTOS) throw new HTTPException(400, { message: `Podés tener hasta ${MAX_PHOTOS} fotos en tu perfil` });
+  const albumId = isPrivate ? (albumField ? (await ownAlbumOr404(u.id, albumField)).id : (await defaultAlbum(u.id)).id) : null;
 
   let saved: { key: string; posterKey: string | null; seconds: number | null };
   try {
@@ -231,16 +244,39 @@ meRoutes.post("/me/photos", requireUser, requireProfile, async (c) => {
   const id = newId();
   const kind = isVideo ? "video" : "photo";
   const position = mine.length;
-  await db.insert(photo).values({ id, userId: u.id, position, isPrivate, kind, ...saved });
-  return c.json({ id, position, isPrivate, ...mediaOut({ kind, ...saved }) });
+  await db.insert(photo).values({ id, userId: u.id, position, isPrivate, albumId, kind, ...saved });
+  return c.json({ id, position, isPrivate, albumId, ...mediaOut({ kind, ...saved }) });
 });
 
-/** Pasar una foto al álbum privado o sacarla. */
+/** Uno de mis álbumes, o 404 (para no confirmar que existe un álbum ajeno). */
+async function ownAlbumOr404(userId: string, albumId: string) {
+  const [a] = await db.select().from(schema.album).where(and(eq(schema.album.id, albumId), eq(schema.album.userId, userId)));
+  if (!a) throw new HTTPException(404, { message: "Ese álbum no existe" });
+  return a;
+}
+
+/**
+ * Pasar una foto a un álbum privado, moverla entre álbumes o sacarla al perfil.
+ * `albumId` elige el álbum; `isPrivate: true` sin álbum la manda al álbum por defecto; `isPrivate: false` la hace pública.
+ */
 meRoutes.patch("/me/photos/:id", requireUser, async (c) => {
   const u = c.get("user");
-  const { isPrivate } = z.object({ isPrivate: z.boolean() }).parse(await c.req.json());
+  const parsed = z.object({ isPrivate: z.boolean().optional(), albumId: z.string().min(1).optional() })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success || (parsed.data.isPrivate === undefined && parsed.data.albumId === undefined)) {
+    throw new HTTPException(400, { message: "Falta a dónde mover el archivo" });
+  }
+  if (parsed.data.isPrivate === false && parsed.data.albumId !== undefined) throw new HTTPException(400, { message: "Una foto pública no va en un álbum" });
+  const isPrivate = parsed.data.albumId !== undefined || parsed.data.isPrivate === true;
   const [current] = await db.select().from(photo).where(and(eq(photo.id, c.req.param("id")), eq(photo.userId, u.id)));
   if (!current) return c.notFound();
+  if (isPrivate && !current.isPrivate) {
+    const priv = await db.select({ id: photo.id }).from(photo).where(and(eq(photo.userId, u.id), eq(photo.isPrivate, true)));
+    if (priv.length >= MAX_ALBUM_ITEMS) throw new HTTPException(400, { message: albumFullMessage });
+  }
+  const albumId = !isPrivate ? null
+    : parsed.data.albumId ? (await ownAlbumOr404(u.id, parsed.data.albumId)).id
+    : current.albumId ?? (await defaultAlbum(u.id)).id;
   if (!isPrivate && current.kind === "video") throw new HTTPException(400, { message: "Los videos solo van en el álbum privado" });
   if (!isPrivate && current.isPrivate) {
     const pub = await db.select({ id: photo.id }).from(photo).where(and(eq(photo.userId, u.id), eq(photo.isPrivate, false)));
@@ -248,7 +284,7 @@ meRoutes.patch("/me/photos/:id", requireUser, async (c) => {
   }
   const [row] = await db
     .update(photo)
-    .set({ isPrivate })
+    .set({ isPrivate, albumId })
     .where(and(eq(photo.id, c.req.param("id")), eq(photo.userId, u.id)))
     .returning();
   if (!row) return c.notFound();
@@ -269,10 +305,7 @@ meRoutes.delete("/me/photos/:id", requireUser, async (c) => {
   await deleteImageUnlessEvidence(row.key);
   if (row.posterKey) await deleteImageUnlessEvidence(row.posterKey);
   // Reordenar las que quedan
-  const rest = await db.select().from(photo).where(eq(photo.userId, u.id)).orderBy(asc(photo.position));
-  for (const [i, p] of rest.entries()) {
-    if (p.position !== i) await db.update(photo).set({ position: i }).where(eq(photo.id, p.id));
-  }
+  await renumberPhotos(u.id);
   return c.json({ ok: true });
 });
 

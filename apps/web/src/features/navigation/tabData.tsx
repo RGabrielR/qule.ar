@@ -1,24 +1,34 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import { api, ApiError, getSocket, type ConversationSummary, type MyGroup, type MyInvite } from "../../api";
+import { useLiveInbox } from "../messages/useLiveInbox";
 
 const FRESH_MS = 15_000;
 export const GROUP_EVENTS = ["group:request", "group:accepted", "group:rejected", "group:removed", "group:gone", "group:role", "group:invite"] as const;
-const DM_EVENTS = ["dm:message", "dm:read", "dm:deleted", "dm:opened"] as const;
 const NO_CONVERSATIONS: ConversationSummary[] = [];
 type Refresh = "recent" | "refresh" | "clear";
 
 function useTabResource<T>(path: string, onUnauthorized: () => void, fallback?: T) {
   const [data, setData] = useState<T | null>(null);
+  const currentData = useRef<T | null>(null);
   const updatedAt = useRef<number | null>(null);
   const inFlight = useRef<{ controller: AbortController; again: boolean } | null>(null);
+  const update = useCallback((value: T | null) => {
+    currentData.current = value;
+    setData(value);
+  }, []);
+  const invalidatePendingLoad = useCallback(() => {
+    if (!inFlight.current) return false;
+    inFlight.current.again = true;
+    return true;
+  }, []);
 
   const load = useCallback((mode: Refresh = "recent") => {
     if (mode === "clear") {
       inFlight.current?.controller.abort();
       inFlight.current = null;
       updatedAt.current = null;
-      setData(null);
+      update(null);
     }
     if (mode === "recent") {
       // Si la lista tiene más de 15 segundos, se sigue mostrando mientras llega la nueva: así cambiar de pestaña
@@ -37,15 +47,15 @@ function useTabResource<T>(path: string, onUnauthorized: () => void, fallback?: 
       api<T>(path, { signal, cache: "no-store" }).then((value) => {
         if (signal.aborted || request.again) return;
         updatedAt.current = Date.now();
-        setData(value);
+        update(value);
       }).catch((error: unknown) => {
         if (signal.aborted) return;
         if (error instanceof ApiError && [401, 403].includes(error.status)) {
           updatedAt.current = null;
-          setData(null);
+          update(null);
           onUnauthorized();
-        } else if (fallback !== undefined) {
-          setData((previous) => previous ?? fallback);
+        } else if (fallback !== undefined && currentData.current === null) {
+          update(fallback);
         }
       }).finally(() => {
         if (inFlight.current !== request) return;
@@ -54,14 +64,14 @@ function useTabResource<T>(path: string, onUnauthorized: () => void, fallback?: 
       });
     }
     fetchData();
-  }, [path, onUnauthorized, fallback]);
+  }, [path, onUnauthorized, fallback, update]);
 
   useLayoutEffect(() => () => {
     inFlight.current?.controller.abort();
     inFlight.current = null;
   }, []);
 
-  return [data, load] as const;
+  return [data, load, { currentData, invalidatePendingLoad, update }] as const;
 }
 
 type TabData = {
@@ -80,11 +90,12 @@ export function useTabData() {
   return data;
 }
 
-export function TabDataProvider({ children, onUnauthorized }: { children: ReactNode; onUnauthorized: () => void }) {
+export function TabDataProvider({ children, onUnauthorized, userId }: { children: ReactNode; onUnauthorized: () => void; userId: string }) {
   const { pathname } = useLocation();
   const [groups, loadGroups] = useTabResource<MyGroup[]>("/groups", onUnauthorized);
   const [invites, loadInvites] = useTabResource<MyInvite[]>("/invites", onUnauthorized);
-  const [conversations, loadConversations] = useTabResource("/conversations", onUnauthorized, NO_CONVERSATIONS);
+  const [conversations, loadConversations, inbox] = useTabResource("/conversations", onUnauthorized, NO_CONVERSATIONS);
+  const resetInbox = useLiveInbox(userId, inbox, loadConversations, onUnauthorized);
   const refreshGroups = useCallback((mode?: Refresh) => {
     loadGroups(mode);
     loadInvites(mode);
@@ -101,32 +112,23 @@ export function TabDataProvider({ children, onUnauthorized }: { children: ReactN
     const socket = getSocket();
     const groupsChanged = () => refreshGroups("refresh");
     const groupAccessLost = () => refreshGroups("clear");
-    const messagesChanged = () => loadConversations("refresh");
-    const messageDeleted = () => loadConversations("clear");
-    const onReconnect = () => {
-      refreshGroups("clear");
-      loadConversations("clear");
-    };
+    const onReconnect = () => refreshGroups("clear");
 
     for (const event of GROUP_EVENTS) {
       socket.on(event, event === "group:removed" || event === "group:gone" ? groupAccessLost : groupsChanged);
     }
-    for (const event of DM_EVENTS) socket.on(event, event === "dm:deleted" ? messageDeleted : messagesChanged);
     socket.io.on("reconnect", onReconnect);
-    window.addEventListener("mortero:read", messagesChanged);
     return () => {
       for (const event of GROUP_EVENTS) {
         socket.off(event, event === "group:removed" || event === "group:gone" ? groupAccessLost : groupsChanged);
       }
-      for (const event of DM_EVENTS) socket.off(event, event === "dm:deleted" ? messageDeleted : messagesChanged);
       socket.io.off("reconnect", onReconnect);
-      window.removeEventListener("mortero:read", messagesChanged);
     };
   }, [loadConversations, refreshGroups]);
 
   function refreshAfterBlock() {
     loadInvites("clear");
-    loadConversations("clear");
+    resetInbox();
   }
 
   return (

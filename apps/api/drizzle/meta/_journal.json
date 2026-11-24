@@ -138,8 +138,29 @@
     {
       "idx": 19,
       "version": "7",
-      "when": 1795424894839,
-      "tag": "0019_message_idempotency",
+      "when": 1795439980256,
+      "tag": "0019_solicitudes_paginadas",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795443287598,
+      "tag": "0020_perfil_tengo_lugar",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795443305149,
+      "tag": "0021_albumes_privados",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795522543967,
+      "tag": "0022_message_idempotency",
       "breakpoints": true
     }
   ]

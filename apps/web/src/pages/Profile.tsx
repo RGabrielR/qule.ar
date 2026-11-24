@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { api, type PublicProfile } from "../api";
+import { api, type Media, type PublicProfile } from "../api";
 import { BackIcon, LockIcon, StarIcon } from "../components/Icons";
 import { useMe } from "../App";
 import { useTabData } from "../features/navigation/tabData";
@@ -11,16 +11,17 @@ import { albumCount, AlbumGrid, AlbumViewer, untilLabel } from "../components/Al
 import { ProfileCover, ProfileStats } from "../components/ProfileContent";
 import { ReactionIcon, ReactionPicker } from "../components/Reactions";
 import { reactionLabel } from "../reactions";
-
-const SHARE_OPTIONS: { hours: number | null; label: string }[] = [
-  { hours: 1, label: "1 hora" },
-  { hours: 24, label: "24 horas" },
-  { hours: 168, label: "7 días" },
-  { hours: null, label: "Sin límite" },
-];
+import { ProfileSwitcher } from "../features/profileSwipe/ProfileSwitcher";
+import { useProfileSwipe } from "../features/profileSwipe/useProfileSwipe";
+import { ShareAlbums } from "../features/photos/ShareAlbums";
 
 export function ProfilePage() {
   const { id = "" } = useParams();
+  // Cada perfil arranca de cero (sin diálogos abiertos ni scroll), también al deslizar al siguiente.
+  return <ProfileView key={id} id={id} />;
+}
+
+function ProfileView({ id }: { id: string }) {
   const nav = useNavigate();
   const [p, setP] = useState<PublicProfile | null>(null);
   const [missing, setMissing] = useState(false);
@@ -30,20 +31,22 @@ export function ProfilePage() {
   const { me } = useMe();
   const isOwner = Boolean(me?.user.access?.includes("owner"));
   const { refreshAfterBlock } = useTabData();
-  const hasOwnAlbum = Boolean(me?.photos.some((x) => x.isPrivate));
   const [params, setParams] = useSearchParams();
   // ?album=1 (desde el mensaje del chat) abre el álbum directo
-  const [viewing, setViewing] = useState<number | null>(null);
-  const [sharing, setSharing] = useState(false);
+  const [viewing, setViewing] = useState<{ items: Media[]; start: number; title: string } | null>(null);
   const [toquePicker, setToquePicker] = useState(false);
   const [toqueMsg, setToqueMsg] = useState("");
+  const swipe = useProfileSwipe(id, viewing == null && !reporting && !staffing);
+  const swipeProps = { ref: swipe.page, ...swipe.handlers };
+  const swipeClass = swipe.active ? " profile--swipe" : "";
 
   useEffect(() => {
     setP(null);
     setMissing(false);
     api<PublicProfile>(`/users/${id}`).then((x) => {
       setP(x);
-      if (params.get("album") === "1" && x.privateAlbum?.items?.length) setViewing(0);
+      const first = x.privateAlbum?.albums[0];
+      if (params.get("album") === "1" && first) setViewing({ items: first.items, start: 0, title: first.name });
     }).catch(() => setMissing(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -63,19 +66,6 @@ export function ProfilePage() {
     const fav = !p.favorite;
     setP({ ...p, favorite: fav });
     await api(`/favorites/${id}`, { method: fav ? "PUT" : "DELETE" }).catch(() => setP({ ...p, favorite: !fav }));
-  }
-
-  async function shareAlbum(hours: number | null) {
-    if (!p) return;
-    const r = await api<{ expiresAt: string | null }>(`/album/grants/${id}`, { method: "PUT", json: { hours } });
-    setP({ ...p, iSharedAlbum: true, sharedUntil: r.expiresAt });
-    setSharing(false);
-  }
-
-  async function unshareAlbum() {
-    if (!p) return;
-    await api(`/album/grants/${id}`, { method: "DELETE" });
-    setP({ ...p, iSharedAlbum: false, sharedUntil: null });
   }
 
   /** Mandar un toque: a la otra persona le llega un aviso. Uno cada 12 horas por persona. */
@@ -99,16 +89,27 @@ export function ProfilePage() {
 
   if (missing) {
     return (
-      <div className="page">
-        <header className="topbar"><button className="iconbtn" onClick={() => nav(-1)} aria-label="Volver"><BackIcon /></button></header>
+      <div className={`page${swipeClass}`} {...swipeProps}>
+        <header className="topbar">
+          <button className="iconbtn" onClick={() => nav(-1)} aria-label="Volver"><BackIcon /></button>
+          {swipe.active && <ProfileSwitcher swipe={swipe} className="topbar__actions" />}
+        </header>
         <div className="empty"><p className="empty__title">Este perfil no está disponible</p></div>
       </div>
     );
   }
-  if (!p) return <div className="page" />;
+  if (!p) {
+    // Mientras carga, si venís de la grilla ya se ve su foto chica.
+    const thumb = swipe.current?.photo;
+    return (
+      <div className={`page profile${swipeClass}`} {...swipeProps}>
+        {thumb && <div className="profile__photo"><img src={thumb} alt="" /></div>}
+      </div>
+    );
+  }
 
   return (
-    <div className="page profile">
+    <div className={`page profile${swipeClass}`} {...swipeProps}>
       <ProfileCover
         key={p.id}
         photos={p.photos}
@@ -116,6 +117,7 @@ export function ProfilePage() {
         age={p.age}
         status={p}
         back={<button className="iconbtn iconbtn--float" onClick={() => nav(-1)} aria-label="Volver"><BackIcon /></button>}
+        aside={swipe.active && <ProfileSwitcher swipe={swipe} className="profile-switch--cover" />}
       />
 
       <div className="profile__body">
@@ -150,50 +152,33 @@ export function ProfilePage() {
         )}
         {toqueMsg && <p className="muted small toque-msg" role="status">{toqueMsg}</p>}
 
-        {p.privateAlbum && (
+        {p.privateAlbum && (p.privateAlbum.albums.length ? p.privateAlbum.albums.map((a) => (
+          <section className="album" key={a.id}>
+            <h3 className="album__title">
+              <LockIcon /> {a.name} · {albumCount(a.count, a.videos)}
+            </h3>
+            {!p.isMe && <p className="muted small album__until">Lo podés ver {untilLabel(a.expiresAt)}.</p>}
+            <AlbumGrid items={a.items} onOpen={(start) => setViewing({ items: a.items, start, title: p.isMe ? a.name : `${a.name} · ${p.displayName}` })} />
+          </section>
+        )) : (
           <section className="album">
             <h3 className="album__title">
               <LockIcon /> Álbum privado · {albumCount(p.privateAlbum.count, p.privateAlbum.videos)}
             </h3>
-            {p.privateAlbum.items ? (
-              <>
-                {!p.isMe && <p className="muted small album__until">Lo podés ver {untilLabel(p.privateAlbum.expiresAt)}.</p>}
-                <AlbumGrid items={p.privateAlbum.items} onOpen={setViewing} />
-              </>
-            ) : (
-              <p className="muted small">{p.displayName} todavía no te compartió su álbum.</p>
-            )}
+            <p className="muted small">{p.displayName} todavía no te compartió ningún álbum.</p>
           </section>
-        )}
+        ))}
 
         <ProfileStats p={p} />
 
-        {!p.isMe && hasOwnAlbum && (
-          <div className="share-album">
-            {p.iSharedAlbum ? (
-              <>
-                <p className="small"><LockIcon /> Le compartiste tu álbum · {untilLabel(p.sharedUntil)}</p>
-                <div className="row">
-                  <button className="btn btn--ghost" onClick={() => setSharing(!sharing)}>Cambiar plazo</button>
-                  <button className="btn btn--ghost" onClick={unshareAlbum}>Dejar de compartir</button>
-                </div>
-              </>
-            ) : (
-              <button className="btn btn--ghost" onClick={() => setSharing(!sharing)} aria-expanded={sharing}>
-                <LockIcon /> Compartirle mi álbum privado
-              </button>
-            )}
-            {sharing && (
-              <div className="share-album__options" role="group" aria-label="Por cuánto tiempo">
-                <p className="muted small">¿Por cuánto tiempo lo puede ver?</p>
-                <div className="chips">
-                  {SHARE_OPTIONS.map((o) => (
-                    <button key={o.label} className="chip" onClick={() => shareAlbum(o.hours)}>{o.label}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+        {!p.isMe && me && (
+          <ShareAlbums
+            userId={p.id}
+            name={p.displayName}
+            me={me}
+            shares={p.myShares}
+            onChange={(myShares) => setP({ ...p, myShares, iSharedAlbum: myShares.length > 0 })}
+          />
         )}
         {!p.isMe && <InviteToGroups userId={p.id} name={p.displayName} />}
 
@@ -217,9 +202,7 @@ export function ProfilePage() {
           </div>
         )}
       </div>
-      {viewing != null && p.privateAlbum?.items && (
-        <AlbumViewer items={p.privateAlbum.items} start={viewing} title={`Álbum de ${p.displayName}`} onClose={closeViewer} />
-      )}
+      {viewing && <AlbumViewer items={viewing.items} start={viewing.start} title={viewing.title} onClose={closeViewer} />}
       {reporting && <ReportDialog userId={p.id} name={p.displayName} onClose={() => setReporting(false)} />}
       {staffing && <StaffDialog userId={p.id} name={p.displayName} onClose={() => setStaffing(false)} />}
     </div>

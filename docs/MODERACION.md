@@ -103,9 +103,11 @@ Quien administra en general (las cuentas de `ADMIN_USER_IDS` o `ADMIN_EMAILS` en
 
 | Permiso | Qué permite |
 |---|---|
-| Reportes | Ver los reportes, descartarlos y borrar el mensaje reportado |
+| Reportes | Ver los reportes, descartarlos y borrar el mensaje reportado. Ante un reporte por menor de edad, suspender de forma preventiva (ver abajo) |
 | Suspensiones | Suspender y reactivar cuentas |
 | Revisiones | Responder los pedidos de revisión de suspensiones (mantener o levantar) |
+
+**Suspensión preventiva por menor de edad.** Con un reporte abierto por "menor de edad" y indicios suficientes, quien tiene solo el permiso Reportes puede suspender la cuenta en el momento, sin esperar a alguien con Suspensiones. Le llega un aviso a quienes tienen Suspensiones (a la administración general, siempre) y la cuenta aparece en Suspendidas como "Preventiva, falta revisarla": otra persona la **mantiene** o **reactiva la cuenta**. Quien la hizo no la puede confirmar. Igual que cualquier suspensión, la persona puede pedir una revisión.
 
 Solo la administración general puede dar de baja o reactivar grupos, ver quién mandó cada reporte, dar y sacar permisos, suspender a alguien del equipo y ver el **Registro**. A la administración general no la puede suspender nadie desde la app. Nadie del equipo ve mails, IPs ni datos de salud. Los permisos se chequean en el servidor, no solo escondiendo botones.
 

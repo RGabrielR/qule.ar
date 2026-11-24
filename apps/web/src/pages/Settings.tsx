@@ -7,6 +7,7 @@ import { Avatar } from "../components/Avatar";
 import { BackIcon } from "../components/Icons";
 import { disablePush, enablePush, pushHelp, pushState, testPush, type PushState } from "../push";
 import { getTheme, setTheme } from "../theme";
+import { staffNotices } from "../features/moderation/notices";
 
 const NOTICES: { kind: NotifyKind; label: string; hint?: string }[] = [
   { kind: "mensajes", label: "Mensajes privados" },
@@ -15,13 +16,6 @@ const NOTICES: { kind: NotifyKind; label: string; hint?: string }[] = [
   { kind: "grupos", label: "Mensajes nuevos en grupos", hint: "Como mucho uno cada 10 minutos por grupo. También podés silenciar un grupo solo." },
   { kind: "solicitudes", label: "Solicitudes e invitaciones", hint: "Pedidos para entrar a tus grupos, invitaciones y cuando te aceptan." },
 ];
-
-/** Solo para quien es del equipo de moderación. A la administración general los de menores le llegan igual. */
-const staffNotice = (owner: boolean): { kind: NotifyKind; label: string; hint?: string } => ({
-  kind: "moderacion",
-  label: "Moderación",
-  hint: `Reportes urgentes y pedidos de revisión. Si lo apagás, igual los ves al entrar a Moderación.${owner ? " Los reportes por menor de edad te llegan siempre." : ""}`,
-});
 
 /** Qué avisos le llegan. Se guarda en la cuenta, así vale para todos los dispositivos. */
 function NoticePrefs({ initial, staff, owner }: { initial: Partial<Record<NotifyKind, boolean>>; staff: boolean; owner: boolean }) {
@@ -46,7 +40,7 @@ function NoticePrefs({ initial, staff, owner }: { initial: Partial<Record<Notify
     <>
       <p className="muted small prefs__lead">¿Qué avisos querés recibir?</p>
       <ul className="prefs">
-        {(staff ? [...NOTICES, staffNotice(owner)] : NOTICES).map((n) => {
+        {(staff ? [...NOTICES, ...staffNotices(owner)] : NOTICES).map((n) => {
           const on = prefs[n.kind] !== false;
           return (
             <li key={n.kind} className="setting">

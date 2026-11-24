@@ -80,7 +80,9 @@ export function App() {
           <Route path="/visitas" element={<Views />} />
           <Route path="/favoritos" element={<Favorites />} />
           <Route path="/toques" element={<Toques />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route element={<RequirePermission allows={(me) => me.user.isAdmin} />}>
+            <Route path="/admin" element={<Admin />} />
+          </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -99,11 +101,17 @@ function RequireAuth({ children, needProfile }: { children: React.ReactNode; nee
   return <>{children}</>;
 }
 
+function RequirePermission({ allows }: { allows: (me: Me) => boolean }) {
+  const { me } = useMe();
+  if (!me || !allows(me)) return <Navigate to="/" replace />;
+  return <Outlet />;
+}
+
 type Toast = { id: number; text: string; to?: string };
 
 function Shell() {
   const { me, reload } = useMe();
-  return <TabDataProvider key={me?.user.id} onUnauthorized={reload}><ShellContent /></TabDataProvider>;
+  return <TabDataProvider key={me?.user.id} userId={me?.user.id ?? ""} onUnauthorized={reload}><ShellContent /></TabDataProvider>;
 }
 
 function ShellContent() {
@@ -156,7 +164,7 @@ function ShellContent() {
   }, [unread, pending]);
 
   // En una conversación abierta, la barra de abajo se esconde para dejar lugar al teclado
-  const inThread = /^\/mensajes\/.+/.test(loc.pathname);
+  const inThread = /^\/mensajes\/.+/.test(loc.pathname) || /^\/grupos\/[^/]+\/?$/.test(loc.pathname);
   const inMyProfile = /^\/yo(?:\/|$)/.test(loc.pathname);
   const nearbyEntry = loc.pathname.startsWith("/perfil/") ? loc.state?.nearbyEntry : undefined;
 

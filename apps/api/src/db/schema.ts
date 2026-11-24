@@ -54,6 +54,9 @@ export const verification = pgTable("verification", {
 
 // ---------- Perfil ----------
 
+/** Valores posibles de profile.hasPlace. Sin dato (null) es "sin decir". */
+export const HAS_PLACE = ["si", "no"] as const;
+
 export const profile = pgTable("profile", {
   userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
   displayName: text("display_name").notNull(),
@@ -67,6 +70,8 @@ export const profile = pgTable("profile", {
   lookingFor: jsonb("looking_for").$type<string[]>().notNull().default([]),
   relationship: text("relationship"),
   pronouns: text("pronouns"),
+  // Si tiene lugar para recibir: "si", "no" o null (sin decir). Opcional, lo elige cada persona; nunca se deduce de otra cosa.
+  hasPlace: text("has_place"),
   // Datos de salud (sensibles, Ley 25.326 art. 2 y 7): se guardan cifrados con DATA_KEY. Ver src/crypt.ts
   hivStatus: encryptedText("hiv_status"),
   lastTested: encryptedText("last_tested"),
@@ -96,12 +101,27 @@ export const profile = pgTable("profile", {
   index("profile_grid_idx").on(t.lastSeenAt.desc()).where(sql`${t.incognito} = false and ${t.suspendedAt} is null`),
 ]);
 
+/**
+ * Álbumes privados de cada persona (por ejemplo, uno para cuando es activo y otro para cuando es pasivo).
+ * Cada uno se comparte por separado. El primero (position 0) es el álbum por defecto: ahí van las fotos y
+ * videos que se suben sin elegir álbum y, con la migración 0019, todo lo que ya estaba en el álbum único.
+ */
+export const album = pgTable("album", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  position: integer("position").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("album_user_idx").on(t.userId, t.position)]);
+
 export const photo = pgTable("photo", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   key: text("key").notNull(),
   position: integer("position").notNull().default(0),
   isPrivate: boolean("is_private").notNull().default(false),
+  // En qué álbum privado está. Solo tiene valor si isPrivate; al borrar el álbum se borran sus archivos (ver premium.ts).
+  albumId: text("album_id").references(() => album.id),
   // "photo" o "video". Los videos solo pueden estar en el álbum privado.
   kind: text("kind").notNull().default("photo"),
   // Miniatura del video (una foto .webp sacada del primer segundo)
@@ -115,14 +135,20 @@ export const photo = pgTable("photo", {
   index("photo_poster_key_idx").on(t.posterKey),
 ]);
 
-/** A quién le compartiste tu álbum privado. Se puede revocar en cualquier momento. */
+/** A quién le compartiste cada álbum privado. Se puede revocar en cualquier momento. */
 export const albumGrant = pgTable("album_grant", {
+  albumId: text("album_id").notNull().references(() => album.id, { onDelete: "cascade" }),
+  // Dueño del álbum, repetido para revocar todo de una (bloqueos, "quitar todos los accesos")
   ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   granteeId: text("grantee_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   // Hasta cuándo lo puede ver. null = sin límite.
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [primaryKey({ columns: [t.ownerId, t.granteeId] }), index("album_grant_grantee_idx").on(t.granteeId)]);
+}, (t) => [
+  primaryKey({ columns: [t.albumId, t.granteeId] }),
+  index("album_grant_grantee_idx").on(t.granteeId),
+  index("album_grant_owner_idx").on(t.ownerId, t.granteeId),
+]);
 
 /** Quién vio tu perfil (una fila por persona, con la última visita). */
 export const profileView = pgTable("profile_view", {
@@ -241,7 +267,8 @@ export const groupJoinRequest = pgTable("group_join_request", {
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  index("gjr_group_status_idx").on(t.groupId, t.status),
+  // Lista paginada de solicitudes: pendientes de un grupo, de la más nueva a la más vieja
+  index("gjr_group_status_created_idx").on(t.groupId, t.status, t.createdAt, t.id),
   index("gjr_user_idx").on(t.userId, t.groupId),
   index("gjr_resolved_by_idx").on(t.resolvedBy),
 ]);

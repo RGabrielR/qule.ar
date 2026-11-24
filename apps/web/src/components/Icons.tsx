@@ -69,13 +69,23 @@ export const EditIcon = () => (
 export const SettingsIcon = () => (
   <svg {...base}><path d="M9.5 3h5l.7 2.4 2 .9 2.3-.8 2.5 4.3-1.7 1.8v2l1.7 1.8-2.5 4.3-2.3-.8-2 .9-.7 2.2h-5l-.7-2.2-2-.9-2.3.8L2 15.4l1.7-1.8v-2L2 9.8l2.5-4.3 2.3.8 2-.9L9.5 3Z" /><circle cx="12" cy="12.5" r="3" /></svg>
 );
+export const ChevronLeftIcon = () => (
+  <svg {...base}><path d="m15 5-7 7 7 7" /></svg>
+);
 export const ChevronRightIcon = () => (
   <svg {...base}><path d="m9 5 7 7-7 7" /></svg>
 );
 export const CloseIcon = () => (
   <svg {...base} width={18} height={18}><path d="M6 6l12 12M18 6 6 18" /></svg>
 );
-/** Frases guardadas del chat: un globo de diálogo con renglones. */
+/**
+ * Frases guardadas del chat: un globo rectangular con dos renglones.
+ * Rectangular para que los renglones queden centrados y no se confunda con el globo redondo de Mensajes.
+ */
 export const PhraseIcon = () => (
-  <svg {...base}><path d="M21 12a8 8 0 0 1-11.8 7L4 20.5l1.5-4.6A8 8 0 1 1 21 12z" /><path d="M9 10h6M9 13.5h4" /></svg>
+  <svg {...base}><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H9l-5 4z" /><path d="M8 8.5h8M8 12.5h5" /></svg>
+);
+/** Avisos (notificaciones): una campana. */
+export const BellIcon = () => (
+  <svg {...base} width={18} height={18}><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9Z" /><path d="M10 19.5a2.2 2.2 0 0 0 4 0" /></svg>
 );

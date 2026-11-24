@@ -20,9 +20,10 @@ self.addEventListener("push", (event) => {
       if (looking && !data.always) return;
       await self.registration.showNotification(data.title, {
         body: data.body,
-        icon: "/icon-192.png",
+        // Los avisos de moderación traen su propio ícono (ver push.ts); el resto, el de la app
+        icon: data.icon || "/icon-192.png",
         // Silueta blanca con fondo transparente: con un PNG a color, Android muestra un cuadrado blanco
-        badge: "/badge-96.png",
+        badge: data.badge || "/badge-96.png",
         tag: data.tag,
         renotify: Boolean(data.tag),
         data: { url: data.url },

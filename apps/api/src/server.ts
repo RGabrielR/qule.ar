@@ -67,6 +67,13 @@ const app = new Hono<AppEnv>();
 // Encabezados de seguridad en todas las respuestas (ver security.ts). La CSP necesita el index.html compilado
 // para permitir, por su hash, el único script en línea (el del tema).
 const indexPath = path.join(env.WEB_DIST, "index.html");
+// Los íconos de la app (icon-192.png…) se pueden mostrar desde otros sitios: el logo de los mails sale de acá
+// y los clientes de mail web lo cargan desde su propio dominio. Son imágenes públicas, no exponen nada.
+// Va antes de securityHeaders para correr después que él y ganarle al "same-origin" que pone por defecto.
+app.use("/icon-*", async (c, next) => {
+  await next();
+  if (/^\/icon-[\w-]+\.png$/.test(c.req.path)) c.res.headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+});
 app.use("*", securityHeaders(env.APP_URL, existsSync(indexPath) ? readFileSync(indexPath, "utf8") : null));
 
 // Si entran por otra dirección (www, el túnel provisorio viejo), los mandamos al dominio principal.

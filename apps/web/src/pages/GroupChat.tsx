@@ -13,6 +13,7 @@ import { slowModeText } from "../features/groups/groupRules";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
+import { useSectionBack } from "../useSectionBack";
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
@@ -32,6 +33,7 @@ function GroupChatThread({ id }: { id: string }) {
   const scope = JSON.stringify([me?.user.id, id]);
   const pending = usePending(groupOutbox, scope);
   const nav = useNavigate();
+  const goBack = useSectionBack("/grupos");
   const [info, setInfo] = useState<GroupInfo | null>(null);
   const [infoTick, setInfoTick] = useState(0);
   const [confirmed, setMessages] = useState<GroupMessage[]>([]);
@@ -320,6 +322,7 @@ function GroupChatThread({ id }: { id: string }) {
   return (
     <div className="chat">
       <header className="topbar">
+        <button type="button" className="iconbtn" onClick={goBack} aria-label="Volver a Grupos"><BackIcon /></button>
         <GroupAvatar name={info.name} photo={info.photo} general={info.isGeneral} size="sm" />
         <div className="topbar__grow">
           <h1 className="topbar__title topbar__title--sm"><Link to={`/grupos/${id}/info`}>{info.isGeneral ? "# " : ""}{info.name}</Link></h1>

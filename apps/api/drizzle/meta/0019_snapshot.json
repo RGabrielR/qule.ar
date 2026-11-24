@@ -1,5 +1,5 @@
 {
-  "id": "f1d901b6-e352-4326-a179-46ab66c97dc8",
+  "id": "c262db7a-7e0c-4d39-bf69-4b145d1e3a8c",
   "prevId": "ca7b968f-f16b-478b-99b3-0dea878c9f4a",
   "version": "7",
   "dialect": "postgresql",
@@ -581,12 +581,6 @@
           "primaryKey": true,
           "notNull": true
         },
-        "idempotency_key": {
-          "name": "idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "conversation_id": {
           "name": "conversation_id",
           "type": "text",
@@ -646,27 +640,6 @@
         }
       },
       "indexes": {
-        "dm_sender_idempotency_idx": {
-          "name": "dm_sender_idempotency_idx",
-          "columns": [
-            {
-              "expression": "sender_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "idempotency_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "dm_conv_idx": {
           "name": "dm_conv_idx",
           "columns": [
@@ -1122,8 +1095,8 @@
         }
       },
       "indexes": {
-        "gjr_group_status_idx": {
-          "name": "gjr_group_status_idx",
+        "gjr_group_status_created_idx": {
+          "name": "gjr_group_status_created_idx",
           "columns": [
             {
               "expression": "group_id",
@@ -1133,6 +1106,18 @@
             },
             {
               "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1334,12 +1319,6 @@
           "primaryKey": true,
           "notNull": true
         },
-        "idempotency_key": {
-          "name": "idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "group_id": {
           "name": "group_id",
           "type": "text",
@@ -1385,27 +1364,6 @@
         }
       },
       "indexes": {
-        "gm_sender_idempotency_idx": {
-          "name": "gm_sender_idempotency_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "idempotency_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "gm_group_sched_idx": {
           "name": "gm_group_sched_idx",
           "columns": [

@@ -26,6 +26,8 @@ export const LIMITS = {
   report: { max: 15, windowMs: HOUR, message: "Mandaste muchos reportes. Si es urgente, esperá un rato y volvé a intentar." },
   /** Toques a cualquier persona (a una misma ya hay un límite de uno cada 12 horas) */
   toque: { max: 40, windowMs: HOUR, message: "Mandaste muchos toques. Probá de nuevo en un rato." },
+  /** Aceptar o rechazar solicitudes en lote (cada pedido resuelve hasta 200) */
+  bulkRequests: { max: 60, windowMs: HOUR, message: "Resolviste muchas solicitudes de una. Probá de nuevo en un rato." },
   /** Pedidos de revisión de una suspensión (igual hay uno por suspensión y una sola ampliación) */
   appeal: { max: 5, windowMs: HOUR, message: "Probá de nuevo en un rato." },
 } satisfies Record<string, Rule>;

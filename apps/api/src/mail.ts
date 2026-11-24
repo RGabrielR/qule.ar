@@ -84,31 +84,82 @@ export async function sendMail(mail: Mail, kind: MailKind) {
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
-/** Plantilla simple: se ve bien en clientes claros y oscuros. Los colores salen de la marca (packages/brand). */
-const FONT = `${fonts.text.family},system-ui,-apple-system,'Segoe UI',sans-serif`;
+/**
+ * Plantilla de los mails. Armada con tablas y estilos en línea, que es lo único que respetan todos los
+ * clientes (Gmail, Outlook, Apple Mail). Los colores salen de la marca (packages/brand).
+ *
+ * El logo se carga desde la web (APP_URL/icon-192.png): Gmail y Apple Mail lo muestran solos. Si el cliente
+ * bloquea imágenes, queda el nombre escrito al lado, así que el mail se entiende igual.
+ */
+const FONT = `${fonts.text.family},system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif`;
 
-function layout(title: string, paragraphs: string[], button?: { label: string; url: string }) {
-  const p = paragraphs.map((t) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.5;color:${c.text}">${t}</p>`).join("");
+type Layout = {
+  title: string;
+  /** Texto corto que se ve en la bandeja de entrada al lado del asunto. */
+  preview: string;
+  paragraphs: string[];
+  button?: { label: string; url: string };
+  /** Por qué le llega este mail. */
+  reason: string;
+};
+
+export function layout({ title, preview, paragraphs, button, reason }: Layout) {
+  const site = env.APP_URL.replace(/\/$/, "");
+  const logo = `${site}/icon-192.png`;
+  const p = paragraphs
+    .map((t) => `<p style="margin:0 0 14px;font-size:16px;line-height:1.55;color:${c.text}">${esc(t)}</p>`)
+    .join("");
   const b = button
-    ? `<p style="margin:22px 0"><a href="${esc(button.url)}" style="background:${c.accent};color:${c.accentInk};text-decoration:none;font-weight:700;padding:12px 22px;border-radius:${radii.pill};display:inline-block">${esc(button.label)}</a></p>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 22px"><tr>
+<td align="center" bgcolor="${c.accent}" style="border-radius:${radii.pill}">
+<a href="${esc(button.url)}" target="_blank" style="display:inline-block;padding:14px 28px;font-family:${FONT};font-size:16px;font-weight:700;color:${c.accentInk};text-decoration:none;border-radius:${radii.pill}">${esc(button.label)}</a>
+</td></tr></table>
+<p style="margin:0;font-size:13px;line-height:1.5;color:${c.muted}">Si el botón no anda, copiá este link en el navegador:<br>
+<a href="${esc(button.url)}" target="_blank" style="color:${c.link};word-break:break-all">${esc(button.url)}</a></p>`
     : "";
-  return `<!doctype html><html><body style="margin:0;padding:24px;background:${c.bg};font-family:${FONT}">
-<div style="max-width:480px;margin:0 auto;background:${c.card};border-radius:16px;padding:28px">
-<p style="margin:0 0 18px;font-size:24px;font-weight:800;letter-spacing:-0.03em;color:${c.accent}">${esc(APP_NAME)}</p>
-<h1 style="margin:0 0 14px;font-size:20px;color:${c.title}">${esc(title)}</h1>${p}${b}
-<p style="margin:24px 0 0;font-size:12px;color:${c.muted}">${esc(APP_SLOGAN)} App comunitaria, gratuita y de código abierto.</p>
-</div></body></html>`;
+  // Relleno invisible después de la vista previa, para que la bandeja no muestre el resto del texto del mail
+  const spacer = "&#x34F;&zwnj;&nbsp;".repeat(30);
+  return `<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">
+<title>${esc(title)}</title></head>
+<body style="margin:0;padding:0;background:${c.bg};-webkit-text-size-adjust:100%">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(preview)}${spacer}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${c.bg}" style="background:${c.bg}"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;font-family:${FONT}">
+<tr><td style="padding:0 4px 18px">
+<a href="${esc(site)}" target="_blank" style="text-decoration:none"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+<td style="padding-right:12px"><img src="${esc(logo)}" width="44" height="44" alt="" style="display:block;border:0;border-radius:12px"></td>
+<td style="font-family:${FONT};font-size:24px;font-weight:800;letter-spacing:-0.03em;color:${c.title}">${esc(APP_NAME)}</td>
+</tr></table></a></td></tr>
+<tr><td bgcolor="${c.card}" style="background:${c.card};border-radius:20px;padding:32px 28px">
+<h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:800;color:${c.title}">${esc(title)}</h1>
+${p}${b}
+</td></tr>
+<tr><td style="padding:20px 8px 0;font-size:12px;line-height:1.6;color:${c.muted}">
+${esc(reason)}<br>
+${esc(APP_SLOGAN)} App comunitaria, gratuita y de código abierto. <a href="${esc(site)}" target="_blank" style="color:${c.muted}">${esc(site.replace(/^https?:\/\//, ""))}</a>
+</td></tr>
+</table></td></tr></table></body></html>`;
 }
+
+const ACCOUNT_REASON = `Te llega porque es un aviso importante sobre tu cuenta de ${APP_NAME}.`;
 
 export function resetMail(to: string, url: string): Mail {
   return {
     to,
     subject: "Cambiá tu contraseña",
     text: `Pediste cambiar tu contraseña de ${APP_NAME}. Entrá a este link para elegir una nueva (vence en 1 hora):\n\n${url}\n\nSi no fuiste vos, ignorá este mail: tu contraseña sigue igual.`,
-    html: layout("Cambiá tu contraseña", [
-      "Pediste cambiar tu contraseña. Tocá el botón para elegir una nueva. El link vence en 1 hora.",
-      "Si no fuiste vos, ignorá este mail: tu contraseña sigue igual.",
-    ], { label: "Elegir contraseña nueva", url }),
+    html: layout({
+      title: "Cambiá tu contraseña",
+      preview: "Elegí una contraseña nueva. El link vence en 1 hora.",
+      paragraphs: [
+        "Pediste cambiar tu contraseña. Tocá el botón para elegir una nueva. El link vence en 1 hora.",
+        "Si no fuiste vos, ignorá este mail: tu contraseña sigue igual.",
+      ],
+      button: { label: "Elegir contraseña nueva", url },
+      reason: "Te llega porque alguien pidió cambiar la contraseña de esta dirección.",
+    }),
   };
 }
 
@@ -121,10 +172,16 @@ export function suspendedMail(to: string): Mail {
     to,
     subject: `Tu cuenta de ${APP_NAME} está suspendida`,
     text: `Tu cuenta de ${APP_NAME} fue suspendida. Entrá con tu cuenta para ver el motivo.\n\nSi creés que es un error, desde ahí mismo podés pedir que la revisemos. Es privado.\n\n${env.APP_URL}`,
-    html: layout("Tu cuenta está suspendida", [
-      "Entrá con tu cuenta para ver el motivo.",
-      "Si creés que es un error, desde ahí mismo podés pedir que la revisemos. Es privado.",
-    ], { label: `Entrar a ${APP_NAME}`, url: env.APP_URL }),
+    html: layout({
+      title: "Tu cuenta está suspendida",
+      preview: "Entrá con tu cuenta para ver el motivo.",
+      paragraphs: [
+        "Entrá con tu cuenta para ver el motivo.",
+        "Si creés que es un error, desde ahí mismo podés pedir que la revisemos. Es privado.",
+      ],
+      button: { label: `Entrar a ${APP_NAME}`, url: env.APP_URL },
+      reason: ACCOUNT_REASON,
+    }),
   };
 }
 
@@ -138,13 +195,25 @@ export function appealReviewedMail(to: string, lifted: boolean): Mail {
       to,
       subject: `Tu cuenta de ${APP_NAME} vuelve a funcionar`,
       text: `Revisamos tu pedido y levantamos la suspensión. Ya podés entrar como siempre. Perdón por las molestias.\n\n${env.APP_URL}`,
-      html: layout("Tu cuenta vuelve a funcionar", ["Revisamos tu pedido y levantamos la suspensión. Ya podés entrar como siempre. Perdón por las molestias."], { label: `Entrar a ${APP_NAME}`, url: env.APP_URL }),
+      html: layout({
+        title: "Tu cuenta vuelve a funcionar",
+        preview: "Levantamos la suspensión: ya podés entrar como siempre.",
+        paragraphs: ["Revisamos tu pedido y levantamos la suspensión. Ya podés entrar como siempre. Perdón por las molestias."],
+        button: { label: `Entrar a ${APP_NAME}`, url: env.APP_URL },
+        reason: ACCOUNT_REASON,
+      }),
     };
   }
   return {
     to,
     subject: "Revisamos tu pedido",
     text: `Ya revisamos tu pedido de revisión en ${APP_NAME}. Entrá con tu cuenta para leer la respuesta.\n\n${env.APP_URL}`,
-    html: layout("Revisamos tu pedido", ["Entrá con tu cuenta para leer la respuesta."], { label: `Entrar a ${APP_NAME}`, url: env.APP_URL }),
+    html: layout({
+      title: "Revisamos tu pedido",
+      preview: "Entrá con tu cuenta para leer la respuesta.",
+      paragraphs: ["Entrá con tu cuenta para leer la respuesta."],
+      button: { label: `Entrar a ${APP_NAME}`, url: env.APP_URL },
+      reason: ACCOUNT_REASON,
+    }),
   };
 }

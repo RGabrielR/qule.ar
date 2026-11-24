@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { api, ApiError, upload, type AlbumGrant, type Me, type Profile } from "../api";
+import { api, ApiError, upload, type AlbumGrant, type Me, type MyAlbum, type Profile } from "../api";
 import { useMe } from "../App";
 import { APP_NAME } from "../brand";
 import { AlbumViewer, duration, untilLabel } from "../components/AlbumViewer";
@@ -9,6 +9,8 @@ import { Avatar } from "../components/Avatar";
 import { BackIcon, ChevronRightIcon, LockIcon, PlusIcon } from "../components/Icons";
 import { PhotoCrop } from "../components/PhotoCrop";
 import { preparePhotoForCrop } from "../features/photos/preparePhoto";
+import { HasPlaceSelect } from "../features/place/hasPlace";
+import { AlbumHeader, MoveTo, NewAlbum } from "../features/photos/AlbumHeader";
 import { BODY_TYPES, HIV_STATUS, LOOKING_FOR, POSITIONS, PRONOUNS, RELATIONSHIP, TRIBES } from "../options";
 
 type Form = Omit<Profile, "birthdate" | "age">;
@@ -52,16 +54,25 @@ function MultiChips({ label, value, options, onChange, max = 10 }: { label: stri
 const numOrNull = (s: string) => (s === "" ? null : Number(s));
 
 const MAX_PROFILE_PHOTOS = 6;
+/** Tope de fotos y videos privados, sumando todos los álbumes (igual que en la API). */
 const MAX_ALBUM_ITEMS = 40;
+/** Cuántos álbumes privados se pueden tener (igual que en la API). */
+const MAX_ALBUMS = 5;
 
-/** Fotos elegidas que se van subiendo de a una: las fotos pasan por el recorte, los videos del álbum suben directo. */
-type MediaBatch = { files: File[]; index: number; isPrivate: boolean; slots: number };
+/**
+ * Fotos elegidas que se van subiendo de a una: las fotos pasan por el recorte, los videos del álbum suben directo.
+ * albumId: a qué álbum privado van (null con isPrivate = el álbum por defecto, que se crea solo si no hay ninguno).
+ */
+type MediaBatch = { files: File[]; index: number; isPrivate: boolean; albumId: string | null; slots: number };
+
+/** Dónde se está preparando una foto: el perfil público o un álbum. */
+const batchSpot = (b: { isPrivate: boolean; albumId: string | null }) => (b.isPrivate ? b.albumId ?? "private" : "public");
 
 function profileForm(p: Profile): Form {
   return {
     displayName: p.displayName, about: p.about, heightCm: p.heightCm, weightKg: p.weightKg,
     bodyType: p.bodyType, position: p.position, tribes: p.tribes, lookingFor: p.lookingFor,
-    relationship: p.relationship, pronouns: p.pronouns, hivStatus: p.hivStatus, lastTested: p.lastTested,
+    relationship: p.relationship, pronouns: p.pronouns, hasPlace: p.hasPlace, hivStatus: p.hivStatus, lastTested: p.lastTested,
   };
 }
 
@@ -90,10 +101,10 @@ function PhotoPreparing() {
 
 export function EditProfile() {
   const { me, reload } = useMe();
-  return me?.profile ? <ProfileEditor key={me.user.id} profile={me.profile} photos={me.photos} reload={reload} /> : null;
+  return me?.profile ? <ProfileEditor key={me.user.id} profile={me.profile} photos={me.photos} albums={me.albums} reload={reload} /> : null;
 }
 
-function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: Photos; reload: () => Promise<void> }) {
+function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; photos: Photos; albums: MyAlbum[]; reload: () => Promise<void> }) {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const isNew = params.get("nuevo") === "1";
@@ -106,13 +117,15 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
   const [mediaError, setMediaError] = useState("");
   const publicFileRef = useRef<HTMLInputElement>(null);
   const privateFileRef = useRef<HTMLInputElement>(null);
+  // A qué álbum va lo que se elige con privateFileRef
+  const targetAlbum = useRef<string | null>(null);
   const [grants, setGrants] = useState<AlbumGrant[]>([]);
   const [grantFeedback, setGrantFeedback] = useState("");
   const grantsHeading = useRef<HTMLHeadingElement>(null);
   const [progress, setProgress] = useState<{ done: number; total: number; video: boolean } | null>(null);
-  const [viewing, setViewing] = useState<number | null>(null);
+  const [viewing, setViewing] = useState<{ albumId: string; index: number } | null>(null);
   const [cropBatch, setCropBatch] = useState<(MediaBatch & { image: HTMLImageElement }) | null>(null);
-  const [preparing, setPreparing] = useState<"public" | "private" | null>(null);
+  const [preparing, setPreparing] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState("");
 
   useEffect(() => {
@@ -160,7 +173,12 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
     const slots = isPrivate ? MAX_ALBUM_ITEMS - privatePhotos.length : MAX_PROFILE_PHOTOS - publicPhotos.length;
     setMediaError("");
     setPhotoError("");
-    void advanceBatch({ files, index: 0, isPrivate, slots });
+    void advanceBatch({ files, index: 0, isPrivate, albumId: isPrivate ? targetAlbum.current : null, slots });
+  }
+
+  function pickPrivate(albumId: string | null) {
+    targetAlbum.current = albumId;
+    privateFileRef.current?.click();
   }
 
   async function changeMedia(action: () => Promise<void>) {
@@ -175,23 +193,51 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
     }
   }
 
-  function setPrivate(photoId: string, isPrivate: boolean) {
-    if (!isPrivate && !confirm("¿Mostrar esta foto en tu perfil público?")) return;
+  /** Pasar un archivo a un álbum, al álbum por defecto ("private") o al perfil público ("public"). */
+  function moveMedia(photoId: string, target: string) {
+    if (target === "public" && !confirm("¿Mostrar esta foto en tu perfil público?")) return;
+    const json = target === "public" ? { isPrivate: false } : target === "private" ? { isPrivate: true } : { albumId: target };
     return changeMedia(async () => {
-      await api(`/me/photos/${photoId}`, { method: "PATCH", json: { isPrivate } });
+      await api(`/me/photos/${photoId}`, { method: "PATCH", json });
       await reload();
     });
   }
 
-  function revoke(userId: string) {
+  function createAlbum(name: string) {
     return changeMedia(async () => {
-      await api(`/album/grants/${userId}`, { method: "DELETE" });
-      setGrants((g) => g.filter((x) => x.id !== userId));
+      await api("/album/albums", { method: "POST", json: { name } });
+      await reload();
+    });
+  }
+
+  function renameAlbum(albumId: string, name: string) {
+    return changeMedia(async () => {
+      await api(`/album/albums/${albumId}`, { method: "PATCH", json: { name } });
+      await reload();
+      setGrants((list) => list.map((g) => (g.albumId === albumId ? { ...g, albumName: name } : g)));
+    });
+  }
+
+  function deleteAlbum(albumId: string, moveTo: string | null) {
+    const count = privatePhotos.filter((p) => p.albumId === albumId).length;
+    if (!moveTo && count && !confirm(`¿Borrar el álbum y ${count === 1 ? "su archivo" : `sus ${count} archivos`}? No se puede deshacer.`)) return Promise.resolve();
+    return changeMedia(async () => {
+      await api(`/album/albums/${albumId}${moveTo ? `?moveTo=${encodeURIComponent(moveTo)}` : ""}`, { method: "DELETE" });
+      setViewing(null);
+      await reload();
+      setGrants((list) => list.filter((g) => g.albumId !== albumId));
+    });
+  }
+
+  function revoke(g: AlbumGrant) {
+    return changeMedia(async () => {
+      await api(`/album/albums/${g.albumId}/grants/${g.id}`, { method: "DELETE" });
+      setGrants((list) => list.filter((x) => x.id !== g.id || x.albumId !== g.albumId));
     });
   }
 
   function revokeAll() {
-    if (!confirm("¿Quitar todos los accesos a tu álbum privado?")) return;
+    if (!confirm("¿Quitar todos los accesos a tus álbumes privados?")) return;
     return changeMedia(async () => {
       await api("/album/grants", { method: "DELETE" });
       grantsHeading.current?.focus();
@@ -201,7 +247,7 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
   }
 
   function blockFromAlbum(g: AlbumGrant) {
-    if (!confirm(`¿Bloquear a ${g.name}? Pierde el acceso a tu álbum y no van a poder verse ni escribirse.`)) return;
+    if (!confirm(`¿Bloquear a ${g.name}? Pierde el acceso a todos tus álbumes y no van a poder verse ni escribirse.`)) return;
     return changeMedia(async () => {
       await api("/blocks", { method: "POST", json: { userId: g.id } });
       setGrants((x) => x.filter((y) => y.id !== g.id));
@@ -210,8 +256,8 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
 
   /** Sube la foto ya recortada y sigue con el resto de la tanda. */
   async function uploadCrop(batch: MediaBatch, file: File) {
-    const { isPrivate, index, slots } = batch;
-    await upload("/me/photos", file, isPrivate ? { private: "1" } : {});
+    const { index, slots } = batch;
+    await upload("/me/photos", file, uploadFields(batch));
     await reload().catch(() => setMediaError("Recargá para ver las fotos que subiste."));
     await advanceBatch({ ...batch, index: index + 1, slots: slots - 1 });
   }
@@ -220,7 +266,14 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
    * Sube los archivos en el orden en que se eligieron. Los videos del álbum suben directo (de a uno, así el servidor
    * los procesa sin trabarse). En cada foto se detiene para que se confirme el recorte.
    */
-  async function advanceBatch({ files, index, isPrivate, slots }: MediaBatch) {
+  function uploadFields({ isPrivate, albumId }: MediaBatch): Record<string, string> {
+    if (!isPrivate) return {};
+    return albumId ? { album: albumId } : { private: "1" };
+  }
+
+  async function advanceBatch(batch: MediaBatch) {
+    const { files, isPrivate, albumId } = batch;
+    let { index, slots } = batch;
     setCropBatch(null);
     const errors: string[] = [];
     const photoErrors: string[] = [];
@@ -229,7 +282,7 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
     while (index < files.length && slots > 0) {
       const file = files[index];
       if (!isPrivate || !file.type.startsWith("video/")) {
-        setPreparing(isPrivate ? "private" : "public");
+        setPreparing(batchSpot(batch));
         try {
           image = await preparePhotoForCrop(file);
           break;
@@ -245,7 +298,7 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
       setUploading(true);
       setProgress({ done: index, total: files.length, video: true });
       try {
-        await upload("/me/photos", file, { private: "1" });
+        await upload("/me/photos", file, uploadFields(batch));
         slots--;
         uploadedVideo = true;
       } catch (err) {
@@ -262,12 +315,12 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
     setUploading(false);
     if (index < files.length && slots === 0) {
       errors.push(isPrivate
-        ? `Tu álbum ya tiene ${MAX_ALBUM_ITEMS} fotos y videos. No se subieron los archivos que quedaban.`
+        ? `Ya tenés ${MAX_ALBUM_ITEMS} fotos y videos entre todos tus álbumes. No se subieron los archivos que quedaban.`
         : `Tu perfil ya tiene ${MAX_PROFILE_PHOTOS} fotos. No se subieron las que quedaban.`);
     }
     if (errors.length) setMediaError((previous) => [previous, ...errors].filter(Boolean).join(" · "));
     if (photoErrors.length) setPhotoError(photoErrors.join(" · "));
-    if (image) setCropBatch({ files, index, isPrivate, slots, image });
+    if (image) setCropBatch({ files, index, isPrivate, albumId, slots, image });
   }
 
   function removePhoto(photoId: string) {
@@ -283,7 +336,9 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
     const [selected] = ordered.splice(from, 1);
     ordered.splice(to, 0, selected);
     let index = 0;
-    const ids = photos.map((photo) => photo.isPrivate === selected.isPrivate ? ordered[index++].id : photo.id);
+    // Solo cambia el orden dentro del mismo grupo (el perfil público o un álbum)
+    const group = (photo: Photos[number]) => (photo.isPrivate ? photo.albumId : "public");
+    const ids = photos.map((photo) => group(photo) === group(selected) ? ordered[index++].id : photo.id);
     return changeMedia(async () => {
       await api("/me/photos/order", { method: "PUT", json: ids });
       await reload();
@@ -318,7 +373,7 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
                   <button className="photos__action" disabled={mediaLocked} onClick={() => reorder(publicPhotos, i, 0)}>Hacer principal</button>
                 )}
                 <button className="photos__remove" aria-label="Borrar foto" disabled={mediaLocked} onClick={() => removePhoto(p.id)}>✕</button>
-                <button className="photos__lock" aria-label="Pasar al álbum privado" title="Pasar al álbum privado" disabled={mediaLocked} onClick={() => setPrivate(p.id, true)}><LockIcon /></button>
+                <button className="photos__lock" aria-label="Pasar al álbum privado" title="Pasar al álbum privado" disabled={mediaLocked} onClick={() => moveMedia(p.id, albums[0]?.id ?? "private")}><LockIcon /></button>
               </div>
               <PhotoOrder index={i} total={publicPhotos.length} disabled={mediaLocked} onMove={(step) => reorder(publicPhotos, i, i + step)} />
             </div>
@@ -336,39 +391,59 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
       </section>
 
       <section className="section">
-        <h2 className="section__title"><LockIcon /> Álbum privado <span className="muted">{privatePhotos.length}/40</span></h2>
+        <h2 className="section__title"><LockIcon /> Álbumes privados <span className="muted">{privatePhotos.length}/{MAX_ALBUM_ITEMS}</span></h2>
         <p className="muted small lead">
-          Fotos y videos (hasta 1 minuto) que solo ve la gente a la que se lo compartís desde su perfil, por 1 hora, 24 horas, 7 días o sin límite. Podés quitar el acceso cuando quieras.
+          Fotos y videos (hasta 1 minuto) que solo ve la gente a la que le compartís cada álbum desde su perfil, por 1 hora, 24 horas, 7 días o sin límite. Podés tener hasta {MAX_ALBUMS} álbumes y {MAX_ALBUM_ITEMS} archivos entre todos, y quitar el acceso cuando quieras.
         </p>
-        <div className="photos">
-          {privatePhotos.map((p, i) => (
-            <div key={p.id}>
-              <div className="photos__item">
-                <button className="photos__open" onClick={() => setViewing(i)} aria-label={`Ver ${p.kind === "video" ? "video" : "foto"} ${i + 1}`}>
-                  {p.thumb ? <img src={p.thumb} alt="" /> : <span className="album__nothumb" />}
-                  {p.kind === "video" && <span className="album__play">▶ {duration(p.seconds)}</span>}
-                </button>
-                {p.kind === "photo" && <button className="photos__action" disabled={mediaLocked} onClick={() => setPrivate(p.id, false)}>Hacer pública</button>}
-                <button className="photos__remove" aria-label="Borrar archivo" disabled={mediaLocked} onClick={() => removePhoto(p.id)}>✕</button>
+        {(albums.length ? albums : [null]).map((a) => {
+          const items = a ? privatePhotos.filter((p) => p.albumId === a.id) : [];
+          const spot = a?.id ?? "private";
+          return (
+            <div className="album-edit" key={spot}>
+              {a && (
+                <AlbumHeader
+                  album={a}
+                  count={items.length}
+                  videos={items.filter((p) => p.kind === "video").length}
+                  others={albums.filter((o) => o.id !== a.id)}
+                  disabled={mediaLocked}
+                  onRename={(name) => renameAlbum(a.id, name)}
+                  onDelete={(moveTo) => deleteAlbum(a.id, moveTo)}
+                />
+              )}
+              <div className="photos">
+                {items.map((p, i) => (
+                  <div key={p.id}>
+                    <div className="photos__item">
+                      <button className="photos__open" onClick={() => a && setViewing({ albumId: a.id, index: i })} aria-label={`Ver ${p.kind === "video" ? "video" : "foto"} ${i + 1}`}>
+                        {p.thumb ? <img src={p.thumb} alt="" /> : <span className="album__nothumb" />}
+                        {p.kind === "video" && <span className="album__play">▶ {duration(p.seconds)}</span>}
+                      </button>
+                      <MoveTo current={p.albumId} albums={albums} canGoPublic={p.kind === "photo"} disabled={mediaLocked} onMove={(target) => moveMedia(p.id, target)} />
+                      <button className="photos__remove" aria-label="Borrar archivo" disabled={mediaLocked} onClick={() => removePhoto(p.id)}>✕</button>
+                    </div>
+                    <PhotoOrder index={i} total={items.length} disabled={mediaLocked} onMove={(step) => reorder(items, i, i + step)} />
+                  </div>
+                ))}
+                {privatePhotos.length < MAX_ALBUM_ITEMS && (
+                  preparing === spot ? <PhotoPreparing /> : (
+                    <button className="photos__add" onClick={() => pickPrivate(a?.id ?? null)} disabled={mediaLocked} aria-label={a ? `Agregar fotos y videos a ${a.name}` : "Agregar fotos y videos"}>
+                      {uploading && targetAlbum.current === (a?.id ?? null) ? "Subiendo…" : <><PlusIcon /> Fotos y videos</>}
+                    </button>
+                  )
+                )}
               </div>
-              <PhotoOrder index={i} total={privatePhotos.length} disabled={mediaLocked} onMove={(step) => reorder(privatePhotos, i, i + step)} />
             </div>
-          ))}
-          {privatePhotos.length < 40 && (
-            preparing === "private" ? <PhotoPreparing /> : (
-              <button className="photos__add" onClick={() => privateFileRef.current?.click()} disabled={mediaLocked}>
-                {uploading ? "Subiendo…" : <><PlusIcon /> Fotos y videos</>}
-              </button>
-            )
-          )}
-        </div>
+          );
+        })}
+        {albums.length > 0 && albums.length < MAX_ALBUMS && <div className="album-edit__new"><NewAlbum disabled={mediaLocked} onCreate={createAlbum} /></div>}
         {progress && (
           <p className="muted small" role="status">
             Subiendo {progress.done + 1} de {progress.total}{progress.video ? " · los videos tardan un poco más en procesarse" : ""}…
           </p>
         )}
         <div className="album-access__heading">
-          <h3 className="subhead" ref={grantsHeading} tabIndex={-1}>Acceso al álbum</h3>
+          <h3 className="subhead" ref={grantsHeading} tabIndex={-1}>Quién ve tus álbumes</h3>
           {!!grants.length && <button type="button" className="btn btn--small btn--ghost btn--dangertext" disabled={mediaLocked} onClick={revokeAll}>Quitar todos los accesos</button>}
         </div>
         {grantFeedback && <p className="muted small" role="status">{grantFeedback}</p>}
@@ -376,13 +451,13 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
           <>
             <ul className="blocked grants">
               {grants.map((g) => (
-                <li key={g.id}>
+                <li key={`${g.id}-${g.albumId}`}>
                   <Avatar src={g.photo} name={g.name} size={36} />
                   <span className="grants__who">
                     <Link to={`/perfil/${g.id}`}>{g.name}</Link>
-                    <small className="muted">{untilLabel(g.expiresAt)}</small>
+                    <small className="muted">{g.albumName} · {untilLabel(g.expiresAt)}</small>
                   </span>
-                  <button className="linkbtn" disabled={mediaLocked} onClick={() => revoke(g.id)}>Quitar</button>
+                  <button className="linkbtn" disabled={mediaLocked} onClick={() => revoke(g)} aria-label={`Quitarle ${g.albumName} a ${g.name}`}>Quitar</button>
                   <button className="linkbtn linkbtn--danger" disabled={mediaLocked} onClick={() => blockFromAlbum(g)}>Bloquear</button>
                 </li>
               ))}
@@ -403,9 +478,11 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
             onUpload={(file) => uploadCrop(cropBatch, file)}
           />
         )}
-        {viewing != null && (
-          <AlbumViewer items={privatePhotos} start={viewing} title="Tu álbum privado" onClose={() => setViewing(null)} />
-        )}
+        {viewing && (() => {
+          const a = albums.find((x) => x.id === viewing.albumId);
+          const items = privatePhotos.filter((p) => p.albumId === viewing.albumId);
+          return a && items.length ? <AlbumViewer items={items} start={viewing.index} title={a.name} onClose={() => setViewing(null)} /> : null;
+        })()}
       </section>
 
       <form className="section form profile-editor__form" onSubmit={save}>
@@ -431,6 +508,7 @@ function ProfileEditor({ profile, photos, reload }: { profile: Profile; photos: 
           <Select label="Rol" value={form.position} options={POSITIONS} onChange={(v) => set("position", v)} />
           <Select label="Relación" value={form.relationship} options={RELATIONSHIP} onChange={(v) => set("relationship", v)} />
           <Select label="Pronombres" value={form.pronouns} options={PRONOUNS} onChange={(v) => set("pronouns", v)} />
+          <HasPlaceSelect value={form.hasPlace} onChange={(v) => set("hasPlace", v)} />
         </div>
         <MultiChips label="Tribus" value={form.tribes} options={TRIBES} onChange={(v) => set("tribes", v)} />
         <MultiChips label="Busco" value={form.lookingFor} options={LOOKING_FOR} onChange={(v) => set("lookingFor", v)} />
