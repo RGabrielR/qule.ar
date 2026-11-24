@@ -1,5 +1,5 @@
 import { ChatPresenceDot } from "../features/messages/chatPresence";
-import { compareDmOrder, DM_EVENTS, type DmReadReceipt } from "@mortero/shared/realtime";
+import { compareDmOrder, DM_EVENTS, type DmReadReceipt, type DmSettingsChange } from "@mortero/shared/realtime";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, getSocket, upload, type ChatContact, type Dm, type ReactionEvent } from "../api";
@@ -17,6 +17,8 @@ import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../featur
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
 import { Watermark } from "../features/photos/Watermark";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
+import { useConversationActions } from "../features/messages/ConversationActions";
+import { ConversationHeaderMenu } from "../features/messages/ConversationHeaderMenu";
 
 /** Texto corto para la cita en el composer y en la burbuja. */
 function replyPreview(m: Dm) {
@@ -32,7 +34,10 @@ export function Conversation() {
   const { me } = useMe();
   const nav = useNavigate();
   const goBack = useSectionBack("/mensajes");
-  const [other, setOther] = useState<ChatContact | null>(null);
+  const [details, setDetails] = useState<{ id: string; other?: ChatContact; muted: boolean }>();
+  const other = details?.id === id ? details.other : undefined;
+  const muted = details?.id === id && details.muted;
+  const { act, dialog, errorNotice } = useConversationActions(() => nav("/mensajes", { replace: true }));
   const [messages, setMessages] = useState<Dm[]>([]);
   const [seen, setSeen] = useState<{ conversationId: string; readAtById: Map<string, string>; through?: Pick<Dm, "createdAt" | "id"> }>();
   const [text, setText] = useDraft(`dm:${me?.user.id ?? ""}:${id}`);
@@ -66,8 +71,8 @@ export function Conversation() {
       beforeHistory?.push(update);
       setMessages(update);
     };
-    api<{ other: ChatContact }>(`/conversations/${id}`)
-      .then((c) => alive && setOther(c.other))
+    api<{ id: string; other?: ChatContact; muted: boolean }>(`/conversations/${id}`)
+      .then((c) => alive && setDetails(c))
       .catch(() => nav("/mensajes", { replace: true }));
     api<{ messages: Dm[]; hasMore: boolean }>(`/conversations/${id}/messages`).then((d) => {
       if (!alive) return;
@@ -115,6 +120,11 @@ export function Conversation() {
         .filter((m) => m.id !== p.id)
         .map((m) => (m.replyTo?.id === p.id ? { ...m, replyTo: { ...m.replyTo, authorName: null, body: null } } : m)));
     };
+    const onSettings = (event: DmSettingsChange) => {
+      if (event.conversationId !== id) return;
+      if (event.change === "cleared") nav("/mensajes", { replace: true });
+      else setDetails((current) => current?.id === id ? { ...current, muted: event.muted } : current);
+    };
     const onOpened = (p: { conversationId: string; id: string }) => {
       if (p.conversationId === id) applyMessageUpdate((list) => list.map((m) => (m.id === p.id ? { ...m, opened: true } : m)));
     };
@@ -133,6 +143,7 @@ export function Conversation() {
     s.on(DM_EVENTS.updated, onUpdated);
     s.on(DM_EVENTS.read, onRead);
     s.on(DM_EVENTS.deleted, onDeleted);
+    s.on(DM_EVENTS.settings, onSettings);
     s.on(DM_EVENTS.opened, onOpened);
     s.on(DM_EVENTS.typing, onTyping);
     return () => {
@@ -143,6 +154,7 @@ export function Conversation() {
       s.off(DM_EVENTS.updated, onUpdated);
       s.off(DM_EVENTS.read, onRead);
       s.off(DM_EVENTS.deleted, onDeleted);
+      s.off(DM_EVENTS.settings, onSettings);
       s.off(DM_EVENTS.opened, onOpened);
       s.off(DM_EVENTS.typing, onTyping);
       clearTimeout(typingTimer.current);
@@ -298,7 +310,14 @@ export function Conversation() {
             </span>
           </Link>
         )}
+        {other && (
+          <ConversationHeaderMenu key={id} muted={muted} onAction={(action) => void act(action, { id, other, muted }, (next) => {
+            setDetails((current) => current?.id === id ? { ...current, muted: next } : current);
+          })} />
+        )}
       </header>
+
+      {errorNotice}
 
       <div className="chat__list chat__list--dm" role="log" aria-label="Mensajes" ref={listRef} onScroll={onListScroll}>
         {messages.map((m) => {
@@ -369,7 +388,10 @@ export function Conversation() {
                   <button
                     className="iconbtn bubble__more"
                     aria-label="Reaccionar u opciones del mensaje" aria-expanded={msgMenu === m.id} aria-controls={msgMenu === m.id ? `message-options-${m.id}` : undefined}
-                    onClick={() => setMsgMenu(msgMenu === m.id ? null : m.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMsgMenu(msgMenu === m.id ? null : m.id);
+                    }}
                   >
                     <DotsIcon />
                   </button>
@@ -473,6 +495,7 @@ export function Conversation() {
       </form>
 
       {openPhoto && <ChatPhotoViewer src={openPhoto} watermark={openPhotoMessage?.senderId !== myId} onClose={() => setPhotoMessageId(null)} />}
+      {dialog}
       {viewer && <ExpiringViewer src={viewer.src} seconds={viewer.seconds} onClose={() => setViewer(null)} />}
     </div>
   );

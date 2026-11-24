@@ -92,3 +92,6 @@ export const PhraseIcon = () => (
 export const BellIcon = () => (
   <svg {...base} width={18} height={18}><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9Z" /><path d="M10 19.5a2.2 2.2 0 0 0 4 0" /></svg>
 );
+export const BellOffIcon = () => (
+  <svg {...base} width={16} height={16}><path d="m3 3 18 18M6 7a7 7 0 0 0-.5 2c0 5-2 6.5-2 6.5H15m4.5-1A13 13 0 0 1 18 9a6 6 0 0 0-8.3-5.5M10 19.5a2.2 2.2 0 0 0 4 0" /></svg>
+);

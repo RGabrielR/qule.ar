@@ -6,6 +6,7 @@ export const DM_EVENTS = {
   opened: "dm:opened",
   typing: "dm:typing",
   access: "dm:access",
+  settings: "dm:settings",
 } as const;
 
 /**
@@ -21,6 +22,10 @@ export const SOCKET_ERRORS = {
 } as const;
 
 export const SOCKET_RETRY_ERRORS: readonly string[] = [SOCKET_ERRORS.tooManyAttempts, SOCKET_ERRORS.tooManySockets, SOCKET_ERRORS.closed];
+
+export type DmSettingsChange = { conversationId: string } & (
+  { change: "muted"; muted: boolean } | { change: "cleared" }
+);
 
 export const INBOX_LIMIT = 100;
 export const READ_RECEIPT_LIMIT = 100;

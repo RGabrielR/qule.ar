@@ -263,6 +263,6 @@ export type MyInvite = {
 export const ROLE_LABEL: Record<Role, string> = { owner: "Dueño", moderator: "Moderador", member: "Miembro" };
 
 export type ChatContact = Author & { presence?: "online" | "recent" };
-export type ConversationSummary = { id: string; lastMessageAt: string; other: ChatContact; last: Dm; unread: number };
+export type ConversationSummary = { id: string; lastMessageAt: string; other?: ChatContact; last: Dm; unread: number; muted: boolean };
 
 export type Viewer = Author & { viewedAt: string };

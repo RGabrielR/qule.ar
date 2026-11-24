@@ -1,5 +1,5 @@
-import { DM_EVENTS, INBOX_LIMIT, READ_RECEIPT_LIMIT, type DmReadReceipt } from "@mortero/shared/realtime";
-import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { DM_EVENTS, INBOX_LIMIT, READ_RECEIPT_LIMIT, type DmReadReceipt, type DmSettingsChange } from "@mortero/shared/realtime";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, notExists, or, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -13,12 +13,12 @@ import { distanceLabel, visibleKm } from "../geo.js";
 import { deleteImage, MAX_UPLOAD_BYTES, saveImage } from "../storage.js";
 import { albumAccess, markAlbumNoticesRevoked, recordView } from "./premium.js";
 import { myRecentToque } from "./toques.js";
-import { pushTo } from "../push.js";
+import { pushDm } from "../push.js";
 import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
 import { limit } from "../ratelimit.js";
 
-const { profile, photo, block, report, conversation, directMessage } = schema;
+const { profile, photo, block, report, conversation, conversationSettings, directMessage } = schema;
 
 export const socialRoutes = new Hono<AppEnv>();
 for (const p of ["/users/*", "/conversations", "/conversations/*", "/blocks", "/blocks/*", "/reports"]) {
@@ -157,6 +157,17 @@ async function replyToIdFor(replyToId: string | undefined, conversationId: strin
   return orig.id;
 }
 
+function settingsFor(userId: string, conversationId: string | SQLWrapper) {
+  return and(eq(conversationSettings.userId, userId), eq(conversationSettings.conversationId, conversationId));
+}
+
+function visibleDm(userId: string, message: { conversationId: SQLWrapper; createdAt: SQLWrapper } = directMessage) {
+  return notExists(db.select({ visible: sql`1` }).from(conversationSettings).where(and(
+    settingsFor(userId, message.conversationId),
+    gte(conversationSettings.clearedAt, message.createdAt),
+  )));
+}
+
 /** El acceso vigente determina el estado visible. Consultarlo nunca modifica el aviso. */
 async function albumNoticeStates(
   meId: string,
@@ -201,51 +212,39 @@ async function albumNoticeStates(
 
 socialRoutes.get("/conversations", async (c) => {
   const me = c.get("user");
-  const convs = await db
+  const otherId = sql<string>`case when ${conversation.userA} = ${me.id} then ${conversation.userB} else ${conversation.userA} end`;
+  const blocked = db.select({ blocked: sql`1` }).from(block).where(or(
+    and(eq(block.blockerId, me.id), eq(block.blockedId, otherId)),
+    and(eq(block.blockedId, me.id), eq(block.blockerId, otherId)),
+  ));
+  // El índice por conversación y fecha permite buscar solo el último mensaje visible de cada chat.
+  const lastMessage = db.select().from(directMessage)
+    .where(and(eq(directMessage.conversationId, conversation.id), visibleDm(me.id)))
+    .orderBy(desc(directMessage.createdAt), desc(directMessage.id)).limit(1).as("last_message");
+  const rows = await db
     .select()
-    .from(conversation)
-    .where(or(eq(conversation.userA, me.id), eq(conversation.userB, me.id)))
+    .from(conversation).innerJoinLateral(lastMessage, sql`true`)
+    .leftJoin(conversationSettings, settingsFor(me.id, conversation.id))
+    .where(and(or(eq(conversation.userA, me.id), eq(conversation.userB, me.id)), notExists(blocked)))
     .orderBy(desc(conversation.lastMessageAt), desc(conversation.id))
     .limit(INBOX_LIMIT);
-  if (!convs.length) return c.json([]);
-  const otherIdFor = (cv: typeof conversation.$inferSelect) => cv.userA === me.id ? cv.userB : cv.userA;
-  const others = convs.map(otherIdFor);
-  const blockedRows = await db
-    .select()
-    .from(block)
-    .where(or(
-      and(eq(block.blockerId, me.id), inArray(block.blockedId, others)),
-      and(eq(block.blockedId, me.id), inArray(block.blockerId, others)),
-    ));
-  const blocked = new Set(blockedRows.map((r) => (r.blockerId === me.id ? r.blockedId : r.blockerId)));
-
-  const visible = convs.filter((cv) => !blocked.has(otherIdFor(cv)));
+  const visible = rows.map(({ conversation: cv, last_message: last, conversation_settings: settings }) => ({
+    id: cv.id, lastMessageAt: cv.lastMessageAt, otherId: cv.userA === me.id ? cv.userB : cv.userA, last, muted: settings?.muted ?? false,
+  }));
   if (!visible.length) return c.json([]);
   const ids = visible.map((cv) => cv.id);
-  // El índice por conversación y fecha permite buscar solo el último mensaje de cada chat.
-  const lastMessage = db.select().from(directMessage)
-    .where(eq(directMessage.conversationId, conversation.id))
-    .orderBy(desc(directMessage.createdAt), desc(directMessage.id)).limit(1).as("last_message");
-  const [authors, latest, unreadCounts] = await Promise.all([
-    authorsFor(visible.map(otherIdFor), { presence: true }),
-    db.select().from(conversation).innerJoinLateral(lastMessage, sql`true`).where(inArray(conversation.id, ids)),
+  const [authors, unreadCounts] = await Promise.all([
+    authorsFor(visible.map((cv) => cv.otherId), { presence: true }),
     db.select({ id: directMessage.conversationId, unread: sql<number>`count(*)::int` }).from(directMessage)
-      .where(and(inArray(directMessage.conversationId, ids), ne(directMessage.senderId, me.id), isNull(directMessage.readAt)))
+      .where(and(inArray(directMessage.conversationId, ids), ne(directMessage.senderId, me.id), isNull(directMessage.readAt), visibleDm(me.id)))
       .groupBy(directMessage.conversationId),
   ]);
-  const latestById = new Map(latest.map(({ last_message }) => [last_message.conversationId, last_message]));
-  const states = await albumNoticeStates(me.id, visible.flatMap((cv) => {
-    const message = latestById.get(cv.id);
-    return message ? [{ message, otherId: otherIdFor(cv) }] : [];
-  }));
   const unreadById = new Map(unreadCounts.map((r) => [r.id, r.unread]));
-  return c.json(visible.flatMap((cv) => {
-    const last = latestById.get(cv.id);
-    return last ? [{
-      id: cv.id, lastMessageAt: cv.lastMessageAt.toISOString(),
-      other: authors.get(otherIdFor(cv)), last: { ...serializeDm(last), ...states.get(last.id) }, unread: unreadById.get(cv.id) ?? 0,
-    }] : [];
-  }));
+  const states = await albumNoticeStates(me.id, visible.map((cv) => ({ message: cv.last, otherId: cv.otherId })));
+  return c.json(visible.map((cv) => ({
+    id: cv.id, lastMessageAt: cv.lastMessageAt.toISOString(), muted: cv.muted,
+    other: authors.get(cv.otherId), last: { ...serializeDm(cv.last), ...states.get(cv.last.id) }, unread: unreadById.get(cv.id) ?? 0,
+  })));
 });
 
 /** Abre (o crea) la conversación con alguien. */
@@ -274,8 +273,37 @@ socialRoutes.get("/conversations/:id", async (c) => {
   const me = c.get("user");
   const { conv, otherId } = await myConversation(c.req.param("id"), me.id);
   if (await isBlocked(me.id, otherId)) return c.notFound();
-  const authors = await authorsFor([otherId], { presence: true });
-  return c.json({ id: conv.id, other: authors.get(otherId) });
+  const [authors, [settings]] = await Promise.all([
+    authorsFor([otherId], { presence: true }),
+    db.select({ muted: conversationSettings.muted }).from(conversationSettings).where(settingsFor(me.id, conv.id)),
+  ]);
+  return c.json({ id: conv.id, other: authors.get(otherId), muted: settings?.muted ?? false });
+});
+
+socialRoutes.put("/conversations/:id/notifications", async (c) => {
+  const { id: userId } = c.get("user");
+  const { conv, otherId } = await myConversation(c.req.param("id"), userId);
+  if (await isBlocked(userId, otherId)) return c.notFound();
+  const input = z.object({ muted: z.boolean() }).safeParse(await c.req.json().catch(() => null));
+  if (!input.success) throw new HTTPException(400, { message: "Elegí si querés recibir avisos de este chat" });
+  const { muted } = input.data;
+  await db.insert(conversationSettings).values({ conversationId: conv.id, userId, muted })
+    .onConflictDoUpdate({ target: [conversationSettings.userId, conversationSettings.conversationId], set: { muted } });
+  emitToUser(userId, DM_EVENTS.settings, { conversationId: conv.id, change: "muted", muted } satisfies DmSettingsChange);
+  return c.json({ muted });
+});
+
+socialRoutes.delete("/conversations/:id", async (c) => {
+  const { id: userId } = c.get("user");
+  const { conv } = await myConversation(c.req.param("id"), userId);
+  const clearedAt = new Date();
+  await db.insert(conversationSettings).values({ conversationId: conv.id, userId, clearedAt })
+    .onConflictDoUpdate({
+      target: [conversationSettings.userId, conversationSettings.conversationId],
+      set: { clearedAt: sql`greatest(${conversationSettings.clearedAt}, ${clearedAt.toISOString()})` },
+    });
+  emitToUser(userId, DM_EVENTS.settings, { conversationId: conv.id, change: "cleared" } satisfies DmSettingsChange);
+  return c.json({ ok: true });
 });
 
 socialRoutes.get("/conversations/:id/summary", async (c) => {
@@ -285,12 +313,14 @@ socialRoutes.get("/conversations/:id/summary", async (c) => {
 
   const unread = alias(directMessage, "unread");
   const unreadCount = db.select({ count: sql<number>`count(*)::int` }).from(unread)
-    .where(and(eq(unread.conversationId, conv.id), eq(unread.senderId, otherId), isNull(unread.readAt)));
+    .where(and(eq(unread.conversationId, conv.id), eq(unread.senderId, otherId), isNull(unread.readAt), visibleDm(me.id, unread)));
   const [last] = await db.select({
     message: directMessage,
     unread: sql<number>`(${unreadCount})`.as("unread_count"),
+    muted: conversationSettings.muted,
   }).from(directMessage)
-    .where(eq(directMessage.conversationId, conv.id))
+    .leftJoin(conversationSettings, settingsFor(me.id, conv.id))
+    .where(and(eq(directMessage.conversationId, conv.id), visibleDm(me.id)))
     .orderBy(desc(directMessage.createdAt), desc(directMessage.id))
     .limit(1);
   if (!last) return c.json(null);
@@ -300,7 +330,7 @@ socialRoutes.get("/conversations/:id/summary", async (c) => {
   ]);
   return c.json({
     id: conv.id, lastMessageAt: new Date(Math.max(conv.lastMessageAt.getTime(), last.message.createdAt.getTime())).toISOString(),
-    other: authors.get(otherId), last: { ...serializeDm(last.message), ...states.get(last.message.id) }, unread: last.unread,
+    other: authors.get(otherId), last: { ...serializeDm(last.message), ...states.get(last.message.id) }, unread: last.unread, muted: last.muted ?? false,
   });
 });
 
@@ -309,7 +339,7 @@ socialRoutes.get("/conversations/:id/messages", async (c) => {
   const { conv, otherId } = await myConversation(c.req.param("id"), me.id);
   if (await isBlocked(me.id, otherId)) return c.notFound();
   const before = c.req.query("before");
-  const conds = [eq(directMessage.conversationId, conv.id)];
+  const conds = [eq(directMessage.conversationId, conv.id), visibleDm(me.id)];
   if (before) conds.push(lt(directMessage.createdAt, new Date(before)));
   const rows = await db
     .select({ message: directMessage, senderCreatedAt: schema.user.createdAt })
@@ -374,10 +404,7 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
   const msg = { ...serialized, canOpenLinks: canOpenLinks(row.createdAt, me.createdAt) };
   emitToUser(me.id, DM_EVENTS.message, msg);
   emitToUser(otherId, DM_EVENTS.message, msg);
-  // Notificación discreta (sin nombre ni contenido). Se manda siempre: si la app está abierta y a la vista,
-  // el service worker no la muestra. Antes se salteaba si "estaba en línea", y en el celu con la app
-  // minimizada la conexión queda abierta un rato y el aviso nunca llegaba.
-  pushTo(otherId, { title: "Te llegó un mensaje", body: "Abrí el chat para leerlo.", url: `/mensajes/${conv.id}`, tag: `dm-${conv.id}`, kind: "mensajes" }).catch(() => {});
+  pushDm(otherId, conv.id).catch(() => {});
   return c.json(msg);
 });
 
@@ -398,6 +425,7 @@ socialRoutes.post("/conversations/:id/messages/:mid/open", async (c) => {
       eq(directMessage.expiring, true),
       ne(directMessage.senderId, me.id),
       isNull(directMessage.openedAt),
+      visibleDm(me.id),
     ))
     .returning();
   if (!row?.photoKey) throw new HTTPException(410, { message: "Esta foto ya se vio" });
@@ -457,7 +485,7 @@ socialRoutes.post("/conversations/:id/read", async (c) => {
         .where(and(eq(oldest.id, beforeId), eq(oldest.conversationId, conv.id)))
     : undefined;
   const now = new Date();
-  const unreadFromOther = and(eq(directMessage.conversationId, conv.id), eq(directMessage.senderId, otherId), isNull(directMessage.readAt));
+  const unreadFromOther = and(eq(directMessage.conversationId, conv.id), eq(directMessage.senderId, otherId), isNull(directMessage.readAt), visibleDm(me.id));
   const receipt = await db.transaction(async (tx) => {
     const explicit = messageIds.length ? await tx.update(directMessage).set({ readAt: now })
       .where(and(unreadFromOther, inArray(directMessage.id, messageIds))).returning({ id: directMessage.id }) : [];

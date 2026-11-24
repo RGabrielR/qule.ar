@@ -7,7 +7,7 @@ import { z } from "zod";
 import { db, schema } from "../db/index.js";
 import { authorsFor, blockedWith, isBlocked, newId, reactionsFor, requireProfile, requireUser, serializeDm, type AppEnv } from "../lib.js";
 import { emitToUser } from "../realtime.js";
-import { pushTo } from "../push.js";
+import { pushDm } from "../push.js";
 import { deleteImageUnlessEvidence } from "../moderation.js";
 import { defaultAlbum, MAX_ALBUM_NAME, MAX_ALBUMS, myAlbums, renumberPhotos } from "../albums.js";
 
@@ -338,7 +338,7 @@ async function shareAlbum(ownerId: string, albumId: string, target: string, hour
     await emitNoticeUpdated(ownerId, target, row, expiresAtIso);
   }
   if (!hadAccess) {
-    pushTo(target, { title: "Te llegó un mensaje", body: "Abrí el chat para leerlo.", url: `/mensajes/${conv.id}`, tag: `dm-${conv.id}`, kind: "mensajes" }).catch(() => {});
+    pushDm(target, conv.id).catch(() => {});
   }
   return expiresAt;
 }
