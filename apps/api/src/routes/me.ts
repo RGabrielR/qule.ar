@@ -12,6 +12,7 @@ import { env } from "../env.js";
 import { issueChallenge } from "../botCheck.js";
 import { isListed } from "../verification.js";
 import { hasAlbumAccess } from "./premium.js";
+import { markAlbumImage, parseWatermarkKey, type Watermark } from "../albumWatermark.js";
 import { defaultAlbum, MAX_ALBUM_ITEMS, myAlbums, renumberPhotos } from "../albums.js";
 
 import { accessFor } from "../staff.js";
@@ -26,6 +27,7 @@ import { forgetFile, isKnownPublic, rememberPublic, requireUserForFiles } from "
 
 const { profile, photo, user, group, groupMember, directMessage, conversation } = schema;
 const MAX_PHOTOS = 6;
+const albumWatermarkKey = parseWatermarkKey(process.env.ALBUM_WATERMARK_KEY);
 /** El tope de archivos privados es por persona, sumando todos sus álbumes. */
 const albumFullMessage = `Entre todos tus álbumes podés tener hasta ${MAX_ALBUM_ITEMS} fotos y videos`;
 
@@ -54,7 +56,7 @@ export const meRoutes = new Hono<AppEnv>();
 
 // Config pública: qué métodos de login hay
 // passwordReset: sin mails configurados no ofrecemos recuperar la contraseña (en desarrollo sí: el mail sale por consola)
-meRoutes.get("/config", (c) => c.json({ google: googleEnabled, passwordReset: mailEnabled || process.env.NODE_ENV !== "production" }));
+meRoutes.get("/config", (c) => c.json({ google: googleEnabled, reportCapture: Boolean(albumWatermarkKey), passwordReset: mailEnabled || process.env.NODE_ENV !== "production" }));
 
 // Desafío anti-bots para crear una cuenta con mail (ver botCheck.ts). bits 0: no hace falta.
 meRoutes.get("/signup-challenge", (c) => {
@@ -100,13 +102,20 @@ meRoutes.get("/files/:key", requireUserForFiles, async (c) => {
   const noStore = Boolean(ph?.isPrivate || dm?.expiring);
   // Foto de perfil pública o de un grupo activo: la puede ver cualquiera con sesión, se recuerda un minuto
   if ((ph && !ph.isPrivate) || (grp && !grp.removedAt)) rememberPublic(key);
-  return sendImage(c, key, thumb, noStore);
+  const watermark = albumWatermarkKey && ph?.isPrivate && ph.kind === "photo" && ph.userId !== viewer
+    ? { secret: albumWatermarkKey, fileKey: key, viewerId: viewer, thumb }
+    : undefined;
+  return sendImage(c, key, thumb, noStore, watermark);
 });
 
-async function sendImage(c: Context<AppEnv>, key: string, thumb: boolean, noStore: boolean) {
+async function sendImage(
+  c: Context<AppEnv>, key: string, thumb: boolean, noStore: boolean,
+  watermark?: Watermark,
+) {
   const buf = await readImage(key, thumb);
   if (!buf) return c.notFound();
-  return c.body(new Uint8Array(buf), 200, {
+  const body = watermark ? await markAlbumImage(buf, watermark) : buf;
+  return c.body(new Uint8Array(body), 200, {
     "Content-Type": "image/webp",
     "Cache-Control": noStore ? "no-store" : "private, max-age=31536000, immutable",
   });

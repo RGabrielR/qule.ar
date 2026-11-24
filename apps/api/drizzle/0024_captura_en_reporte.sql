@@ -1,0 +1,1 @@
+ALTER TABLE "report" ADD COLUMN "capture_key" text;

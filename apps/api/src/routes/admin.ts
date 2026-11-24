@@ -11,6 +11,7 @@ import { pushEnabled, pushTo, vapidPublicKey } from "../push.js";
 import { disconnectUser, emitToGroup, emitToUser } from "../realtime.js";
 import { deleteImage } from "../storage.js";
 import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
+import { canVerifyReportPhoto, reportPhotoRoutes } from "./reportPhotos.js";
 import { removeGroup } from "./groups.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
@@ -66,6 +67,8 @@ adminRoutes.delete("/push/subscribe", requireUser, async (c) => {
 
 adminRoutes.use("/admin/*", requireUser, requireAccess("owner", ...STAFF_PERMISSIONS));
 
+adminRoutes.route("/admin/reports/:id/photo-verification", reportPhotoRoutes);
+
 adminRoutes.get("/admin/stats", async (c) => {
   const count = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
   return c.json({
@@ -80,7 +83,10 @@ adminRoutes.get("/admin/stats", async (c) => {
 /** Reportes, con el mensaje reportado (si hay) y el historial de la persona reportada. */
 adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (c) => {
   // Quién reportó solo lo ve la administración general: al resto no le hace falta para decidir
-  const owner = (await accessFor(c.get("user"))).includes("owner");
+  const actor = c.get("user").id;
+  const access = await accessFor(c.get("user"));
+  const owner = access.includes("owner");
+  const canVerifyPhotos = access.includes("reports") && access.includes("photoVerification");
   const status = c.req.query("status") === "closed" ? "closed" : "open";
   const rows = await db
     .select()
@@ -180,7 +186,8 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
       automatic: !r.reporterId && (r.details ?? "").startsWith(AUTO_DETAILS_PREFIX),
       targetSuspendedAt: suspended.get(tid) ?? null,
       targetReportCount: totalBy.get(tid) ?? 0,
-      evidenceFiles: r.evidenceKeys.length,
+      evidenceFiles: r.evidenceKeys.length + Number(Boolean(r.captureKey)),
+      photoVerification: canVerifyPhotos && canVerifyReportPhoto(r, actor),
       urgent: isUrgent(r.reason),
       targetAutoHidden: hidden.has(tid),
     });
@@ -493,8 +500,11 @@ adminRoutes.post("/admin/team", requireAccess("owner"), async (c) => {
   if (u.id === me.id) throw new HTTPException(400, { message: "Ya tenés todos los permisos" });
   if (isOwner(u)) throw new HTTPException(400, { message: "Esa cuenta ya tiene administración general" });
   const perms = [...new Set(permissions)];
+  if (perms.includes("photoVerification") && !perms.includes("reports")) {
+    throw new HTTPException(400, { message: "Verificar fotos también requiere el permiso Reportes" });
+  }
   await grant(u.id, perms, me.id);
-  const names: Record<string, string> = { reports: "Reportes", sanctions: "Suspensiones", appeals: "Revisiones" };
+  const names: Record<string, string> = { reports: "Reportes", sanctions: "Suspensiones", appeals: "Revisiones", photoVerification: "Verificar fotos" };
   await logAction(me.id, perms.length ? "Cambió permisos" : "Sacó todos los permisos", u.id, perms.map((p) => names[p]).join(", ") || null);
   return c.json({ ok: true });
 });

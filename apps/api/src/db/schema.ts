@@ -188,6 +188,7 @@ export const report = pgTable("report", {
   // Cifrada (ver src/crypt.ts): no se puede comparar en la base, se compara después de leerla
   messageBody: encryptedMessageText("message_body"),
   evidenceKeys: jsonb("evidence_keys").$type<string[]>().notNull().default([]),
+  captureKey: text("capture_key"),
   reason: text("reason").notNull(),
   details: text("details"),
   status: text("status").notNull().default("open"), // open | dismissed | actioned

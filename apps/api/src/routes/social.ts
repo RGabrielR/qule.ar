@@ -10,7 +10,7 @@ import {
 } from "../lib.js";
 import { emitToUser, isOnline } from "../realtime.js";
 import { distanceLabel, visibleKm } from "../geo.js";
-import { deleteImage, MAX_UPLOAD_BYTES, saveImage } from "../storage.js";
+import { deleteImage, deleteReportCapture, MAX_UPLOAD_BYTES, saveImage, saveReportCapture } from "../storage.js";
 import { albumAccess, markAlbumNoticesRevoked, recordView } from "./premium.js";
 import { myRecentToque } from "./toques.js";
 import { pushTo } from "../push.js";
@@ -527,6 +527,9 @@ export { REPORT_REASONS } from "../moderation.js";
 socialRoutes.post("/reports", async (c) => {
   const me = c.get("user");
   await limit(me.id, "report");
+  const multipart = /^multipart\/form-data(?:;|$)/i.test(c.req.header("content-type") ?? "");
+  const body = await (multipart ? c.req.parseBody() : c.req.json()).catch(() => null);
+  const file: unknown = multipart ? body?.file : undefined;
   const r = z
     .object({
       userId: z.string().optional(),
@@ -536,9 +539,17 @@ socialRoutes.post("/reports", async (c) => {
       messageId: z.string().optional(),
       messageKind: z.enum(["group", "dm"]).optional(),
     })
-    .safeParse(await c.req.json());
+    .safeParse(body);
   if (!r.success) throw new HTTPException(400, { message: "Elegí un motivo" });
   const { userId: maybeUser, groupId, ...rest } = r.data;
+
+  if (file !== undefined) {
+    if (!process.env.ALBUM_WATERMARK_KEY || groupId || rest.reason === "menor de edad" || me.id === maybeUser) {
+      throw new HTTPException(400, { message: "Este reporte no admite capturas adjuntas" });
+    }
+    if (!(file instanceof File) || !file.size) throw new HTTPException(400, { message: "Elegí una captura válida" });
+    if (file.size > MAX_UPLOAD_BYTES) throw new HTTPException(413, { message: "La captura supera los 12 MB" });
+  }
 
   // Reporte de un grupo: por su nombre, su descripción o lo que pasa adentro. Se guarda copia del nombre y la descripción.
   if (groupId) {
@@ -585,10 +596,23 @@ socialRoutes.post("/reports", async (c) => {
     evidenceKeys = pics.map((p) => p.key);
   }
   const [target] = await db.select({ name: profile.displayName }).from(profile).where(eq(profile.userId, userId));
-  await db.insert(report).values({
-    id: newId(), reporterId: me.id, targetUserId: userId, ...rest,
-    targetName: target?.name ?? null, messageBody, evidenceKeys,
-  });
+  let captureKey: string | null = null;
+  if (file instanceof File) {
+    try {
+      captureKey = await saveReportCapture(await file.arrayBuffer());
+    } catch {
+      throw new HTTPException(400, { message: "No pudimos leer la captura. Probá con JPG, PNG o WebP." });
+    }
+  }
+  try {
+    await db.insert(report).values({
+      id: newId(), reporterId: me.id, targetUserId: userId, ...rest,
+      targetName: target?.name ?? null, messageBody, evidenceKeys, captureKey,
+    });
+  } catch (error) {
+    if (captureKey) await deleteReportCapture(captureKey);
+    throw error;
+  }
   // Lo urgente (menores, contenido íntimo sin consentimiento, amenazas) le avisa a moderación al instante
   if (isUrgent(rest.reason)) notifyModeratorsUrgent(rest.reason).catch((e) => console.error("notifyModeratorsUrgent", e));
   return c.json({ ok: true });

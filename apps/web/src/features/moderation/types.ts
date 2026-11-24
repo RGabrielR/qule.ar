@@ -34,6 +34,7 @@ export type Report = {
   target: (Omit<Author, "id"> & { id: string | null }) | null;
   group: ReportedGroup | null;
   evidenceFiles: number;
+  photoVerification: boolean;
   targetSuspendedAt: string | null;
   targetReportCount: number;
 };

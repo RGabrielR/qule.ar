@@ -89,6 +89,14 @@ Al reportar, la app guarda una copia de lo reportado: el texto del mensaje y sus
 - Si el reporte **termina en una medida** (borrar el mensaje o suspender), la copia se conserva como prueba.
 - Los archivos guardados solo los puede pedir moderación. El panel dice cuántos hay, pero **no los muestra ni hace falta descargarlos**. Si una fiscalía los pide, quien administra el servidor los entrega.
 
+### Verificar fotos de álbumes privados
+
+Con el [piloto de marca invisible](ALBUM-WATERMARK.md) activo, abrí **Verificar foto** desde el reporte. La persona que reporta puede adjuntar una captura al enviar el reporte. Si la adjuntó, ya aparece cargada en Moderación. Elegí la foto original de una cuenta vinculada al caso e indicá el ID de la cuenta que querés verificar. Por defecto se propone la cuenta reportada. Podés ajustar el área en ambas imágenes si la captura incluye bordes o muestra solo una parte de la foto.
+
+El panel identifica quién subió la foto original. Si la marca coincide, también muestra a qué cuenta se entregó esa copia. La coincidencia es un indicio para revisar junto con la demás evidencia. Puede haber circulado entre varias personas antes de que se tomara la captura.
+
+La consulta queda en **Registro** con el reporte y la acción. La captura que adjunta la persona al reportar se guarda cifrada y se elimina si se descarta el reporte. Si moderación carga una captura solo para verificarla, el verificador no conserva el archivo. El panel habilita la herramienta en reportes de personas abiertos o que terminaron en una medida, con ambas cuentas identificadas. Los reportes por menor de edad siguen el protocolo correspondiente.
+
 ## Reglas para quien modera
 
 - **Mirá solo lo necesario** para resolver el reporte: el mensaje o el perfil reportado. Nada más. Son datos personales, y muchas veces sensibles (Ley 25.326).
@@ -106,6 +114,7 @@ Quien administra en general (las cuentas de `ADMIN_USER_IDS` o `ADMIN_EMAILS` en
 | Reportes | Ver los reportes, descartarlos y borrar el mensaje reportado. Ante un reporte por menor de edad, suspender de forma preventiva (ver abajo) |
 | Suspensiones | Suspender y reactivar cuentas |
 | Revisiones | Responder los pedidos de revisión de suspensiones (mantener o levantar) |
+| Verificar fotos | Comparar capturas con fotos de los álbumes privados de las cuentas vinculadas a un reporte. También requiere Reportes |
 
 **Suspensión preventiva por menor de edad.** Con un reporte abierto por "menor de edad" y indicios suficientes, quien tiene solo el permiso Reportes puede suspender la cuenta en el momento, sin esperar a alguien con Suspensiones. Le llega un aviso a quienes tienen Suspensiones (a la administración general, siempre) y la cuenta aparece en Suspendidas como "Preventiva, falta revisarla": otra persona la **mantiene** o **reactiva la cuenta**. Quien la hizo no la puede confirmar. Igual que cualquier suspensión, la persona puede pedir una revisión.
 

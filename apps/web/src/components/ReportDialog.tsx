@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { api } from "../api";
+import { useEffect, useState } from "react";
+import { api, upload } from "../api";
 import { REPORT_REASONS, URGENT_REASONS } from "../options";
 import { DialogFocus } from "./DialogFocus";
 
@@ -18,19 +18,39 @@ export function ReportDialog({ userId, groupId, name, messageId, messageKind, on
   const [details, setDetails] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
 
+  const [capturesEnabled, setCapturesEnabled] = useState(false);
+  const [capture, setCapture] = useState<File | null>(null);
+  const [error, setError] = useState("");
+  const showCapture = capturesEnabled && Boolean(userId) && !groupId && Boolean(reason) && reason !== "menor de edad";
+
+  useEffect(() => {
+    if (!userId || groupId) return;
+    const controller = new AbortController();
+    void api<{ reportCapture: boolean }>("/config", { signal: controller.signal })
+      .then(({ reportCapture }) => setCapturesEnabled(reportCapture)).catch(() => {});
+    return () => controller.abort();
+  }, [groupId, userId]);
+
   async function send() {
     setState("sending");
+    setError("");
     try {
-      await api("/reports", { method: "POST", json: { userId, groupId, reason, details: details || undefined, messageId, messageKind } });
+      const report = { userId, groupId, reason, details: details || undefined, messageId, messageKind };
+      if (showCapture && capture) {
+        await upload("/reports", capture, Object.fromEntries(Object.entries(report).filter((entry): entry is [string, string] => entry[1] !== undefined)));
+      } else {
+        await api("/reports", { method: "POST", json: report });
+      }
       setState("done");
-    } catch {
+    } catch (e) {
+      setError((e as Error).message);
       setState("error");
     }
   }
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal aria-labelledby="report-title" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet sheet--list report-dialog" role="dialog" aria-modal aria-labelledby="report-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
         {state === "done" ? (
           <>
@@ -45,7 +65,7 @@ export function ReportDialog({ userId, groupId, name, messageId, messageKind, on
             <h2 id="report-title">Reportar {groupId ? "el grupo " : messageId ? "mensaje de " : "a "}{name}</h2>
             <div className="chips">
               {REPORT_REASONS.map((r) => (
-                <button key={r} className={`chip ${reason === r ? "chip--on" : ""}`} onClick={() => setReason(r)}>
+                <button key={r} className={`chip ${reason === r ? "chip--on" : ""}`} disabled={state === "sending"} onClick={() => { setReason(r); if (r === "menor de edad") setCapture(null); }}>
                   {r}
                 </button>
               ))}
@@ -64,7 +84,15 @@ export function ReportDialog({ userId, groupId, name, messageId, messageKind, on
               value={details}
               onChange={(e) => setDetails(e.target.value)}
             />
-            {state === "error" && <p className="error">No se pudo mandar el reporte. Probá de nuevo.</p>}
+            {showCapture && (
+              <label className="field">
+                <span>Adjuntá una captura (opcional)</span>
+                <input className="input" type="file" accept="image/jpeg,image/png,image/webp" disabled={state === "sending"}
+                  onChange={(e) => setCapture(e.target.files?.[0] ?? null)} />
+                <span>Solo la ve el equipo autorizado de Moderación.</span>
+              </label>
+            )}
+            {state === "error" && <p className="error" role="alert">{error || "No se pudo mandar el reporte. Probá de nuevo."}</p>}
             <div className="row">
               <button className="btn" onClick={onClose}>Cancelar</button>
               <button className="btn btn--danger" disabled={!reason || state === "sending"} onClick={send}>

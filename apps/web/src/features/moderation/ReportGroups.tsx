@@ -5,6 +5,7 @@ import { Avatar } from "../../components/Avatar";
 import {
   filterGroups, groupReports, NO_FILTERS, type ReportedMessage, type ReportFilters, type ReportGroup, type ReportSort, type ReportType,
 } from "./groupReports";
+import { VerifyReportPhoto } from "./VerifyReportPhoto";
 import type { Report } from "./types";
 
 const PAGE = 30;
@@ -128,6 +129,8 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup }: {
   onRemoveGroup: (r: Report) => void;
 }) {
   const r = g.first;
+  const [verifying, setVerifying] = useState(false);
+  const verifiable = g.reports.filter((report) => report.photoVerification);
   const open = g.reports.filter((x) => x.status === "open");
   const isOpen = open.length > 0;
   // Los motivos de un perfil o un grupo (no de un mensaje) y los comentarios de quienes reportaron
@@ -203,6 +206,12 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup }: {
           {g.evidenceFiles === 1 ? "1 archivo guardado" : `${g.evidenceFiles} archivos guardados`} como prueba. No lo descargues: si hay que
           denunciar, lo pide la fiscalía (ver el protocolo).
         </p>
+      )}
+      {verifiable.length > 0 && (
+        <div className="rcard__actions">
+          <button type="button" className="btn btn--small" onClick={() => setVerifying(true)}>Verificar foto</button>
+          {verifying && <VerifyReportPhoto reports={verifiable} onClose={() => setVerifying(false)} />}
+        </div>
       )}
       {g.automatic && <p className="muted small">Alerta automática de la app: revisalo y decidí.</p>}
 

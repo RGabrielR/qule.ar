@@ -5,7 +5,7 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { BackIcon } from "../components/Icons";
 import { DialogFocus } from "../components/DialogFocus";
-import { PERMISSION_LABELS } from "../staff";
+import { PERMISSION_LABELS, toggleStaffPermission } from "../staff";
 import { ModerationNotices } from "../features/moderation/ModerationNotices";
 import { ReportGroups } from "../features/moderation/ReportGroups";
 import type { Report } from "../features/moderation/types";
@@ -479,7 +479,6 @@ function Team({ team, onChange }: { team: TeamMember[]; onChange: () => void }) 
     }
     setBusy(false);
   }
-  const toggle = (list: string[], p: string) => (list.includes(p) ? list.filter((x) => x !== p) : [...list, p]);
   return (
     <div className="stack admin__team">
       <p className="muted small">
@@ -499,7 +498,7 @@ function Team({ team, onChange }: { team: TeamMember[]; onChange: () => void }) 
               <div className="team__perms">
                 {PERMISSION_LABELS.map((p) => (
                   <label key={p.id} className="field--inline small">
-                    <input type="checkbox" disabled={busy} checked={m.permissions.includes(p.id)} onChange={() => save(m.id, toggle(m.permissions, p.id))} />
+                    <input type="checkbox" disabled={busy || (p.id === "photoVerification" && !m.permissions.includes("reports"))} checked={m.permissions.includes(p.id)} onChange={() => save(m.id, toggleStaffPermission(m.permissions, p.id))} />
                     {p.label}
                   </label>
                 ))}
@@ -519,7 +518,7 @@ function Team({ team, onChange }: { team: TeamMember[]; onChange: () => void }) 
         </label>
         {PERMISSION_LABELS.map((p) => (
           <label key={p.id} className="field--inline small">
-            <input type="checkbox" checked={perms.includes(p.id)} onChange={() => setPerms(toggle(perms, p.id))} />
+            <input type="checkbox" disabled={busy || (p.id === "photoVerification" && !perms.includes("reports"))} checked={perms.includes(p.id)} onChange={() => setPerms(toggleStaffPermission(perms, p.id))} />
             <span><b>{p.label}</b> <span className="muted">· {p.hint}</span></span>
           </label>
         ))}
