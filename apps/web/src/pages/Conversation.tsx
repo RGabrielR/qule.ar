@@ -247,7 +247,7 @@ export function Conversation() {
               ) : (
                 <>
                   {m.photo && <img className="bubble__photo" src={m.photo} alt="Foto enviada" loading="lazy" />}
-                  {m.body && <p><MessageText text={m.body} /></p>}
+                  {m.body && <p>{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>}
                 </>
               )}
               <time>{new Date(m.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</time>

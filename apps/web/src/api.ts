@@ -162,6 +162,7 @@ export type Dm = {
   senderId: string;
   kind: "text" | "photo" | "album";
   body: string | null;
+  canOpenLinks?: boolean;
   photo: string | null;
   expiring: boolean;
   opened: boolean;
