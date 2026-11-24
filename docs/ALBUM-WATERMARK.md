@@ -36,3 +36,15 @@ node --import tsx apps/api/scripts/measure-album-watermark.ts \
 En una prueba local con esas dos imágenes y el [retrato público de Eileen Collins](https://scikit-image.org/docs/stable/api/skimage.data.html#skimage.data.astronaut), se recuperó la marca en los seis archivos servidos y en sus seis variantes por cada prueba de recompresión JPEG q65, reducción al 50 % con JPEG q65, recorte central al 25 % del área y captura emulada a 375 px con DPR 2. A DPR 1 se recuperó en cinco de seis. Hubo cero coincidencias en 678 controles negativos del ensayo, incluidas cuentas distintas y copias sin marca.
 
 La mediana de cinco procesamientos por variante fue de 23 a 58 ms por foto y de 19 a 23 ms por miniatura. El PSNR frente a la referencia sin marca quedó entre 39,2 y 42,4 dB. Es una muestra chica de tiempo de procesamiento y distorsión de píxeles. Quedan por medir la apertura de álbumes bajo carga, los reenvíos en servicios reales, las capturas en celulares físicos y una foto de la pantalla tomada con otro celular.
+
+## Recorrido integrado con la marca visible
+
+En Chromium a 375 px, tomamos una captura del visor privado con la marca visible del PR #214 y la adjuntamos a un reporte. La verificación encontró la marca invisible en esa misma captura. Probamos confirmación y cancelación de la suspensión, la respuesta privada y su llegada al hilo abierto.
+
+1. [Visor privado con marca visible](evidencia/marca-invisible/01-marca-visible.jpg)
+2. [Captura adjunta en el formulario de reporte](evidencia/marca-invisible/02-adjuntar-captura.jpg)
+3. [Coincidencia en Moderación](evidencia/marca-invisible/03-coincidencia.jpg)
+4. [Decisión sobre la cuenta y respuesta enviada](evidencia/marca-invisible/04-accion-y-respuesta.jpg)
+5. [Respuesta en el hilo de Mis reportes](evidencia/marca-invisible/05-mis-reportes.jpg)
+
+Las cuentas del recorrido son de prueba. La foto de muestra es el [retrato público de Eileen Collins](https://scikit-image.org/docs/stable/api/skimage.data.html#skimage.data.astronaut).
