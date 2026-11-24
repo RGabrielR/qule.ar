@@ -1,3 +1,4 @@
+import { ChatPresenceDot } from "../features/messages/chatPresence";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useMe } from "../App";
@@ -59,7 +60,7 @@ export function Inbox() {
                   <Avatar src={c.other?.photo ?? null} name={c.other?.name ?? "?"} size={52} />
                   <div className="inbox__text">
                     <div className="inbox__top">
-                      <b>{c.other?.name ?? "Cuenta borrada"}</b>
+                      <b className="chat-contact-name"><ChatPresenceDot state={c.other?.presence} /><span>{c.other?.name ?? "Cuenta borrada"}</span></b>
                       <time>{ago(c.last.createdAt)}</time>
                     </div>
                     <p className="inbox__preview">{mine && "Vos: "}{preview}</p>

@@ -217,6 +217,7 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .inbox__item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
 .inbox__item:hover { background: var(--surface); }
 .inbox__text { flex: 1; min-width: 0; }
+.chat-contact-name { display: inline-flex; align-items: center; align-self: center; gap: 6px; vertical-align: middle; }
 .inbox__top { display: flex; justify-content: space-between; gap: 8px; }
 .inbox__top time { color: var(--muted); font-size: var(--text-xs); flex: none; }
 .inbox__preview { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-md); }

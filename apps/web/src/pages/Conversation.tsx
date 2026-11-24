@@ -1,7 +1,8 @@
+import { ChatPresenceDot } from "../features/messages/chatPresence";
 import { compareDmOrder, DM_EVENTS, type DmReadReceipt } from "@mortero/shared/realtime";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { api, getSocket, upload, type Author, type Dm, type ReactionEvent } from "../api";
+import { api, getSocket, upload, type ChatContact, type Dm, type ReactionEvent } from "../api";
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
@@ -18,7 +19,7 @@ export function Conversation() {
   const { me } = useMe();
   const nav = useNavigate();
   const goBack = useSectionBack("/mensajes");
-  const [other, setOther] = useState<Author | null>(null);
+  const [other, setOther] = useState<ChatContact | null>(null);
   const [messages, setMessages] = useState<Dm[]>([]);
   const [seen, setSeen] = useState<{ conversationId: string; ids: Set<string>; through?: Pick<Dm, "createdAt" | "id"> }>();
   const [text, setText] = useDraft(`dm:${me?.user.id ?? ""}:${id}`);
@@ -46,7 +47,7 @@ export function Conversation() {
       beforeHistory?.push(update);
       setMessages(update);
     };
-    api<{ other: Author }>(`/conversations/${id}`)
+    api<{ other: ChatContact }>(`/conversations/${id}`)
       .then((c) => alive && setOther(c.other))
       .catch(() => nav("/mensajes", { replace: true }));
     api<{ messages: Dm[]; hasMore: boolean }>(`/conversations/${id}/messages`).then((d) => {
@@ -213,7 +214,11 @@ export function Conversation() {
           <Link to={`/perfil/${other.id}`} className="topbar__who">
             <Avatar src={other.photo} name={other.name} size={36} />
             <span>
-              <b>{other.name}</b> <span className="muted">{other.age}</span>
+              <span className="chat-contact-name">
+                <ChatPresenceDot state={other.presence} />
+                <b>{other.name}</b>
+                <span className="muted">{other.age}</span>
+              </span>
               {typing && <span className="typing-label">escribiendo…</span>}
             </span>
           </Link>
