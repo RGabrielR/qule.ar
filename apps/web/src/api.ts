@@ -141,6 +141,7 @@ export type NearbyPerson = {
   name: string;
   age: number;
   photo: string | null;
+  coverPhoto: string | null;
   online: boolean;
   recent: boolean;
   distance: string | null;

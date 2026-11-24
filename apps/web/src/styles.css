@@ -263,6 +263,10 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .profile { padding-bottom: 32px; }
 .profile__photo { position: relative; isolation: isolate; aspect-ratio: 4 / 5; max-height: 70vh; width: 100%; background: var(--surface-2); overflow: hidden; }
 .profile__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.profile__cover-media { position: absolute; inset: 0; }
+.profile__cover-media img { position: absolute; inset: 0; }
+.profile__cover-media img[hidden] { visibility: hidden; }
+.profile__skeleton { position: absolute; inset: 0; background: linear-gradient(var(--surface-3), var(--surface-2)); }
 .profile__photo::after { content: ""; position: absolute; inset: auto 0 0; height: 45%; background: linear-gradient(transparent, var(--scrim-strong)); pointer-events: none; }
 .profile__photo > .iconbtn--float { z-index: var(--z-sticky); }
 .profile__nophoto { width: 100%; height: 100%; display: grid; place-items: center; font-family: var(--display); font-size: var(--display-xl); color: var(--accent); background: var(--accent-soft); }

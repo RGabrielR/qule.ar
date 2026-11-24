@@ -18,7 +18,7 @@ process.env.DATA_KEY ??= randomBytes(32).toString("base64");
 
 const { db, schema, runMigrations, closeDb } = await import("./db/index.js");
 const { nearbyPage, parseNearbyFilters } = await import("./routes/nearby.js");
-const { ageFrom, thumbUrl } = await import("./lib.js");
+const { ageFrom, imageUrl, thumbUrl } = await import("./lib.js");
 const { distanceLabel, visibleKm } = await import("./geo.js");
 const { REPORT_REASONS } = await import("./moderation.js");
 
@@ -130,7 +130,7 @@ async function reference(me: { userId: string; cellLat: number | null; cellLng: 
     hasMore: list.length > f.offset + 60,
     total: list.length,
     people: page.map(({ p, km, age }) => ({
-      id: p.userId, name: p.displayName, age, photo: thumbUrl(first.get(p.userId)), online: false,
+      id: p.userId, name: p.displayName, age, photo: thumbUrl(first.get(p.userId)), coverPhoto: imageUrl(first.get(p.userId)), online: false,
       recent: Date.now() - p.lastSeenAt.getTime() < 15 * 60_000, favorite: favs.has(p.userId),
       distance: km != null ? distanceLabel(km) : null,
     })),
