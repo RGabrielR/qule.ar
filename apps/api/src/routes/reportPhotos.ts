@@ -1,4 +1,5 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { REPORT_RESPONSE_EVENT } from "@mortero/shared/realtime";
+import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import sharp from "sharp";
@@ -6,6 +7,8 @@ import { z } from "zod";
 import { parseWatermarkKey, verifyAlbumImage } from "../albumWatermark.js";
 import { db, schema } from "../db/index.js";
 import type { AppEnv } from "../lib.js";
+import { emitToUser } from "../realtime.js";
+import { pushTo } from "../push.js";
 import { logAction, requireAccess } from "../staff.js";
 import { MAX_UPLOAD_BYTES, readImage, readReportCapture } from "../storage.js";
 
@@ -30,6 +33,38 @@ async function verifiableReport(reportId: string, actorId: string) {
   return { ...r, reporterId: r.reporterId, targetUserId: r.targetUserId };
 }
 
+export async function requireVerifiedPhotoAction(reportId: string, actorId: string, targetId?: string) {
+  const r = await verifiableReport(reportId, actorId);
+  if (!r.photoMatch) throw new HTTPException(409, { message: "Primero verificá una coincidencia en este reporte" });
+  if (targetId && (r.targetUserId !== targetId || r.photoMatch.viewerId !== targetId)) {
+    throw new HTTPException(409, { message: "La copia verificada tiene que corresponder a la cuenta reportada" });
+  }
+  return r;
+}
+
+reportPhotoRoutes.post("/response", async (c) => {
+  const id = c.req.param("id")!;
+  const actor = c.get("user").id;
+  const r = await requireVerifiedPhotoAction(id, actor);
+  const { response } = z.object({ response: z.string().trim().min(1, "Escribí una respuesta").max(1000) }).parse(await c.req.json());
+  const saved = await db.transaction(async (tx) => {
+    const [updated] = await tx.update(report).set({ moderatorResponse: response, respondedAt: new Date() })
+      .where(and(eq(report.id, id), isNull(report.respondedAt), ne(report.status, "dismissed"), eq(report.reporterId, r.reporterId)))
+      .returning({ response: report.moderatorResponse, respondedAt: report.respondedAt });
+    if (!updated) throw new HTTPException(409, { message: "Este reporte ya tiene una respuesta o fue descartado" });
+    await tx.insert(schema.modAction).values({
+      id: crypto.randomUUID(), actorId: actor, action: "Respondió un reporte de foto", targetId: id,
+    });
+    return updated;
+  });
+  emitToUser(r.reporterId, REPORT_RESPONSE_EVENT, { reportId: id });
+  void pushTo(r.reporterId, {
+    kind: "reportes", title: "Moderación", body: "Tenés una respuesta de Moderación.",
+    url: `/yo/reportes/${encodeURIComponent(id)}`, tag: `reporte-${id}`,
+  }).catch(() => {});
+  return c.json(saved);
+});
+
 async function referencePhotos(r: Awaited<ReturnType<typeof verifiableReport>>, photoId?: string) {
   return db.select({
     id: photo.id, key: photo.key, userId: photo.userId, position: photo.position,
@@ -52,6 +87,10 @@ reportPhotoRoutes.get("/", async (c) => {
   await logAction(actor, "Consultó las fotos para verificar un reporte", id);
   return c.json({
     hasCapture: Boolean(r.captureKey),
+    hasMatch: Boolean(r.photoMatch),
+    matchedTarget: r.photoMatch?.viewerId === r.targetUserId,
+    response: r.moderatorResponse,
+    respondedAt: r.respondedAt,
     photos: photos.map(({ id, position, album, name, key }) => ({
       id, position, album, name: name ?? "Cuenta sin perfil", attached: r.evidenceKeys.includes(key),
     })),
@@ -154,6 +193,12 @@ reportPhotoRoutes.post("/", async (c) => {
   const status = !result || result.insufficient ? "insufficient" : result.match ? "match" : "no_match";
   const [recipient] = status === "match" ? await db.select({ name: profile.displayName }).from(user)
     .leftJoin(profile, eq(profile.userId, user.id)).where(eq(user.id, viewerId)) : [];
+  if (status === "match") {
+    const [saved] = await db.update(report).set({
+      photoMatch: { photoId, viewerId, variant: parsed.data.variant, at: new Date().toISOString() },
+    }).where(and(eq(report.id, id), ne(report.status, "dismissed"))).returning({ id: report.id });
+    if (!saved) throw new HTTPException(409, { message: "El reporte fue descartado mientras se verificaba la foto" });
+  }
   await logAction(actor, "Verificó una foto de un reporte", id, `${photoId} · ${status === "match" ? "coincidencia" : status === "insufficient" ? "imagen insuficiente" : "sin coincidencia"}`);
   return c.json({
     status, uploader: selected.name ?? "Cuenta sin perfil",

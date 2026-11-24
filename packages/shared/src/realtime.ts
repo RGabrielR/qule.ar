@@ -8,6 +8,8 @@ export const DM_EVENTS = {
   access: "dm:access",
 } as const;
 
+export const REPORT_RESPONSE_EVENT = "report:response";
+
 export const INBOX_LIMIT = 100;
 export const READ_RECEIPT_LIMIT = 100;
 

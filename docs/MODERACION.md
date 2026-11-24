@@ -95,6 +95,8 @@ Con el [piloto de marca invisible](ALBUM-WATERMARK.md) activo, abrí **Verificar
 
 El panel identifica quién subió la foto original. Si la marca coincide, también muestra a qué cuenta se entregó esa copia. La coincidencia es un indicio para revisar junto con la demás evidencia. Puede haber circulado entre varias personas antes de que se tomara la captura.
 
+Tras guardar una coincidencia, **Acción** permite enviar una respuesta privada que la persona puede leer en **Yo → Configuración → Mis reportes**. Los reportes aparecen desde que se envían. Cada uno muestra el texto enviado y la respuesta en el mismo hilo. El aviso abre el hilo directamente. Desde la misma pestaña, se puede borrar un mensaje reportado con un motivo o confirmar la suspensión dentro de la misma pestaña si la copia coincide con la cuenta reportada y quien modera tiene el permiso.
+
 La consulta queda en **Registro** con el reporte y la acción. La captura que adjunta la persona al reportar se guarda cifrada y se elimina si se descarta el reporte. Si moderación carga una captura solo para verificarla, el verificador no conserva el archivo. El panel habilita la herramienta en reportes de personas abiertos o que terminaron en una medida, con ambas cuentas identificadas. Los reportes por menor de edad siguen el protocolo correspondiente.
 
 ## Reglas para quien modera

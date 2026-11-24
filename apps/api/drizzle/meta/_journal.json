@@ -176,6 +176,13 @@
       "when": 1795558315727,
       "tag": "0024_captura_en_reporte",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795560062811,
+      "tag": "0025_acciones_reporte_foto",
+      "breakpoints": true
     }
   ]
 }

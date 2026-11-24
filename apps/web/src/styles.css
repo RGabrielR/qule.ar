@@ -230,6 +230,7 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .inbox__item:hover { background: var(--surface); }
 .inbox__text { flex: 1; min-width: 0; }
 .inbox__top { display: flex; justify-content: space-between; gap: 8px; }
+.reports-inbox .inbox__top strong { min-width: 0; overflow-wrap: anywhere; }
 .inbox__top time { color: var(--muted); font-size: var(--text-xs); flex: none; }
 .inbox__preview { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-md); }
 .inbox__item--unread .inbox__preview { color: var(--text); font-weight: 500; }
@@ -750,9 +751,26 @@ button.quote:hover { background: var(--surface-3); }
 .req--picked { border-color: var(--accent); }
 
 /* Verificación de fotos desde un reporte */
-.verify-photo, .report-dialog { overflow-y: auto; }
+.report-dialog { overflow-y: auto; }
+.verify-photo { height: 88dvh; }
 
-.verify-photo__form,
+.verify-photo__form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.verify-photo__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.verify-photo__body,
+.verify-photo__footer,
 .verify-photo__result {
   display: grid;
   gap: 12px;

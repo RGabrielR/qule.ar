@@ -11,7 +11,7 @@ import { pushEnabled, pushTo, vapidPublicKey } from "../push.js";
 import { disconnectUser, emitToGroup, emitToUser } from "../realtime.js";
 import { deleteImage } from "../storage.js";
 import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
-import { canVerifyReportPhoto, reportPhotoRoutes } from "./reportPhotos.js";
+import { canVerifyReportPhoto, reportPhotoRoutes, requireVerifiedPhotoAction } from "./reportPhotos.js";
 import { removeGroup } from "./groups.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
@@ -188,6 +188,7 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
       targetReportCount: totalBy.get(tid) ?? 0,
       evidenceFiles: r.evidenceKeys.length + Number(Boolean(r.captureKey)),
       photoVerification: canVerifyPhotos && canVerifyReportPhoto(r, actor),
+      photoEvidence: Boolean(r.captureKey || r.photoMatch),
       urgent: isUrgent(r.reason),
       targetAutoHidden: hidden.has(tid),
     });
@@ -224,7 +225,16 @@ adminRoutes.post("/admin/reports/:id/dismiss", requireAccess("reports"), async (
 
 /** Borrar el mensaje reportado. */
 adminRoutes.post("/admin/reports/:id/delete-message", requireAccess("reports"), async (c) => {
-  const [r] = await db.select().from(report).where(eq(report.id, c.req.param("id")));
+  const id = c.req.param("id");
+  const verification = c.req.header("content-type")?.startsWith("application/json")
+    ? z.object({ verified: z.literal(true), reason: z.string().trim().min(3, "Escribí un motivo").max(300) }).parse(await c.req.json())
+    : null;
+  const actor = c.get("user");
+  if (verification && !(await accessFor(actor)).includes("photoVerification")) {
+    throw new HTTPException(403, { message: "No tenés permiso para verificar fotos" });
+  }
+  const [r] = verification ? [await requireVerifiedPhotoAction(id, actor.id)] : await db.select().from(report).where(eq(report.id, id));
+  if (verification && r?.status !== "open") throw new HTTPException(409, { message: "Este reporte ya se resolvió" });
   if (!r?.messageId) throw new HTTPException(400, { message: "Este reporte no tiene mensaje" });
   if (r.messageKind === "group") {
     const [m] = await db.update(groupMessage).set({ status: "deleted", body: "" }).where(eq(groupMessage.id, r.messageId)).returning();
@@ -249,7 +259,7 @@ adminRoutes.post("/admin/reports/:id/delete-message", requireAccess("reports"), 
   const same = await db.select({ id: report.id }).from(report)
     .where(and(eq(report.messageId, r.messageId), eq(report.status, "open")));
   await closeReports([r.id, ...same.map((x) => x.id)], c.get("user").id, "actioned", "Mensaje borrado");
-  await logAction(c.get("user").id, "Borró un mensaje reportado", r.id);
+  await logAction(actor.id, "Borró un mensaje reportado", r.id, verification?.reason);
   return c.json({ ok: true });
 });
 
@@ -291,7 +301,17 @@ adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports
   if ((await accessFor(t)).length > 0 && !mine.includes("owner")) {
     throw new HTTPException(403, { message: "Solo la administración general puede suspender a alguien del equipo" });
   }
-  const { reason } = z.object({ reason: z.string().trim().min(3, "Escribí un motivo").max(300) }).parse(await c.req.json());
+  const { reason, photoReportId } = z.object({
+    reason: z.string().trim().min(3, "Escribí un motivo").max(300),
+    photoReportId: z.string().max(200).optional(),
+  }).parse(await c.req.json());
+  if (photoReportId) {
+    if (preventive || !mine.includes("reports") || !mine.includes("photoVerification")) {
+      throw new HTTPException(403, { message: "No tenés permiso para aplicar esta medida" });
+    }
+    const r = await requireVerifiedPhotoAction(photoReportId, admin.id, target);
+    if (r.status !== "open") throw new HTTPException(409, { message: "Este reporte ya se resolvió" });
+  }
   const [p] = await db.update(profile).set({ suspendedAt: new Date(), suspendReason: reason, suspendedBy: admin.id })
     .where(eq(profile.userId, target)).returning();
   if (!p) throw new HTTPException(404, { message: "Esa cuenta no existe" });
@@ -300,7 +320,7 @@ adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports
   const open = await db.select({ id: report.id }).from(report)
     .where(and(eq(report.targetUserId, target), eq(report.status, "open")));
   await closeReports(open.map((r) => r.id), admin.id, "actioned", `Cuenta suspendida: ${reason}`);
-  await logAction(admin.id, preventive ? PREVENTIVE : SUSPENDED, target, reason);
+  await logAction(admin.id, preventive ? PREVENTIVE : SUSPENDED, target, photoReportId ? `${reason} · Reporte ${photoReportId}` : reason);
   if (preventive) {
     await notifyStaff(
       "sanctions",

@@ -13,7 +13,7 @@ const { profile, pushSubscription } = schema;
  * "moderacion_urgente" (menores de edad y suspensiones preventivas) solo se muestra a la administración general.
  * La notificación de prueba no tiene tipo: llega siempre.
  */
-export const NOTIFY_KINDS = ["mensajes", "toques", "respuestas", "grupos", "solicitudes", "moderacion", "moderacion_urgente"] as const;
+export const NOTIFY_KINDS = ["mensajes", "toques", "respuestas", "grupos", "solicitudes", "reportes", "moderacion", "moderacion_urgente"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 
 /** Si la persona quiere este tipo de aviso. Lo que no eligió cuenta como "sí". */

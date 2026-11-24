@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, upload } from "../../api";
 import { DialogFocus } from "../../components/DialogFocus";
+import { ReportPhotoActions, type Measure, type ReportReply } from "./ReportPhotoActions";
 import type { Report } from "./types";
 
 type Reference = { id: string; position: number; album: string; name: string; attached: boolean };
@@ -11,15 +12,30 @@ type Result = { status: "match" | "no_match" | "insufficient"; uploader: string;
 const formatReport = (report: Report) =>
   `${report.reason} · ${new Date(report.createdAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}`;
 
-export function VerifyReportPhoto({ reports, onClose }: { reports: Report[]; onClose: () => void }) {
+export function VerifyReportPhoto({ reports, canSuspend, onClose }: {
+  reports: Report[];
+  canSuspend: boolean;
+  onClose: (refresh?: boolean) => void;
+}) {
   const [reportId, setReportId] = useState(reports[0].id);
+  const [measures, setMeasures] = useState<Partial<Record<string, Measure>>>({});
+  const [hasChanges, setHasChanges] = useState(false);
+  const close = () => onClose(hasChanges);
   const currentReport = reports.find((report) => report.id === reportId) ?? reports[0];
 
+  function recordMeasure(measure: Measure) {
+    const affected = measure === "suspended"
+      ? reports.filter((report) => report.target?.id === currentReport.target?.id)
+      : [currentReport];
+    setMeasures((previous) => ({ ...previous, ...Object.fromEntries(affected.map((report) => [report.id, measure])) }));
+    setHasChanges(true);
+  }
+
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
+    <div className="sheet-backdrop" onClick={close}>
       <div className="sheet sheet--list verify-photo" role="dialog" aria-modal="true" aria-labelledby="verify-photo-title" onClick={(e) => e.stopPropagation()}>
-        <DialogFocus onClose={onClose} />
-        <h2 id="verify-photo-title">Verificar foto</h2>
+        <DialogFocus onClose={close} />
+        <h2 id="verify-photo-title" className="sr-only">Verificar foto</h2>
         {reports.length > 1 && (
           <label className="field">
             <span>Reporte</span>
@@ -28,19 +44,26 @@ export function VerifyReportPhoto({ reports, onClose }: { reports: Report[]; onC
             </select>
           </label>
         )}
-        <VerificationForm key={currentReport.id} report={currentReport} onClose={onClose} />
+        <VerificationForm key={currentReport.id} report={currentReport} canSuspend={canSuspend}
+          measure={measures[currentReport.id]} onMeasure={recordMeasure} onMatch={() => setHasChanges(true)} onClose={close} />
       </div>
     </div>
   );
 }
 
-function VerificationForm({ report, onClose }: { report: Report; onClose: () => void }) {
+function VerificationForm({ report, canSuspend, measure, onMeasure, onMatch, onClose }: {
+  report: Report; canSuspend: boolean; measure?: Measure; onMeasure: (measure: Measure) => void; onMatch: () => void; onClose: () => void;
+}) {
   const path = `/admin/reports/${encodeURIComponent(report.id)}/photo-verification`;
   const [photos, setPhotos] = useState<Reference[] | null>(null);
   const [photoId, setPhotoId] = useState("");
   const [variant, setVariant] = useState<Variant>("photo");
   const [viewerId, setViewerId] = useState(report.target?.id ?? "");
   const [hasCapture, setHasCapture] = useState(false);
+  const [section, setSection] = useState<"verify" | "action">("verify");
+  const [hasMatch, setHasMatch] = useState(false);
+  const [matchedTarget, setMatchedTarget] = useState(false);
+  const [reply, setReply] = useState<ReportReply>({ response: null, respondedAt: null });
   const [file, setFile] = useState<File | null>(null);
   const [captureUrl, setCaptureUrl] = useState("");
   const [originalCrop, setOriginalCrop] = useState<Crop>();
@@ -52,11 +75,14 @@ function VerificationForm({ report, onClose }: { report: Report; onClose: () => 
 
   useEffect(() => {
     const controller = new AbortController();
-    api<{ photos: Reference[]; hasCapture: boolean }>(path, { signal: controller.signal })
-      .then(({ photos, hasCapture }) => {
+    api<{ photos: Reference[]; hasCapture: boolean; hasMatch: boolean; matchedTarget: boolean } & ReportReply>(path, { signal: controller.signal })
+      .then(({ photos, hasCapture, hasMatch, matchedTarget, response, respondedAt }) => {
         if (controller.signal.aborted) return;
         setPhotos(photos);
         setHasCapture(hasCapture);
+        setHasMatch(hasMatch);
+        setMatchedTarget(matchedTarget);
+        setReply({ response, respondedAt });
         setPhotoId(photos.find((photo) => photo.attached)?.id ?? "");
       })
       .catch((e: Error) => { if (!controller.signal.aborted) setError(e.message); })
@@ -75,19 +101,24 @@ function VerificationForm({ report, onClose }: { report: Report; onClose: () => 
   const originalUrl = chosen ? `/api${path}/${encodeURIComponent(chosen.id)}/${variant}` : "";
 
   const comparisonUrl = hasCapture ? `/api${path}/capture` : captureUrl;
-  const canVerify = chosen && (hasCapture || file) && viewerId.trim() && !busy;
+  const canVerify = chosen && (hasCapture || file) && viewerId.trim();
 
   async function verify(e: FormEvent) {
     e.preventDefault();
-    if (!canVerify) return;
+    if (!canVerify || busy) return;
     setBusy(true);
     setError("");
-    setResult(null);
     try {
       const fields = { photoId: chosen.id, viewerId, variant, originalCrop, captureCrop };
-      setResult(file
+      const checked = file
         ? await upload<Result>(path, file, { fields: JSON.stringify(fields) })
-        : await api<Result>(path, { method: "POST", json: fields }));
+        : await api<Result>(path, { method: "POST", json: fields });
+      setResult(checked);
+      if (checked.status === "match") {
+        setHasMatch(true);
+        onMatch();
+        setMatchedTarget(checked.recipient?.id === report.target?.id);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -96,86 +127,103 @@ function VerificationForm({ report, onClose }: { report: Report; onClose: () => 
   }
 
   return (
-    <form className="verify-photo__form" onSubmit={verify}>
-      {loading && <p className="muted small" role="status">Buscando fotos del reporte…</p>}
-      {photos?.length === 0 && (
-        <>
-          <p className="muted small">No hay una foto original disponible en los álbumes de este reporte.</p>
-          {hasCapture && <div className="verify-photo__comparison">
-            <VerificationImage title="Captura recibida" url={comparisonUrl} disabled onCrop={setCaptureCrop} />
-          </div>}
-        </>
-      )}
-      {!!photos?.length && (
-        <>
-          <div className={hasCapture ? undefined : "verify-photo__fields"}>
-            <label className="field">
-              <span>Foto original</span>
-              <select className="input" value={photoId} disabled={busy} onChange={(e) => {
-                setPhotoId(e.target.value); setOriginalCrop(undefined); setResult(null);
-              }}>
-                <option value="">Elegí una foto</option>
-                {photos.map((photo) => (
-                  <option key={photo.id} value={photo.id}>{photo.name} · {photo.album} · Foto {photo.position + 1}</option>
-                ))}
-              </select>
-            </label>
-            {!hasCapture && <label className="field">
-              <span>Captura recibida</span>
-              <input className="input" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(e) => {
-                setFile(e.target.files?.[0] ?? null); setCaptureUrl(""); setCaptureCrop(undefined); setResult(null);
-              }} />
-            </label>}
-          </div>
-
-          <div className="verify-photo__comparison">
-            <VerificationImage key={originalUrl} title="Foto original" url={originalUrl} crop={originalCrop} disabled={busy}
-              onCrop={(crop) => { setOriginalCrop(crop); setResult(null); }} />
-            <VerificationImage key={comparisonUrl} title="Captura recibida" url={comparisonUrl} crop={captureCrop} disabled={busy}
-              onCrop={(crop) => { setCaptureCrop(crop); setResult(null); }} />
-          </div>
-
-          <div className="verify-photo__fields">
-            <label className="field">
-              <span>Versión de la foto</span>
-              <select className="input" value={variant} disabled={busy} onChange={(e) => {
-                setVariant(e.target.value === "thumb" ? "thumb" : "photo"); setOriginalCrop(undefined); setResult(null);
-              }}>
-                <option value="photo">Foto abierta</option>
-                <option value="thumb">Miniatura del álbum</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>ID de la cuenta a verificar</span>
-              <input className="input" value={viewerId} maxLength={200} disabled={busy} onChange={(e) => {
-                setViewerId(e.target.value); setResult(null);
-              }} />
-            </label>
-          </div>
-        </>
-      )}
-
-      {chosen && (
-        <dl className="verify-photo__result" aria-live="polite">
-          <div><dt>Foto subida por</dt><dd>{result?.uploader ?? chosen.name}</dd></div>
-          {result?.recipient && <div><dt>Copia entregada a</dt><dd>{result.recipient.name}</dd></div>}
-        </dl>
-      )}
-      {result && (
-        <p className="muted small" role="status">
-          {result.status === "match" && result.recipient && `La marca coincide con la copia entregada a ${result.recipient.name}.`}
-          {result.status === "no_match" && "Sin coincidencia para esta cuenta."}
-          {result.status === "insufficient" && "Imagen insuficiente para verificar la marca."}
-        </p>
-      )}
-      {error && <p className="notice notice--error" role="alert">{error}</p>}
-      <div className="rcard__actions">
-        <button type="button" className="btn" onClick={onClose}>Volver al reporte</button>
-        {!!photos?.length && <button className="btn btn--primary" disabled={!canVerify}>
-          {busy ? "Verificando…" : "Verificar"}
-        </button>}
+    <>
+      <div className="tabs" role="tablist" aria-label="Verificación del reporte">
+        <button type="button" role="tab" id="report-photo-verify-tab" aria-controls="report-photo-verify" aria-selected={section === "verify"}
+          onClick={() => setSection("verify")}>Verificar foto</button>
+        <button type="button" role="tab" id="report-photo-actions-tab" aria-controls="report-photo-actions" aria-selected={section === "action"}
+          disabled={!hasMatch || busy} onClick={() => setSection("action")}>Acción</button>
       </div>
-    </form>
+      {section === "action" ? (
+        <ReportPhotoActions report={report} path={path} reply={reply} onReply={setReply} measure={measure} onMeasure={onMeasure}
+          canSuspend={canSuspend} matchedTarget={matchedTarget} onClose={onClose} />
+      ) : (
+        <form className="verify-photo__form" role="tabpanel" id="report-photo-verify" aria-labelledby="report-photo-verify-tab" onSubmit={verify}>
+          <div className="verify-photo__body">
+            {loading && <p className="muted small" role="status">Buscando fotos del reporte…</p>}
+            {photos?.length === 0 && (
+              <>
+                <p className="muted small">No hay una foto original disponible en los álbumes de este reporte.</p>
+                {hasCapture && <div className="verify-photo__comparison">
+                  <VerificationImage title="Captura recibida" url={comparisonUrl} disabled onCrop={setCaptureCrop} />
+                </div>}
+              </>
+            )}
+            {!!photos?.length && (
+              <>
+                <div className={hasCapture ? undefined : "verify-photo__fields"}>
+                  <label className="field">
+                    <span>Foto original</span>
+                    <select className="input" value={photoId} disabled={busy} onChange={(e) => {
+                      setPhotoId(e.target.value); setOriginalCrop(undefined); setResult(null);
+                    }}>
+                      <option value="">Elegí una foto</option>
+                      {photos.map((photo) => (
+                        <option key={photo.id} value={photo.id}>{photo.name} · {photo.album} · Foto {photo.position + 1}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {!hasCapture && <label className="field">
+                    <span>Captura recibida</span>
+                    <input className="input" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(e) => {
+                      setFile(e.target.files?.[0] ?? null); setCaptureUrl(""); setCaptureCrop(undefined); setResult(null);
+                    }} />
+                  </label>}
+                </div>
+
+                <div className="verify-photo__comparison">
+                  <VerificationImage key={originalUrl} title="Foto original" url={originalUrl} crop={originalCrop} disabled={busy}
+                    onCrop={(crop) => { setOriginalCrop(crop); setResult(null); }} />
+                  <VerificationImage key={comparisonUrl} title="Captura recibida" url={comparisonUrl} crop={captureCrop} disabled={busy}
+                    onCrop={(crop) => { setCaptureCrop(crop); setResult(null); }} />
+                </div>
+
+                <div className="verify-photo__fields">
+                  <label className="field">
+                    <span>Versión de la foto</span>
+                    <select className="input" value={variant} disabled={busy} onChange={(e) => {
+                      setVariant(e.target.value === "thumb" ? "thumb" : "photo"); setOriginalCrop(undefined); setResult(null);
+                    }}>
+                      <option value="photo">Foto abierta</option>
+                      <option value="thumb">Miniatura del álbum</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>ID de la cuenta a verificar</span>
+                    <input className="input" value={viewerId} maxLength={200} disabled={busy} onChange={(e) => {
+                      setViewerId(e.target.value); setResult(null);
+                    }} />
+                  </label>
+                </div>
+              </>
+            )}
+
+            {chosen && (
+              <dl className="verify-photo__result" aria-live="polite">
+                <div><dt>Foto subida por</dt><dd>{result?.uploader ?? chosen.name}</dd></div>
+                {result?.recipient && <div><dt>Copia entregada a</dt><dd>{result.recipient.name}</dd></div>}
+              </dl>
+            )}
+          </div>
+          <div className="verify-photo__footer">
+            {result && (
+              <p className="muted small" role="status">
+                {result.status === "match" && result.recipient && `La marca coincide con la copia entregada a ${result.recipient.name}.`}
+                {result.status === "no_match" && "Sin coincidencia para esta cuenta."}
+                {result.status === "insufficient" && "Imagen insuficiente para verificar la marca."}
+              </p>
+            )}
+            {error && <p className="notice notice--error" role="alert">{error}</p>}
+            <div className="rcard__actions">
+              <button type="button" className="btn" onClick={onClose}>Volver al reporte</button>
+              {!!photos?.length && <button type="submit" className="btn btn--primary" disabled={!canVerify} aria-disabled={busy}>
+                {busy ? "Verificando…" : "Verificar"}
+              </button>}
+            </div>
+          </div>
+        </form>
+      )}
+    </>
   );
 }
 

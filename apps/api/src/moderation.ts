@@ -96,7 +96,7 @@ async function stillInUse(key: string) {
 export async function releaseEvidence(reportIds: string[]) {
   if (!reportIds.length) return;
   const rows = await db.select({ keys: report.evidenceKeys, capture: report.captureKey }).from(report).where(inArray(report.id, reportIds));
-  await db.update(report).set({ messageBody: null, evidenceKeys: [], captureKey: null }).where(inArray(report.id, reportIds));
+  await db.update(report).set({ messageBody: null, evidenceKeys: [], captureKey: null, photoMatch: null }).where(inArray(report.id, reportIds));
   for (const { capture } of rows) {
     if (capture) await deleteReportCapture(capture);
   }

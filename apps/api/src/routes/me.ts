@@ -1,4 +1,4 @@
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { mailEnabled } from "../mail.js";
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -217,6 +217,33 @@ meRoutes.put("/me/terms", requireUser, requireProfile, async (c) => {
   if (version !== TERMS_VERSION) throw new HTTPException(409, { message: "Los términos cambiaron. Recargá la página para leer la versión nueva." });
   await db.update(profile).set({ termsVersion: TERMS_VERSION, termsAcceptedAt: new Date() }).where(eq(profile.userId, u.id));
   return c.json({ termsVersion: TERMS_VERSION });
+});
+
+const myReportSummary = {
+  id: schema.report.id, reason: schema.report.reason, targetName: schema.report.targetName,
+  createdAt: schema.report.createdAt, respondedAt: schema.report.respondedAt,
+  open: sql<boolean>`${schema.report.status} = 'open'`,
+};
+
+meRoutes.get("/me/reportes", requireUser, async (c) => {
+  const { report } = schema;
+  c.header("Cache-Control", "no-store");
+  const reports = await db.select(myReportSummary).from(report).where(eq(report.reporterId, c.get("user").id))
+    .orderBy(desc(sql`coalesce(${report.respondedAt}, ${report.createdAt})`), desc(report.id));
+  return c.json(reports);
+});
+
+meRoutes.get("/me/reportes/:id", requireUser, async (c) => {
+  const { report } = schema;
+  c.header("Cache-Control", "no-store");
+  const [found] = await db.select({
+    ...myReportSummary,
+    details: report.details,
+    response: report.moderatorResponse,
+    hasCapture: sql<boolean>`${report.captureKey} is not null`,
+  }).from(report).where(and(eq(report.id, c.req.param("id")), eq(report.reporterId, c.get("user").id)));
+  if (!found) throw new HTTPException(404, { message: "No encontramos ese reporte" });
+  return c.json(found);
 });
 
 /** Qué avisos quiere recibir. Se manda solo lo que cambia; lo demás queda como estaba. */

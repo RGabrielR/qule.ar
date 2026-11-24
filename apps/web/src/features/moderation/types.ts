@@ -35,6 +35,7 @@ export type Report = {
   group: ReportedGroup | null;
   evidenceFiles: number;
   photoVerification: boolean;
+  photoEvidence: boolean;
   targetSuspendedAt: string | null;
   targetReportCount: number;
 };

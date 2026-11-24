@@ -288,14 +288,92 @@ test("accesos al álbum privado", async (t) => {
     assert.equal(preview.status, 200);
     assert.equal(preview.headers.get("cache-control"), "no-store");
     const referenceList = await request(attachedUrl, moderator);
-    assert.equal((await referenceList.json() as { hasCapture: boolean }).hasCapture, true);
+    const before = await referenceList.json() as { hasCapture: boolean; hasMatch: boolean };
+    assert.equal(before.hasCapture, true);
+    assert.equal(before.hasMatch, false);
+    const ownPath = `/api/me/reportes/${attachment.id}`;
+    const pendingList = await (await request("/api/me/reportes", owner)).json() as { id: string; open: boolean; respondedAt: string | null }[];
+    const pendingReport = pendingList.find((report) => report.id === attachment.id);
+    assert.equal(pendingReport?.open, true);
+    assert.equal(pendingReport?.respondedAt, null);
+    const ownThread = await request(ownPath, owner);
+    assert.equal(ownThread.headers.get("cache-control"), "no-store");
+    const pending = await ownThread.json() as { details: string; response: null; hasCapture: boolean };
+    assert.equal(pending.details, "Captura adjunta al reportar");
+    assert.equal(pending.response, null);
+    assert.equal(pending.hasCapture, true);
+    assert.equal((await request(ownPath, person)).status, 404);
+    assert.equal((await request(ownPath, moderator)).status, 404);
+    const reply = json("POST", { response: "Revisamos la captura que adjuntaste." });
+    assert.equal((await request(`${attachedUrl}/response`, moderator, reply)).status, 409);
     const fromReport = await request(attachedUrl, moderator, json("POST", {
       photoId: originalId, variant: "photo", viewerId: person.id,
     }));
     assert.deepEqual(await fromReport.json(), { status: "match", uploader: "Ana", recipient: { id: person.id, name: "Luz" } });
+    const after = await (await request(attachedUrl, moderator)).json() as { hasMatch: boolean; matchedTarget: boolean };
+    assert.equal(after.hasMatch, true);
+    assert.equal(after.matchedTarget, true);
+    assert.equal((await request(`${attachedUrl}/response`, person, reply)).status, 403);
+    const responses = await Promise.all([
+      request(`${attachedUrl}/response`, moderator, reply),
+      request(`${attachedUrl}/response`, moderator, reply),
+    ]);
+    assert.deepEqual(responses.map((response) => response.status).sort(), [200, 409]);
+    const answered = await (await request(ownPath, owner)).json() as { details: string; response: string };
+    assert.equal(answered.details, pending.details);
+    assert.equal(answered.response, "Revisamos la captura que adjuntaste.");
+    assert.equal((await request(ownPath, person)).status, 404);
+    assert.deepEqual(await (await request("/api/me/reportes", person)).json(), []);
+    assert.equal((await request(`/api/admin/users/${person.id}/suspend`, moderator,
+      json("POST", { reason: "Motivo de prueba", photoReportId: attachment.id }))).status, 403);
+    await db.insert(schema.staffPermission).values({ userId: moderator.id, permission: "sanctions" });
+    assert.equal((await request(`/api/admin/users/${other.id}/suspend`, moderator,
+      json("POST", { reason: "Motivo de prueba", photoReportId: attachment.id }))).status, 409);
     assert.equal((await request(`/api/admin/reports/${attachment.id}/dismiss`, moderator, { method: "POST" })).status, 200);
     assert.equal((await request(`${attachedUrl}/capture`, moderator)).status, 404);
     assert.equal(await getRawBlob(attachment.captureKey), null);
+    const closedThread = await (await request(ownPath, owner)).json() as { open: boolean; response: string; hasCapture: boolean };
+    assert.equal(closedThread.open, false);
+    assert.equal(closedThread.response, answered.response);
+    assert.equal(closedThread.hasCapture, false);
+
+    const messageId = randomUUID();
+    const [userA, userB] = [owner.id, person.id].sort();
+    const [conversation] = await db.select({ id: schema.conversation.id }).from(schema.conversation)
+      .where(and(eq(schema.conversation.userA, userA), eq(schema.conversation.userB, userB)));
+    assert.ok(conversation);
+    await db.insert(schema.directMessage).values({ id: messageId, conversationId: conversation.id, senderId: person.id, body: "Mensaje de prueba" });
+    evidence.set("messageId", messageId);
+    evidence.set("messageKind", "dm");
+    evidence.set("details", "Reporte de mensaje con captura");
+    assert.equal((await request("/api/reports", owner, { method: "POST", body: evidence })).status, 200);
+    const [messageReport] = await db.select().from(schema.report).where(eq(schema.report.messageId, messageId));
+    const messageUrl = `/api/admin/reports/${messageReport.id}`;
+    const remove = json("POST", { verified: true, reason: "El mensaje difundía la foto del reporte" });
+    assert.equal((await request(`${messageUrl}/delete-message`, moderator, remove)).status, 409);
+    assert.equal((await request(`${messageUrl}/photo-verification`, moderator,
+      json("POST", { photoId: originalId, variant: "photo", viewerId: person.id }))).status, 200);
+    assert.equal((await request(`${messageUrl}/delete-message`, moderator, remove)).status, 200);
+    assert.equal((await request(`${messageUrl}/delete-message`, moderator, remove)).status, 409);
+    assert.deepEqual(await db.select().from(schema.directMessage).where(eq(schema.directMessage.id, messageId)), []);
+    assert.equal((await request(`${messageUrl}/photo-verification/response`, moderator, reply)).status, 200);
+
+    const sanctionId = randomUUID();
+    await db.insert(schema.report).values({ id: sanctionId, reporterId: owner.id, targetUserId: other.id, reason: "otro" });
+    const sanctionUrl = `/api/admin/users/${other.id}/suspend`;
+    const sanction = json("POST", { reason: "Medida por evidencia adicional", photoReportId: sanctionId });
+    assert.equal((await request(sanctionUrl, moderator, sanction)).status, 409);
+    await giveAccess(owner, other);
+    const otherCapture = await (await request(photoItem.url, other)).arrayBuffer();
+    const form = new FormData();
+    form.set("file", new File([otherCapture], "captura.webp", { type: "image/webp" }));
+    form.set("fields", JSON.stringify({ photoId: originalId, variant: "photo", viewerId: other.id }));
+    const otherMatch = await request(`/api/admin/reports/${sanctionId}/photo-verification`, moderator, { method: "POST", body: form });
+    assert.equal((await otherMatch.json() as { status: string }).status, "match");
+    assert.equal((await request(`/api/album/grants/${other.id}`, owner, { method: "DELETE" })).status, 200);
+    assert.equal((await request(sanctionUrl, moderator, sanction)).status, 200);
+    const [closed] = await db.select().from(schema.report).where(eq(schema.report.id, sanctionId));
+    assert.equal(closed.status, "actioned");
   });
 
   await t.test("bloquear a alguien quita el acceso concedido a esa persona", async () => {

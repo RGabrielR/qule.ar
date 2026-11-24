@@ -8,6 +8,7 @@ import { DialogFocus } from "../components/DialogFocus";
 import { PERMISSION_LABELS, toggleStaffPermission } from "../staff";
 import { ModerationNotices } from "../features/moderation/ModerationNotices";
 import { ReportGroups } from "../features/moderation/ReportGroups";
+import { suspendReportAccount } from "../features/moderation/suspendReportAccount";
 import type { Report } from "../features/moderation/types";
 
 type Suspended = Author & {
@@ -166,6 +167,7 @@ export function Admin() {
           has={has}
           act={act}
           onSuspend={setSuspending}
+          onRefresh={load}
           onRemoveGroup={setRemoving}
         />
       )}
@@ -347,7 +349,7 @@ function SuspendDialog({ report, preventive, onClose, onDone }: { report: Report
     setBusy(true);
     setError("");
     try {
-      await api(`/admin/users/${report.target?.id}/suspend`, { method: "POST", json: { reason } });
+      await suspendReportAccount(report, reason);
       onDone();
     } catch (e) {
       setError((e as Error).message);
