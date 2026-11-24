@@ -21,6 +21,7 @@ import { GroupChat } from "./pages/GroupChat";
 import { Groups } from "./pages/Groups";
 import { GroupInfo } from "./pages/GroupInfo";
 import { GroupRequests } from "./pages/GroupRequests";
+import { groupAuthPath, groupIdFromPath, groupIdFromSearch, groupPath } from "./features/groups/groupLink";
 import { Inbox } from "./pages/Inbox";
 import { Conversation } from "./pages/Conversation";
 import { ProfilePage } from "./pages/Profile";
@@ -65,7 +66,7 @@ export function App() {
   return (
     <MeContext.Provider value={{ me, loading, reload }}>
       <Routes>
-        <Route path="/entrar" element={me ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/entrar" element={<LoginRoute />} />
         <Route path="/recuperar" element={<ForgotPassword />} />
         <Route path="/nueva-clave" element={<ResetPassword />} />
         {/* Públicas: se leen con o sin cuenta (y también si la cuenta está suspendida) */}
@@ -99,13 +100,23 @@ export function App() {
   );
 }
 
+function LoginRoute() {
+  const { me } = useMe();
+  const { search } = useLocation();
+  const groupId = groupIdFromSearch(search);
+  const destination = groupId ? groupPath(groupId) : "/";
+  return me ? <Navigate to={destination} replace /> : <Login callbackURL={destination} />;
+}
+
 function RequireAuth({ children, needProfile }: { children: React.ReactNode; needProfile?: boolean }) {
   const { me, reload } = useMe();
   const loc = useLocation();
-  if (!me) return <Navigate to="/entrar" replace state={{ from: loc.pathname }} />;
+  const onboarding = loc.pathname === "/bienvenida";
+  const groupId = onboarding ? groupIdFromSearch(loc.search) : groupIdFromPath(loc.pathname);
+  if (!me) return <Navigate to={groupAuthPath("/entrar", groupId)} replace state={{ from: loc.pathname }} />;
   if (me.profile?.suspendedAt) return <Suspended me={me} onSignedOut={reload} />;
-  if (needProfile && !me.profile) return <Navigate to="/bienvenida" replace />;
-  if (!needProfile && me.profile && loc.pathname === "/bienvenida") return <Navigate to="/yo/editar?nuevo=1" replace />;
+  if (needProfile && !me.profile) return <Navigate to={groupAuthPath("/bienvenida", groupId)} replace />;
+  if (onboarding && me.profile) return <Navigate to={groupId ? groupPath(groupId) : "/yo/editar?nuevo=1"} replace />;
   return <>{children}</>;
 }
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { api, authClient } from "../api";
 import { useMe } from "../App";
 import { APP_NAME } from "../brand";
@@ -16,7 +16,6 @@ function maxBirthdate() {
 
 export function Onboarding() {
   const { me, reload } = useMe();
-  const nav = useNavigate();
   const [displayName, setDisplayName] = useState(me?.user.name ?? "");
   const [birthdate, setBirthdate] = useState("");
   const [adult, setAdult] = useState(false);
@@ -34,7 +33,6 @@ export function Onboarding() {
     try {
       await api("/me/profile", { method: "PUT", json: { displayName, birthdate, acceptTerms } });
       await reload();
-      nav("/yo/editar?nuevo=1", { replace: true });
     } catch (err) {
       setError((err as Error).message);
     } finally {
