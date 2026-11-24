@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { ExternalLinkDialog } from "./ExternalLinkDialog";
 
 const links = /(?:^|(?<=[\s([{<"'“‘¿¡]))(?:https?:\/\/|www\.)[^\s<>"'“”‘’]+/gi;
 
@@ -18,7 +19,7 @@ function toExternalUrl(value: string) {
   try {
     const url = new URL(/^www\./i.test(value) ? `https://${value}` : value);
     if ((url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password) {
-      return url.href;
+      return url;
     }
   } catch {
     // Conservá el texto original si no forma una URL.
@@ -27,6 +28,7 @@ function toExternalUrl(value: string) {
 }
 
 export function MessageText({ text }: { text: string | null }) {
+  const [destination, setDestination] = useState<URL | null>(null);
   if (!text) return null;
   const parts: ReactNode[] = [];
   let cursor = 0;
@@ -34,18 +36,32 @@ export function MessageText({ text }: { text: string | null }) {
   for (const match of text.matchAll(links)) {
     const start = match.index;
     const label = trimTrailingPunctuation(match[0]);
-    const href = toExternalUrl(label);
-    if (!href) continue;
+    const url = toExternalUrl(label);
+    if (!url) continue;
 
     parts.push(text.slice(cursor, start));
     parts.push(
-      <a key={start} className="message-link" href={href} target="_blank" rel="noopener noreferrer">
+      <button
+        key={start}
+        type="button"
+        className="message-link"
+        aria-haspopup="dialog"
+        onClick={(event) => {
+          event.currentTarget.focus({ preventScroll: true });
+          setDestination(url);
+        }}
+      >
         {label}
-      </a>,
+      </button>,
     );
     cursor = start + label.length;
   }
 
   parts.push(text.slice(cursor));
-  return <>{parts}</>;
+  return (
+    <>
+      {parts}
+      {destination && <ExternalLinkDialog destination={destination} onClose={() => setDestination(null)} />}
+    </>
+  );
 }
