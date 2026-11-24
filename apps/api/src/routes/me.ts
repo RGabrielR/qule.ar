@@ -1,3 +1,4 @@
+import { ZODIAC_SIGNS } from "@mortero/shared/zodiac";
 import { and, asc, eq, or } from "drizzle-orm";
 import { mailEnabled } from "../mail.js";
 import { Hono, type Context } from "hono";
@@ -42,6 +43,7 @@ const profileInput = z.object({
   lookingFor: z.array(shortText).max(10).default([]),
   relationship: shortText.nullish(),
   pronouns: shortText.nullish(),
+  zodiacSign: z.enum(ZODIAC_SIGNS, { message: "Elegí un signo válido" }).nullish(),
   // Tengo lugar / No tengo lugar; null lo borra (sin decir)
   hasPlace: z.enum(HAS_PLACE, { message: "Elegí si tenés lugar o no" }).nullish(),
   hivStatus: shortText.nullish(),

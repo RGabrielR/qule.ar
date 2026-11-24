@@ -69,6 +69,7 @@ socialRoutes.get("/users/:id", async (c) => {
     lookingFor: p.lookingFor,
     relationship: p.relationship,
     pronouns: p.pronouns,
+    zodiacSign: p.zodiacSign,
     hasPlace: p.hasPlace,
     hivStatus: p.hivStatus,
     lastTested: p.lastTested,

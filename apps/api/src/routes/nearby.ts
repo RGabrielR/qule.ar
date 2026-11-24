@@ -1,3 +1,4 @@
+import { ZODIAC_SIGNS } from "@mortero/shared/zodiac";
 import { eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -87,6 +88,7 @@ const range = (min: number, max: number) => z.preprocess(
 const age = range(18, 99);
 const height = range(120, 230);
 const weight = range(35, 250);
+const zodiacSign = z.enum(ZODIAC_SIGNS);
 /** Si el mínimo quedó más grande que el máximo, se dan vuelta. */
 function ordered<T extends Record<string, unknown>>(f: T, lo: keyof T, hi: keyof T) {
   const a = f[lo] as number | undefined;
@@ -99,6 +101,7 @@ const filtersSchema = z.object({
   heightMin: height, heightMax: height,
   weightMin: weight, weightMax: weight,
   bodyType: list, position: list, tribes: list, lookingFor: list, relationship: list,
+  zodiacSign: list.transform((values) => values.filter((value) => zodiacSign.safeParse(value).success)),
   // "si", "no" o los dos; quien no lo dijo solo aparece sin este filtro
   hasPlace: list.transform((xs) => xs.filter((x): x is (typeof HAS_PLACE)[number] => (HAS_PLACE as readonly string[]).includes(x))),
   online: z.enum(["1"]).optional(),
@@ -158,6 +161,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
   if (f.bodyType.length) conds.push(sql`p.body_type = any(${textArray(f.bodyType)})`);
   if (f.position.length) conds.push(sql`p.position = any(${textArray(f.position)})`);
   if (f.relationship.length) conds.push(sql`p.relationship = any(${textArray(f.relationship)})`);
+  if (f.zodiacSign.length) conds.push(sql`p.zodiac_sign = any(${textArray(f.zodiacSign)})`);
   if (f.hasPlace.length) conds.push(sql`p.has_place = any(${textArray(f.hasPlace)})`);
   if (f.tribes.length) conds.push(sql`jsonb_exists_any(p.tribes, ${textArray(f.tribes)})`);
   if (f.lookingFor.length) conds.push(sql`jsonb_exists_any(p.looking_for, ${textArray(f.lookingFor)})`);

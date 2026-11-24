@@ -1,3 +1,4 @@
+import { ZODIAC_SIGNS } from "@mortero/shared/zodiac";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type TouchEvent } from "react";
 import { InstallBanner } from "../components/InstallBanner";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -14,11 +15,11 @@ export type Filters = {
   ageMin?: number; ageMax?: number;
   heightMin?: number; heightMax?: number;
   weightMin?: number; weightMax?: number;
-  bodyType: string[]; position: string[]; tribes: string[]; lookingFor: string[]; relationship: string[]; hasPlace: HasPlace[];
+  bodyType: string[]; position: string[]; tribes: string[]; lookingFor: string[]; relationship: string[]; hasPlace: HasPlace[]; zodiacSign: string[];
   online: boolean; withPhoto: boolean; favorites: boolean;
 };
 
-const EMPTY: Filters = { bodyType: [], position: [], tribes: [], lookingFor: [], relationship: [], hasPlace: [], online: false, withPhoto: false, favorites: false };
+const EMPTY: Filters = { bodyType: [], position: [], tribes: [], lookingFor: [], relationship: [], hasPlace: [], zodiacSign: [], online: false, withPhoto: false, favorites: false };
 const STORE_KEY = "mortero:filtros";
 
 function loadFilters(): Filters {
@@ -43,7 +44,7 @@ function toQuery(f: Filters, offset: number) {
   for (const k of ["ageMin", "ageMax", "heightMin", "heightMax", "weightMin", "weightMax"] as const) {
     if (f[k] != null) q.set(k, String(f[k]));
   }
-  for (const k of ["bodyType", "position", "tribes", "lookingFor", "relationship", "hasPlace"] as const) {
+  for (const k of ["bodyType", "position", "tribes", "lookingFor", "relationship", "hasPlace", "zodiacSign"] as const) {
     if (f[k].length) q.set(k, f[k].join(","));
   }
   if (f.online) q.set("online", "1");
@@ -58,7 +59,7 @@ export function countFilters(f: Filters) {
   if (f.ageMin != null || f.ageMax != null) n++;
   if (f.heightMin != null || f.heightMax != null) n++;
   if (f.weightMin != null || f.weightMax != null) n++;
-  n += [f.bodyType, f.position, f.tribes, f.lookingFor, f.relationship, f.hasPlace].filter((x) => x.length).length;
+  n += [f.bodyType, f.position, f.tribes, f.lookingFor, f.relationship, f.hasPlace, f.zodiacSign].filter((x) => x.length).length;
   if (f.online) n++;
   if (f.withPhoto) n++;
   if (f.favorites) n++;
@@ -408,7 +409,7 @@ function RangeRow({ label, unit, min, max, onChange, lo, hi }: {
   );
 }
 
-function Chips({ label, options, value, onChange }: { label: string; options: string[]; value: string[]; onChange: (v: string[]) => void }) {
+function Chips({ label, options, value, onChange }: { label: string; options: readonly string[]; value: string[]; onChange: (v: string[]) => void }) {
   return (
     <fieldset className="field">
       <legend>{label}</legend>
@@ -431,7 +432,7 @@ function FilterSheet({ initial, onApply, onClose }: { initial: Filters; onApply:
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setF({ ...f, [k]: v });
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
+    <div className="sheet-backdrop nearby-filters" onClick={onClose}>
       <div className="sheet sheet--tall" role="dialog" aria-modal aria-labelledby="filters-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
         <div className="sheet__head">
@@ -460,6 +461,7 @@ function FilterSheet({ initial, onApply, onClose }: { initial: Filters; onApply:
           <Chips label="Busca" options={LOOKING_FOR} value={f.lookingFor} onChange={(v) => set("lookingFor", v)} />
           <Chips label="Relación" options={RELATIONSHIP} value={f.relationship} onChange={(v) => set("relationship", v)} />
           <HasPlaceChips value={f.hasPlace} onChange={(v) => set("hasPlace", v)} />
+          <Chips label="Signo" options={ZODIAC_SIGNS} value={f.zodiacSign} onChange={(v) => set("zodiacSign", v)} />
           <p className="muted small">Los filtros de altura, peso y demás dejan afuera a quien no completó ese dato.</p>
         </div>
         <div className="row sheet__foot">

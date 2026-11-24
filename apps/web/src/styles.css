@@ -678,6 +678,7 @@ button.quote:hover { background: var(--surface-3); }
 .notify-banner__actions { flex: none; display: grid; gap: 4px; justify-items: center; }
 /* Dentro de la página (por ejemplo, en Yo), sin flotar sobre el contenido */
 .notify-banner--inline { position: static; max-width: none; margin: 0; box-shadow: none; }
+.shell:has(.nearby-filters) > .notify-banner { visibility: hidden; }
 
 /* ---------- Aviso de versión nueva (arriba, para no chocar con el de notificaciones) ---------- */
 .update-banner {

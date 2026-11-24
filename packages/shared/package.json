@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./realtime": "./src/realtime.ts"
+    "./realtime": "./src/realtime.ts",
+    "./zodiac": "./src/zodiac.ts"
   }
 }

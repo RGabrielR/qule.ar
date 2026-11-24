@@ -75,6 +75,7 @@ export function App() {
         <Route element={<RequireAuth needProfile><Shell /></RequireAuth>}>
           <Route path="/" element={<Navigate to="/cerca" replace />} />
           <Route path="/cerca" element={<Nearby />} />
+          <Route path="/gente" element={<Navigate to="/cerca" replace />} />
           <Route path="/grupos" element={<Groups />} />
           <Route path="/grupos/:id" element={<GroupChat />} />
           <Route path="/grupos/:id/info" element={<GroupInfo />} />

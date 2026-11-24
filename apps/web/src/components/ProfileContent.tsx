@@ -66,7 +66,7 @@ export function ProfileCover({ photos, coverPhoto, displayName, age, status, bac
   );
 }
 
-type StatsInput = Pick<PublicProfile, "about" | "heightCm" | "weightKg" | "bodyType" | "position" | "relationship" | "pronouns" | "hasPlace" | "hivStatus" | "lastTested" | "tribes" | "lookingFor">;
+type StatsInput = Pick<PublicProfile, "about" | "heightCm" | "weightKg" | "bodyType" | "position" | "relationship" | "pronouns" | "hasPlace" | "zodiacSign" | "hivStatus" | "lastTested" | "tribes" | "lookingFor">;
 
 export function ProfileStats({ p, empty = null }: { p: StatsInput; empty?: ReactNode }) {
   const rows: [string, string | null][] = [
@@ -77,6 +77,7 @@ export function ProfileStats({ p, empty = null }: { p: StatsInput; empty?: React
     ["Relación", p.relationship],
     ["Pronombres", p.pronouns],
     ["Lugar", hasPlaceLabel(p.hasPlace)],
+    ["Signo", p.zodiacSign],
     ["Estado serológico", p.hivStatus],
     ["Último test", p.lastTested ? new Date(p.lastTested + "T12:00").toLocaleDateString("es-AR", { month: "long", year: "numeric" }) : null],
   ];

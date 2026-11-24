@@ -1,3 +1,4 @@
+import type { ZodiacSign } from "@mortero/shared/zodiac";
 import type { HasPlace } from "./features/place/hasPlace";
 import { createAuthClient } from "better-auth/react";
 import { io, type Socket } from "socket.io-client";
@@ -76,6 +77,7 @@ export type Profile = {
   lookingFor: string[];
   relationship: string | null;
   pronouns: string | null;
+  zodiacSign: ZodiacSign | null;
   /** "si", "no" o null (sin decir). Ver features/place. */
   hasPlace: HasPlace | null;
   hivStatus: string | null;

@@ -59,6 +59,7 @@ before(async () => {
         bodyType: maybe(pick(BODY)),
         position: maybe(pick(POS)),
         relationship: maybe(pick(REL)),
+        zodiacSign: (["Géminis", "Piscis", null] as const)[i % 3],
         hasPlace: maybe(pick(["si", "no"]), 0.6),
         tribes: some(TRIBES),
         lookingFor: some(LOOKING),
@@ -123,7 +124,7 @@ async function reference(me: { userId: string; cellLat: number | null; cellLng: 
     .filter(({ p, age }) =>
       inRange(age, f.ageMin, f.ageMax) && inRange(p.heightCm, f.heightMin, f.heightMax) && inRange(p.weightKg, f.weightMin, f.weightMax) &&
       anyOf(f.bodyType, p.bodyType) && anyOf(f.position, p.position) && anyOf(f.relationship, p.relationship) &&
-      anyOf(f.hasPlace, p.hasPlace) &&
+      anyOf(f.hasPlace, p.hasPlace) && anyOf(f.zodiacSign, p.zodiacSign) &&
       overlap(f.tribes, p.tribes) && overlap(f.lookingFor, p.lookingFor) && (!f.withPhoto || first.has(p.userId)) && !f.online)
     .sort((a, b) => (a.km ?? Infinity) - (b.km ?? Infinity) || b.p.lastSeenAt.getTime() - a.p.lastSeenAt.getTime());
   const page = list.slice(f.offset, f.offset + 60);
@@ -148,6 +149,8 @@ const CASES: Record<string, string>[] = [
   { ageMax: "40", heightMin: "170", weightMax: "80" },
   { bodyType: "atletico,grande", position: "versatil" },
   { relationship: "soltero" },
+  { zodiacSign: "Géminis" },
+  { zodiacSign: "Géminis,Piscis", ageMin: "30", offset: "60" },
   { hasPlace: "si" },
   { hasPlace: "no", offset: "60" },
   { hasPlace: "si,no" },
@@ -186,6 +189,7 @@ test("acomoda los filtros raros en vez de rechazarlos y conserva el texto como v
   assert.deepEqual(parseNearbyFilters({ tribes: `oso,${"a".repeat(61)},nutria` }).tribes, ["oso", "nutria"]);
   assert.equal(parseNearbyFilters({ position: Array(25).fill("versatil").join(",") }).position.length, 20);
   assert.equal(parseNearbyFilters({ lookingFor: "x,".repeat(100_000) }).lookingFor.length, 20);
+  assert.deepEqual(parseNearbyFilters({ zodiacSign: "inventado,Géminis" }).zodiacSign, ["Géminis"]);
   // Lo que no es un número sí da error
   const notNumbers: Record<string, string>[] = [{ ageMin: "abc" }, { heightMax: "Infinity" }, { offset: "-1" }];
   for (const q of notNumbers) assert.throws(() => parseNearbyFilters(q));

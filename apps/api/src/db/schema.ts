@@ -1,6 +1,7 @@
 import {
   pgTable, text, timestamp, boolean, integer, date, jsonb, uniqueIndex, index, primaryKey, doublePrecision,
 } from "drizzle-orm/pg-core";
+import { ZODIAC_SIGNS } from "@mortero/shared/zodiac";
 import { sql } from "drizzle-orm";
 import { encryptedMessageText, encryptedText } from "../crypt.js";
 
@@ -70,6 +71,7 @@ export const profile = pgTable("profile", {
   lookingFor: jsonb("looking_for").$type<string[]>().notNull().default([]),
   relationship: text("relationship"),
   pronouns: text("pronouns"),
+  zodiacSign: text("zodiac_sign", { enum: ZODIAC_SIGNS }),
   // Si tiene lugar para recibir: "si", "no" o null (sin decir). Opcional, lo elige cada persona; nunca se deduce de otra cosa.
   hasPlace: text("has_place"),
   // Datos de salud (sensibles, Ley 25.326 art. 2 y 7): se guardan cifrados con DATA_KEY. Ver src/crypt.ts
