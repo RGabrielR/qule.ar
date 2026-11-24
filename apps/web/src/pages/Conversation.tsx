@@ -59,7 +59,7 @@ export function Conversation() {
       const oldestLoaded = d.messages[0];
       if (oldestLoaded && d.hasMore) receipts.includeOlderMessages(oldestLoaded.id);
       receipts.schedule(...loaded.filter((message) => message.senderId !== myId && !message.readAt).map(({ id }) => id));
-    }).catch(() => { beforeHistory = null; });
+    }).catch(() => { beforeHistory = null; if (alive) setError("No se pudo cargar la charla."); });
     const s = getSocket();
     const onMsg = (m: Dm) => {
       if (m.conversationId !== id) return;
