@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { CELL_SIZE_METERS, snapToCell } from "../../../packages/geo/cell.js";
 import { api } from "./api";
 
 /**
@@ -6,7 +7,7 @@ import { api } from "./api";
  * Después se actualiza sola mientras la app está en pantalla: al abrirla, al volver a ella y cada 5 minutos.
  * Con la app cerrada o en segundo plano no se manda nada.
  *
- * Solo se manda lat/lng; el servidor la redondea a una zona de ~500 m y no guarda la posición exacta.
+ * Solo se manda el centro de una zona de ~500 m. El servidor también lo redondea antes de guardarlo.
  * Si la persona borró su ubicación (en cualquier dispositivo), el servidor ignora las actualizaciones automáticas.
  */
 
@@ -49,25 +50,36 @@ async function permission(): Promise<PermissionState | "unknown"> {
   }
 }
 
-function position(): Promise<GeolocationPosition> {
+function position(auto: boolean): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) =>
-    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, maximumAge: 60_000, timeout: 15_000 }),
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: !auto,
+      maximumAge: auto ? 60_000 : 0,
+      timeout: 15_000,
+    }),
   );
 }
 
+function isAccurate({ coords }: GeolocationPosition): boolean {
+  return coords.accuracy <= CELL_SIZE_METERS;
+}
+
 async function send(pos: GeolocationPosition, auto: boolean) {
-  await api("/me/location", { method: "PUT", json: { lat: pos.coords.latitude, lng: pos.coords.longitude, auto } });
+  const cell = snapToCell(pos.coords.latitude, pos.coords.longitude);
+  await api("/me/location", { method: "PUT", json: { ...cell, auto } });
   save({ sentAt: Date.now(), pausedUntil: 0 });
   window.dispatchEvent(new Event(LOCATION_EVENT));
 }
 
-export type ShareResult = "ok" | "denied" | "unsupported" | "error";
+export type ShareResult = "ok" | "denied" | "unsupported" | "imprecise" | "error";
 
 /** La persona toca "Compartir" o "Actualizar ubicación". */
 export async function shareLocation(): Promise<ShareResult> {
   if (!("geolocation" in navigator)) return "unsupported";
   try {
-    await send(await position(), false);
+    const pos = await position(false);
+    if (!isAccurate(pos)) return "imprecise";
+    await send(pos, false);
     return "ok";
   } catch (e) {
     return (e as GeolocationPositionError)?.code === 1 ? "denied" : "error";
@@ -79,18 +91,19 @@ let running = false;
 /** Actualización automática. `asking` es true cuando la llama abrir o volver a la app (no el reloj). */
 async function refresh(asking: boolean) {
   if (running || document.visibilityState !== "visible" || !("geolocation" in navigator)) return;
-  const s = read();
   const now = Date.now();
-  const perm = await permission();
-  if (perm === "denied") return;
-  if (perm === "granted") {
-    if (now - s.sentAt < MIN_GAP_MS) return;
-  } else if (!asking || now - s.sentAt < ASK_GAP_MS || now < s.pausedUntil) {
-    return;
-  }
   running = true;
   try {
-    await send(await position(), true);
+    const perm = await permission();
+    if (perm === "denied" || document.visibilityState !== "visible") return;
+    const s = read();
+    if (perm === "granted") {
+      if (now - s.sentAt < MIN_GAP_MS) return;
+    } else if (!asking || now - s.sentAt < ASK_GAP_MS || now < s.pausedUntil) {
+      return;
+    }
+    const pos = await position(true);
+    if (document.visibilityState === "visible" && isAccurate(pos)) await send(pos, true);
   } catch (e) {
     if ((e as GeolocationPositionError)?.code === 1) save({ pausedUntil: now + PAUSE_MS });
   } finally {

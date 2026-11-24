@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router";
 import { api, type NearbyPerson } from "../api";
 import { useMe } from "../App";
 import { CheckIcon, FilterIcon, PinIcon, RefreshIcon, StarIcon } from "../components/Icons";
-import { LOCATION_EVENT, shareLocation } from "../location";
+import { LOCATION_EVENT, shareLocation, type ShareResult } from "../location";
 import { BODY_TYPES, LOOKING_FOR, POSITIONS, RELATIONSHIP, TRIBES } from "../options";
 import { DialogFocus } from "../components/DialogFocus";
 import { getGridList, saveGridList, toGridPerson } from "../features/profileSwipe/gridList";
@@ -66,9 +66,10 @@ export function countFilters(f: Filters) {
 }
 
 type Status = "loading" | "ready" | "error";
-type LocState = "none" | "asking" | "denied" | "unsupported" | "ok";
+type LocState = "none" | "asking" | Exclude<ShareResult, "error">;
+type LocationFeedback = { error: boolean; text: string };
 const REFRESH_DISTANCE = 100;
-type NearbyPage = { hasLocation: boolean; people: NearbyPerson[]; hasMore: boolean };
+type NearbyPage = { hasLocation: boolean; locationUpdatedAt: string | null; people: NearbyPerson[]; hasMore: boolean };
 type NearbyPosition = { userId: string; query: string; top: number; count: number };
 
 // Guarda las posiciones recientes por entrada del historial, sin guardar los perfiles.
@@ -85,7 +86,10 @@ export function Nearby() {
   const [status, setStatus] = useState<Status>("loading");
   const [loc, setLoc] = useState<LocState>("ok");
   const [showFilters, setShowFilters] = useState(false);
-  const [updating, setUpdating] = useState<"idle" | "busy" | "done">("idle");
+  const [showLocation, setShowLocation] = useState(false);
+  const [locationUpdatedAt, setLocationUpdatedAt] = useState<string | null>(null);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [locationFeedback, setLocationFeedback] = useState<LocationFeedback | null>(null);
   const [refreshDistance, setRefreshDistance] = useState(0);
   const [refreshError, setRefreshError] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
@@ -138,6 +142,7 @@ export function Nearby() {
 
   const load = useCallback(async (f: Filters, offset = 0, releasedDistance = 0, restoreCount = 0) => {
     requestRef.current?.abort();
+    if (!offset) setHasMore(false);
     const controller = new AbortController();
     requestRef.current = controller;
     const { signal } = controller;
@@ -155,6 +160,8 @@ export function Nearby() {
       }
       if (signal.aborted) return;
       setLoc((prev) => (d.hasLocation ? "ok" : prev === "ok" ? "none" : prev));
+      setLocationUpdatedAt(d.locationUpdatedAt);
+      if (!d.hasLocation) setShowLocation(false);
       setPeople((prev) => (offset ? [...prev, ...loaded] : loaded));
       setHasMore(hasMore);
       setStatus("ready");
@@ -218,8 +225,9 @@ export function Nearby() {
     if (gesture?.distance === REFRESH_DISTANCE && !requestRef.current) void load(filters, 0, gesture.distance);
   }
 
-  /** Pide la ubicación al navegador y manda solo lat/lng; el servidor la redondea a ~500 m. */
+  /** Pide la ubicación al navegador y comparte solo una zona aproximada. */
   async function share() {
+    setLocationFeedback(null);
     setLoc("asking");
     const r = await shareLocation();
     if (r === "ok") {
@@ -230,17 +238,47 @@ export function Nearby() {
     }
   }
 
-  /** Botón de la barra: vuelve a tomar la ubicación ahora (por si te moviste). */
-  async function update() {
-    setUpdating("busy");
-    const r = await shareLocation();
-    if (r === "ok") {
-      setUpdating("done");
-      setTimeout(() => setUpdating("idle"), 2500);
-    } else {
-      setUpdating("idle");
-      if (r !== "error") setLoc(r);
+  async function applyLocationChange(change: () => Promise<LocationFeedback | null>) {
+    if (locationBusy) return;
+    setLocationBusy(true);
+    setLocationFeedback(null);
+    try {
+      setLocationFeedback(await change());
+    } catch {
+      setLocationFeedback({ error: true, text: "No pudimos guardar el cambio. Probá de nuevo." });
+    } finally {
+      setLocationBusy(false);
     }
+  }
+
+  function updateLocation() {
+    return applyLocationChange(async () => {
+      const result = await shareLocation();
+      if (result === "ok") return { error: false, text: "Ubicación actualizada." };
+      if (result === "imprecise") return { error: true, text: "La señal es imprecisa. Probá cerca de una ventana o al aire libre." };
+      if (result === "denied") return { error: true, text: "Habilitá la ubicación en los ajustes del sitio." };
+      return { error: true, text: "No pudimos actualizar la ubicación. Probá de nuevo." };
+    });
+  }
+
+  function changeDistance(showDistance: boolean) {
+    return applyLocationChange(async () => {
+      await api("/me/privacy", { method: "PUT", json: { showDistance } });
+      await Promise.all([reload(), load(filtersRef.current)]);
+      return { error: false, text: showDistance ? "Volviste a mostrar tu distancia." : "Ocultaste tu distancia." };
+    });
+  }
+
+  function clearLocation() {
+    if (!window.confirm("¿Borrar la zona aproximada que compartiste?")) return;
+    return applyLocationChange(async () => {
+      await api("/me/location", { method: "DELETE" });
+      setLoc("none");
+      setShowLocation(false);
+      setLocationUpdatedAt(null);
+      await Promise.all([reload(), load(filtersRef.current)]);
+      return { error: false, text: "Borraste tu ubicación." };
+    });
   }
 
   useEffect(() => {
@@ -259,6 +297,7 @@ export function Nearby() {
   }, []);
 
   function applyFilters(f: Filters) {
+    filtersRef.current = f;
     pendingRestore.current = undefined;
     if (pageRef.current) pageRef.current.scrollTop = 0;
     setFilters(f);
@@ -281,11 +320,13 @@ export function Nearby() {
           <div className="topbar__actions">
             {loc === "ok" && me?.profile?.hasLocation && (
               <button
-                className={`iconbtn ${updating === "busy" ? "iconbtn--busy" : updating === "done" ? "iconbtn--done" : ""}`}
-                disabled={updating === "busy"}
-                onClick={update}
-                aria-label="Actualizar mi ubicación"
-                title="Actualizar mi ubicación"
+                type="button"
+                className="iconbtn nearby-location-toggle"
+                onClick={() => setShowLocation((open) => !open)}
+                aria-label="Mi ubicación"
+                aria-expanded={showLocation}
+                aria-controls={showLocation ? "nearby-location" : undefined}
+                title="Mi ubicación"
               >
                 <PinIcon size={20} />
               </button>
@@ -299,20 +340,49 @@ export function Nearby() {
 
       <InstallBanner />
 
-      <p className="sr-only" aria-live="polite">{updating === "done" ? "Ubicación actualizada" : ""}</p>
+      {showLocation && loc === "ok" && me?.profile && (
+        <section className="nearby-location" id="nearby-location" aria-labelledby="nearby-location-title">
+          <div className="stack">
+            <h2 className="subhead" id="nearby-location-title">Mi ubicación</h2>
+            <p className="muted small">Compartís una zona de unos 500 m.</p>
+            {locationUpdatedAt && (
+              <p className="muted small">
+                Última actualización · <time dateTime={locationUpdatedAt}>
+                  {new Intl.DateTimeFormat("es-AR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(locationUpdatedAt))}
+                </time>
+              </p>
+            )}
+          </div>
+          <label className="check">
+            <input type="checkbox" checked={me.profile.showDistance} disabled={locationBusy} onChange={(e) => changeDistance(e.target.checked)} />
+            <span>Mostrar mi distancia<small className="muted check__hint">Si la ocultás, tampoco se usa para ordenar la grilla.</small></span>
+          </label>
+          <div className="nearby-location__actions">
+            <button type="button" className="btn btn--small" disabled={locationBusy} onClick={updateLocation}>Actualizar ahora</button>
+            <button type="button" className="btn btn--small btn--ghost btn--dangertext" disabled={locationBusy} onClick={clearLocation}>
+              Borrar ubicación
+            </button>
+          </div>
+        </section>
+      )}
+      <div aria-live="polite" aria-atomic>
+        {locationFeedback && <p className={`page-note ${locationFeedback.error ? "error" : "muted small"}`}>{locationFeedback.text}</p>}
+      </div>
 
       {status === "ready" && loc !== "ok" && (
         <div className="notice locate-bar">
           <span className="locate-bar__icon"><PinIcon /></span>
           <div className="locate-bar__text">
-            <p>Compartí tu ubicación para ver a qué distancia está cada persona.</p>
+            {loc === "imprecise"
+              ? <p className="error" role="status">La señal es imprecisa. Probá cerca de una ventana o al aire libre.</p>
+              : <p>Compartí tu ubicación para ver a qué distancia está cada persona.</p>}
             <p className="muted small">Guardamos solo una zona de unos 500 m y la distancia se muestra en tramos.</p>
             {loc === "denied" && <p className="error">El navegador no nos dio permiso. Habilitalo en los ajustes del sitio.</p>}
             {loc === "unsupported" && <p className="error">Este navegador no permite compartir la ubicación.</p>}
           </div>
           {loc !== "unsupported" && (
             <button className="btn btn--small btn--primary" disabled={loc === "asking"} onClick={share}>
-              {loc === "asking" ? "Buscando…" : "Compartir"}
+              {loc === "asking" ? "Buscando…" : loc === "imprecise" ? "Reintentar" : "Compartir"}
             </button>
           )}
         </div>

@@ -584,6 +584,23 @@ a.gcard:hover { background: var(--surface); }
 
 /* ---------- Ubicación e instalación (arriba de la grilla) ---------- */
 .locate-bar, .install { background: var(--surface); border: 1px solid var(--line); align-items: center; }
+.nearby-location-toggle[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
+.nearby-location {
+  display: grid;
+  gap: 12px;
+  margin: 8px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  animation: nearby-location-in 160ms ease-out both;
+}
+.nearby-location .subhead { margin: 0; }
+.nearby-location .stack { gap: 3px; }
+.nearby-location__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.nearby-location__actions .btn { min-height: 44px; }
+@keyframes nearby-location-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .nearby-location { animation: none; } }
 .locate-bar__icon { flex: none; width: 36px; height: 36px; border-radius: var(--radius-pill); display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
 .locate-bar__text, .install__text { flex: 1; display: grid; gap: 2px; min-width: 0; }
 .install__icon { flex: none; width: 40px; height: 40px; border-radius: var(--radius-md); }

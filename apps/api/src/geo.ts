@@ -7,19 +7,7 @@
  *    moviéndose y comparando distancias: lo máximo que se puede saber es la celda.
  */
 
-const CELL_DEG_LAT = 0.0045; // ~500 m
-
-export function snapToCell(lat: number, lng: number): { lat: number; lng: number } {
-  const row = Math.floor(lat / CELL_DEG_LAT);
-  const cLat = (row + 0.5) * CELL_DEG_LAT;
-  // Las celdas mantienen ~500 m de ancho a cualquier latitud
-  const lngStep = CELL_DEG_LAT / Math.max(Math.cos((cLat * Math.PI) / 180), 0.01);
-  const col = Math.floor(lng / lngStep);
-  const cLng = (col + 0.5) * lngStep;
-  return { lat: round6(cLat), lng: round6(cLng) };
-}
-
-const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
+export { snapToCell } from "../../../packages/geo/cell.js";
 
 export function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const R = 6371;

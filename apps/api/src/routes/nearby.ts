@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -48,7 +48,8 @@ nearbyRoutes.put("/me/location", async (c) => {
   await db
     .update(profile)
     .set({ cellLat: cell.lat, cellLng: cell.lng, locationUpdatedAt: new Date() })
-    .where(eq(profile.userId, u.id));
+    .where(and(eq(profile.userId, u.id),
+      r.data.auto ? and(isNotNull(profile.cellLat), isNotNull(profile.cellLng)) : undefined));
   return c.json({ ok: true });
 });
 
@@ -128,7 +129,7 @@ nearbyRoutes.get("/nearby", async (c) => {
   return c.json(await nearbyPage(c.get("profile")!, filtersSchema.parse(c.req.query())));
 });
 
-type Me = { userId: string; cellLat: number | null; cellLng: number | null; showDistance: boolean };
+type Me = { userId: string; cellLat: number | null; cellLng: number | null; showDistance: boolean; locationUpdatedAt?: Date | null };
 
 /** Una página de la grilla para `me`. Separada de la ruta para poder probarla sin sesión (ver nearby.test.ts). */
 export async function nearbyPage(me: Me, f: NearbyFilters) {
@@ -206,6 +207,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
   return {
     needLocation: false,
     hasLocation: meHasLoc,
+    locationUpdatedAt: meHasLoc ? me.locationUpdatedAt?.toISOString() ?? null : null,
     hasMore: candidates.length > f.offset + PAGE,
     total: candidates.length,
     people: page.flatMap(({ id, km, online, recent }) => {
