@@ -11,6 +11,7 @@ import { PhotoCrop } from "../components/PhotoCrop";
 import { preparePhotoForCrop } from "../features/photos/preparePhoto";
 import { HasPlaceSelect } from "../features/place/hasPlace";
 import { AlbumHeader, MoveTo, NewAlbum } from "../features/photos/AlbumHeader";
+import { useEditorKeyboard } from "../features/profile/useEditorKeyboard";
 import { BODY_TYPES, HIV_STATUS, LOOKING_FOR, POSITIONS, PRONOUNS, RELATIONSHIP, TRIBES } from "../options";
 
 type Form = Omit<Profile, "birthdate" | "age">;
@@ -106,6 +107,7 @@ export function EditProfile() {
 
 function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; photos: Photos; albums: MyAlbum[]; reload: () => Promise<void> }) {
   const navigate = useNavigate();
+  const keyboardOpen = useEditorKeyboard();
   const [params] = useSearchParams();
   const isNew = params.get("nuevo") === "1";
   const [initialForm] = useState(() => profileForm(profile));
@@ -348,7 +350,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
   const photoNotice = photoError && <div className="toast toast--upload-error" role="alert">{photoError}</div>;
 
   return (
-    <div className="page">
+    <div className="page profile-editor" data-keyboard-open={keyboardOpen || undefined}>
       <header className="topbar topbar--thread">
         <button type="button" className="iconbtn" aria-label="Volver a Mi perfil" onClick={leave} disabled={mediaLocked}><BackIcon /></button>
         <h1 className="topbar__title">Editar perfil</h1>
