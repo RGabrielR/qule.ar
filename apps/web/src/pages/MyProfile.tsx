@@ -501,7 +501,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
           <span className="profile-editor__social-label"><XSocialIcon /> Usuario de X</span>
           <span className="profile-editor__handle">
             <span aria-hidden="true">@</span>
-            <input className="input" pattern="\s*[A-Za-z0-9_]{0,15}\s*" aria-describedby="xUsername-error" autoCapitalize="none" spellCheck={false}
+            <input className="input" pattern="\s*[A-Za-z0-9_]{0,15}\s*" aria-describedby="profile-social-visibility profile-social-ownership xUsername-error" autoCapitalize="none" spellCheck={false}
               title="Hasta 15 letras, números o guiones bajos" value={form.xUsername ?? ""} onChange={(e) => set("xUsername", e.target.value.replace(/^\s*@/, "") || null)} />
           </span>
           <small className="profile-editor__handle-error error" id="xUsername-error">Usá hasta 15 letras, números o guiones bajos.</small>
@@ -510,11 +510,15 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
           <span className="profile-editor__social-label"><InstagramIcon /> Usuario de Instagram</span>
           <span className="profile-editor__handle">
             <span aria-hidden="true">@</span>
-            <input className="input" pattern="\s*(?=[A-Za-z0-9_.]{0,30}\s*$)([A-Za-z0-9_]+([.][A-Za-z0-9_]+)*)?\s*" aria-describedby="instagramUsername-error" autoCapitalize="none" spellCheck={false}
+            <input className="input" pattern="\s*(?=[A-Za-z0-9_.]{0,30}\s*$)([A-Za-z0-9_]+([.][A-Za-z0-9_]+)*)?\s*" aria-describedby="profile-social-visibility profile-social-ownership instagramUsername-error" autoCapitalize="none" spellCheck={false}
               title="Hasta 30 letras, números o guiones bajos, con puntos entre ellos" value={form.instagramUsername ?? ""} onChange={(e) => set("instagramUsername", e.target.value.replace(/^\s*@/, "") || null)} />
           </span>
           <small className="profile-editor__handle-error error" id="instagramUsername-error">Usá hasta 30 caracteres: letras, números, guiones bajos o puntos. Los puntos van entre caracteres, de a uno.</small>
         </label>
+        <div className="muted small">
+          <p id="profile-social-ownership">Poné solo tu propia cuenta. Usar la de otra persona es motivo de suspensión.</p>
+          <p id="profile-social-visibility">Lo ve cualquier persona que entre a tu perfil. Si no querés que te reconozcan, no lo pongas.</p>
+        </div>
         <div className="grid2">
           <label className="field">
             <span>Altura (cm)</span>
