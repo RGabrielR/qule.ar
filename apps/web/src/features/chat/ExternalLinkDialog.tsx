@@ -19,24 +19,28 @@ export function ExternalLinkDialog({ destination, onClose }: { destination: URL;
       className="external-link-dialog"
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
-      onClose={(event) => { if (!event.currentTarget.open) onClose(); }}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
     >
       <h2 id={titleId}>Abrir enlace externo</h2>
       <p id={descriptionId}>
         Vas a salir de {APP_NAME} a <strong><bdi dir="ltr">{destination.host}</bdi></strong>.
       </p>
-      <form method="dialog" className="row">
-        <button className="btn" type="submit">Cancelar</button>
-        <a
+      <div className="row">
+        <button className="btn" type="button" onClick={onClose}>Cancelar</button>
+        <button
           className="btn btn--primary"
-          href={destination.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => dialogRef.current?.close()}
+          type="button"
+          onClick={() => {
+            window.open(destination.href, "_blank", "noopener,noreferrer");
+            onClose();
+          }}
         >
           Continuar
-        </a>
-      </form>
+        </button>
+      </div>
     </dialog>,
     document.body,
   );

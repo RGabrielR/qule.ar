@@ -40,10 +40,9 @@ test("los enlaces de grupos muestran el dominio y se abren solo al confirmar", a
 
   const dialog = page.getByRole("dialog", { name: "Abrir enlace externo" });
   const cancel = dialog.getByRole("button", { name: "Cancelar", exact: true });
-  const proceed = dialog.getByRole("link", { name: "Continuar", exact: true });
+  const proceed = dialog.getByRole("button", { name: "Continuar", exact: true });
   await www.click();
   await expect(dialog).toHaveAccessibleDescription("Vas a salir de qule.ar a www.example.test.");
-  await expect(proceed).toHaveAttribute("href", "https://www.example.test/otra");
   await expect(cancel).toBeFocused();
   await cancel.click();
   await expect(dialog).toBeHidden();
@@ -59,14 +58,15 @@ test("los enlaces de grupos muestran el dominio y se abren solo al confirmar", a
   expect(requests).toBe(0);
 
   await page.keyboard.press("Enter");
-  await expect(proceed).toHaveAttribute("href", destination);
-  await expect(proceed).toHaveAttribute("target", "_blank");
-  await expect(proceed).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(proceed).toBeVisible();
   expect(requests).toBe(0);
   const popupPromise = page.waitForEvent("popup");
   await proceed.click();
   const popup = await popupPromise;
   await expect(popup.getByRole("heading", { name: "Página externa" })).toBeVisible();
+  await expect(popup).toHaveURL(destination);
+  expect(await popup.evaluate(() => ({ noOpener: window.opener === null, referrer: document.referrer })))
+    .toEqual({ noOpener: true, referrer: "" });
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(new URL(path, baseURL!).href);
   expect(requests).toBe(1);
