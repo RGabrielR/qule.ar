@@ -376,13 +376,13 @@ export function GroupChat() {
           const ms = new Date(m.scheduledAt).getTime() - now;
           return (
             <div key={m.id} className="queued">
-              <div className="queued__head">
-                <ClockIcon /> En cola · sale en <b>{fmtCountdown(ms)}</b>
-              </div>
               <p className="queued__body">{m.body}</p>
-              <div className="queued__actions">
-                <button className="linkbtn" onClick={() => { setReplyTo(null); setEditing(m.id); setText(m.body ?? ""); }}>Editar</button>
-                <button className="linkbtn linkbtn--danger" onClick={() => cancel(m)}>Cancelar</button>
+              <div className="queued__footer">
+                <span className="queued__time"><ClockIcon /> Sale en {fmtCountdown(ms)}</span>
+                <div className="queued__actions">
+                  <button className="linkbtn" onClick={() => { setReplyTo(null); setEditing(m.id); setText(m.body ?? ""); }}>Editar</button>
+                  <button className="linkbtn linkbtn--danger" onClick={() => cancel(m)}>Cancelar</button>
+                </div>
               </div>
             </div>
           );
