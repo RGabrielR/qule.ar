@@ -81,20 +81,23 @@ export async function saveImage(input: ArrayBuffer | Buffer): Promise<string> {
 const KEY_RE = /^[0-9a-f-]{36}\.webp$/;
 const VIDEO_RE = /^[0-9a-f-]{36}\.mp4$/;
 
-export async function readImage(key: string, thumb = false): Promise<Buffer | null> {
+export async function readImage(key: string, size?: "thumb" | "cover"): Promise<Buffer | null> {
   if (!KEY_RE.test(key)) return null;
   try {
-    if (!thumb) return await getBlob(key);
+    if (!size) return await getBlob(key);
     // La miniatura se genera la primera vez que se pide y queda guardada
-    const saved = await getBlob(`thumbs/${key}`);
+    const thumbnailKey = size === "cover" ? `thumbs/cover-${key}` : `thumbs/${key}`;
+    const saved = await getBlob(thumbnailKey);
     if (saved) return saved;
     const original = await getBlob(key);
     if (!original) return null;
     const out = await sharp(original, { limitInputPixels: MAX_INPUT_PIXELS })
-      .resize({ width: THUMB_PX, height: THUMB_PX, fit: "cover", position: "attention" })
+      .resize(size === "cover"
+        ? { width: THUMB_PX, height: THUMB_PX, fit: "inside", withoutEnlargement: true }
+        : { width: THUMB_PX, height: THUMB_PX, fit: "cover", position: "attention" })
       .webp({ quality: 74 })
       .toBuffer();
-    await putBlob(`thumbs/${key}`, out, "image/webp").catch(() => {});
+    await putBlob(thumbnailKey, out, "image/webp").catch(() => {});
     return out;
   } catch {
     return null;
@@ -109,6 +112,7 @@ export async function deleteImage(key: string) {
   if (!KEY_RE.test(key)) return;
   await deleteBlob(key);
   await deleteBlob(`thumbs/${key}`);
+  await deleteBlob(`thumbs/cover-${key}`);
 }
 
 // ---------- Videos (solo para el álbum privado) ----------

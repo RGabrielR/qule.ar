@@ -98,28 +98,8 @@ function ProfileView({ id }: { id: string }) {
       </div>
     );
   }
-  if (!p) {
-    // Mientras carga, si venís de la grilla ya se ve su foto chica.
-    const thumb = swipe.current?.photo;
-    return (
-      <div className={`page profile${swipeClass}`} {...swipeProps}>
-        {thumb && <div className="profile__photo"><img src={thumb} alt="" /></div>}
-      </div>
-    );
-  }
-
-  return (
-    <div className={`page profile${swipeClass}`} {...swipeProps}>
-      <ProfileCover
-        key={p.id}
-        photos={p.photos}
-        displayName={p.displayName}
-        age={p.age}
-        status={p}
-        back={<button className="iconbtn iconbtn--float" onClick={() => nav(-1)} aria-label="Volver"><BackIcon /></button>}
-        aside={swipe.active && <ProfileSwitcher swipe={swipe} className="profile-switch--cover" />}
-      />
-
+  const content = p && (
+    <>
       <div className="profile__body">
         {!p.isMe && (
           <div className="row">
@@ -205,6 +185,21 @@ function ProfileView({ id }: { id: string }) {
       {viewing && <AlbumViewer items={viewing.items} start={viewing.start} title={viewing.title} onClose={closeViewer} />}
       {reporting && <ReportDialog userId={p.id} name={p.displayName} onClose={() => setReporting(false)} />}
       {staffing && <StaffDialog userId={p.id} name={p.displayName} onClose={() => setStaffing(false)} />}
+    </>
+  );
+
+  return (
+    <div className={`page profile${swipeClass}`} {...swipeProps}>
+      <ProfileCover
+        photos={p?.photos}
+        coverPhoto={swipe.current?.coverPhoto}
+        displayName={p?.displayName}
+        age={p?.age}
+        status={p ?? undefined}
+        back={<button className="iconbtn iconbtn--float" onClick={() => nav(-1)} aria-label="Volver"><BackIcon /></button>}
+        aside={swipe.active && <ProfileSwitcher swipe={swipe} className="profile-switch--cover" />}
+      />
+      {content}
     </div>
   );
 }

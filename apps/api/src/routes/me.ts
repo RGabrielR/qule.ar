@@ -56,9 +56,10 @@ meRoutes.get("/config", (c) => c.json({ google: googleEnabled, passwordReset: ma
 // Archivos: solo para gente con sesión, así no se pueden scrapear las fotos desde afuera
 meRoutes.get("/files/:key", requireUserForFiles, async (c) => {
   const key = c.req.param("key");
-  const thumb = c.req.query("s") === "thumb";
+  const size = c.req.query("s");
+  const variant = size === "thumb" || size === "cover" ? size : undefined;
   // Foto pública ya chequeada hace un rato: directo al archivo, sin preguntarle a la base (ver fileAccess.ts)
-  if (isKnownPublic(key)) return sendImage(c, key, thumb, false);
+  if (isKnownPublic(key)) return sendImage(c, key, variant, false);
   const viewer = c.get("user").id;
   // Foto o video de álbum privado (o la miniatura de un video): solo dueño o gente con acceso vigente
   const [ph] = await db.select().from(photo).where(or(eq(photo.key, key), eq(photo.posterKey, key)));
@@ -91,11 +92,11 @@ meRoutes.get("/files/:key", requireUserForFiles, async (c) => {
   const noStore = Boolean(ph?.isPrivate || dm?.expiring);
   // Foto de perfil pública o de un grupo activo: la puede ver cualquiera con sesión, se recuerda un minuto
   if ((ph && !ph.isPrivate) || (grp && !grp.removedAt)) rememberPublic(key);
-  return sendImage(c, key, thumb, noStore);
+  return sendImage(c, key, variant, noStore);
 });
 
-async function sendImage(c: Context<AppEnv>, key: string, thumb: boolean, noStore: boolean) {
-  const buf = await readImage(key, thumb);
+async function sendImage(c: Context<AppEnv>, key: string, variant: "thumb" | "cover" | undefined, noStore: boolean) {
+  const buf = await readImage(key, variant);
   if (!buf) return c.notFound();
   return c.body(new Uint8Array(buf), 200, {
     "Content-Type": "image/webp",

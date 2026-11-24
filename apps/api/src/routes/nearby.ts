@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db, schema } from "../db/index.js";
 import { HAS_PLACE } from "../db/schema.js";
 import { distanceLabel, snapToCell, visibleKm } from "../geo.js";
-import { ageFrom, firstPublicPhotoKeys, thumbUrl, requireProfile, requireUser, type AppEnv } from "../lib.js";
+import { ageFrom, firstPublicPhotoKeys, imageUrl, thumbUrl, requireProfile, requireUser, type AppEnv } from "../lib.js";
 import { autoHiddenUsers } from "../moderation.js";
 import { isOnline } from "../realtime.js";
 import { hit } from "../shared.js";
@@ -211,11 +211,13 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
     people: page.flatMap(({ id, km, online, recent }) => {
       const d = byId.get(id);
       if (!d) return []; // borró la cuenta entre los dos pasos
+      const photoKey = first.get(id);
       return [{
         id,
         name: d.displayName,
         age: ageFrom(d.birthdate),
-        photo: thumbUrl(first.get(id)),
+        photo: thumbUrl(photoKey),
+        coverPhoto: imageUrl(photoKey),
         online,
         recent,
         favorite: favs.has(id),
