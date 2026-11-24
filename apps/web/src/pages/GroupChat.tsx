@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router";
-import { api, getSocket, type GroupInfo, type GroupMessage, type ReactionEvent } from "../api";
+import { api, ApiError, getSocket, type GroupInfo, type GroupMessage, type ReactionEvent } from "../api";
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
@@ -334,7 +334,18 @@ export function GroupChat() {
   }
 
   async function cancel(m: GroupMessage) {
-    await api(`/groups/${id}/messages/${m.id}`, { method: "DELETE" }).catch(() => {});
+    setNotice(null);
+    try {
+      await api(`/groups/${id}/messages/${m.id}?onlyQueued=1`, { method: "DELETE" });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setNotice({ kind: "info", text: error.message });
+        setQueued((q) => q.filter((x) => x.id !== m.id));
+        return;
+      }
+      setNotice({ kind: "error", text: "No se pudo confirmar la cancelación. Probá de nuevo." });
+      return;
+    }
     setQueued((q) => q.filter((x) => x.id !== m.id));
     if (editing === m.id) {
       setEditing(null);
@@ -355,7 +366,13 @@ export function GroupChat() {
 
   async function remove(m: GroupMessage) {
     setMenuFor(null);
-    await api(`/groups/${id}/messages/${m.id}`, { method: "DELETE" }).catch(() => {});
+    setNotice(null);
+    try {
+      await api(`/groups/${id}/messages/${m.id}`, { method: "DELETE" });
+    } catch {
+      setNotice({ kind: "error", text: "No se pudo confirmar el borrado. Probá de nuevo." });
+      return;
+    }
     updatePublished((list) => list.filter((x) => x.id !== m.id));
   }
 

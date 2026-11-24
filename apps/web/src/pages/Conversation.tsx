@@ -259,7 +259,13 @@ export function Conversation() {
 
   async function unsend(m: Dm) {
     setMsgMenu(null);
-    await api(`/conversations/${id}/messages/${m.id}`, { method: "DELETE" }).catch(() => {});
+    setError("");
+    try {
+      await api(`/conversations/${id}/messages/${m.id}`, { method: "DELETE" });
+    } catch {
+      setError("No se pudo confirmar el desenvío. Probá de nuevo.");
+      return;
+    }
     setReplyTo((r) => (r?.id === m.id ? null : r));
     setMessages((list) => list
       .filter((x) => x.id !== m.id)
