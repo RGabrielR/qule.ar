@@ -395,7 +395,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
       <section className="section">
         <h2 className="section__title"><LockIcon /> Álbumes privados <span className="muted">{privatePhotos.length}/{MAX_ALBUM_ITEMS}</span></h2>
         <p className="muted small lead">
-          Fotos y videos (hasta 1 minuto) que solo ve la gente a la que le compartís cada álbum desde su perfil, por 1 hora, 24 horas, 7 días o sin límite. Podés tener hasta {MAX_ALBUMS} álbumes y {MAX_ALBUM_ITEMS} archivos entre todos, y quitar el acceso cuando quieras.
+          Fotos y videos (hasta 1 minuto) que solo ve la gente a la que le compartís cada álbum desde su perfil, por 1 hora, 24 horas, 7 días o sin límite. Podés tener hasta {MAX_ALBUMS} álbumes y {MAX_ALBUM_ITEMS} archivos entre todos, y quitar el acceso cuando quieras. No podemos impedir capturas de pantalla, pero quien mira tus fotos las ve con su nombre encima: si saca una captura, se sabe quién fue.
         </p>
         {(albums.length ? albums : [null]).map((a) => {
           const items = a ? privatePhotos.filter((p) => p.albumId === a.id) : [];

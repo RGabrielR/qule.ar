@@ -15,6 +15,7 @@ import { MessageText } from "../features/chat/MessageText";
 import { batchReadReceipts } from "../features/messages/readReceipts";
 import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
+import { Watermark } from "../features/photos/Watermark";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
 
 /** Texto corto para la cita en el composer y en la burbuja. */
@@ -274,7 +275,8 @@ export function Conversation() {
 
   const loadedMessageIds = new Set(messages.map((m) => m.id));
   const lastMine = [...messages].reverse().find((m) => m.senderId === myId);
-  const openPhoto = messages.find((m) => m.id === photoMessageId && m.conversationId === id)?.photo;
+  const openPhotoMessage = messages.find((m) => m.id === photoMessageId && m.conversationId === id);
+  const openPhoto = openPhotoMessage?.photo;
 
   const lastSeen = lastMine && (lastMine.readAt || (seen?.conversationId === id &&
     ((seen.readAtById.get(lastMine.id) ?? "") >= lastMine.createdAt || (seen.through && compareDmOrder(lastMine, seen.through) <= 0))));
@@ -349,8 +351,9 @@ export function Conversation() {
               ) : (
                 <>
                   {m.photo && (
-                    <button type="button" className="bubble__photo-button" aria-label="Abrir foto" onClick={() => setPhotoMessageId(m.id)}>
+                    <button type="button" className={`bubble__photo-button${mine ? "" : " private-media"}`} aria-label="Abrir foto" onClick={() => setPhotoMessageId(m.id)}>
                       <img className="bubble__photo" src={m.photo} alt="" loading="lazy" onLoad={followLatestMessage} />
+                      {!mine && <Watermark />}
                     </button>
                   )}
                   {m.body && <p>{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>}
@@ -469,7 +472,7 @@ export function Conversation() {
         </div>
       </form>
 
-      {openPhoto && <ChatPhotoViewer src={openPhoto} onClose={() => setPhotoMessageId(null)} />}
+      {openPhoto && <ChatPhotoViewer src={openPhoto} watermark={openPhotoMessage?.senderId !== myId} onClose={() => setPhotoMessageId(null)} />}
       {viewer && <ExpiringViewer src={viewer.src} seconds={viewer.seconds} onClose={() => setViewer(null)} />}
     </div>
   );
@@ -485,9 +488,12 @@ function ExpiringViewer({ src, seconds, onClose }: { src: string; seconds: numbe
     if (left <= 0) onClose();
   }, [left, onClose]);
   return (
-    <div className="viewer" role="dialog" aria-modal aria-label="Foto temporal" onClick={onClose}>
+    <div className="viewer private-media" role="dialog" aria-modal aria-label="Foto temporal" onClick={onClose}>
       <div className="viewer__bar"><span style={{ width: `${(left / seconds) * 100}%` }} /></div>
-      <img src={src} alt="Foto temporal" onContextMenu={(e) => e.preventDefault()} draggable={false} />
+      <div className="viewer__photo">
+        <img src={src} alt="Foto temporal" onContextMenu={(e) => e.preventDefault()} draggable={false} />
+        <Watermark />
+      </div>
       <p className="viewer__note">Se cierra en {Math.max(left, 0)} s y no se puede volver a abrir. Tocá para cerrar.</p>
     </div>
   );
