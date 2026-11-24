@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { api, authClient } from "../api";
 import { useMe } from "../App";
 import { Wordmark } from "../components/Wordmark";
@@ -8,6 +8,7 @@ import { APP_NAME, APP_SLOGAN } from "../brand";
 import { GoogleMark } from "../components/GoogleMark";
 import { EyeIcon, EyeOffIcon } from "../components/Icons";
 import { botCheckHeaders } from "../features/auth/botCheck";
+import { GoogleSignInError } from "../features/auth/GoogleSignInError";
 
 export function Login() {
   const { reload } = useMe();
@@ -20,6 +21,9 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [google, setGoogle] = useState(false);
   const [canReset, setCanReset] = useState(false);
+  // Al volver de Google con un error, Better Auth trae a esta pantalla con ?error=<código> (ver errorCallbackURL)
+  const [params, setParams] = useSearchParams();
+  const [googleError] = useState(() => params.get("error"));
   // Campo trampa: invisible, solo lo completan los bots
   const [trap, setTrap] = useState("");
   // Chequeo anti-bots: se resuelve en segundo plano apenas se elige "Crear cuenta" (ver features/auth/botCheck.ts)
@@ -28,6 +32,11 @@ export function Login() {
   useEffect(() => {
     api<{ google: boolean; passwordReset: boolean }>("/config").then((c) => { setGoogle(c.google); setCanReset(c.passwordReset); }).catch(() => {});
   }, []);
+
+  // Se saca el código de la dirección para que no vuelva a aparecer al recargar
+  useEffect(() => {
+    if (params.has("error")) setParams({}, { replace: true });
+  }, [params, setParams]);
 
   function selectMode(next: "in" | "up") {
     if (next === mode) return;
@@ -76,11 +85,13 @@ export function Login() {
       </div>
 
       <div className="auth__card">
+        {googleError && <GoogleSignInError code={googleError} canReset={canReset} />}
+
         {google && (
           <>
             <button
               className="btn btn--google"
-              onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/" })}
+              onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/", errorCallbackURL: "/entrar" })}
             >
               <GoogleMark /> Seguir con Google
             </button>
