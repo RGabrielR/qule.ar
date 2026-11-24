@@ -152,7 +152,7 @@ export function Conversation() {
     const body = text.trim();
     if (!body) return;
     // Mandar con el botón le saca el foco al campo y cierra el teclado. Se lo devolvemos.
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
     setError("");
     setText("");
     try {
