@@ -97,12 +97,6 @@ input[type="date"].input { width: auto; min-width: 0; height: 48px; appearance: 
 
 .form { display: flex; flex-direction: column; gap: 14px; }
 .field { display: flex; flex-direction: column; gap: 6px; border: 0; padding: 0; margin: 0; min-width: 0; }
-.profile-editor__handle { position: relative; display: flex; align-items: center; }
-.profile-editor__handle > span { position: absolute; inset-inline-start: 12px; font-size: var(--text-input); pointer-events: none; user-select: none; }
-.profile-editor__handle > .input { padding-inline-start: calc(12px + 1.1em); }
-.profile-editor__handle-error { display: none; }
-.field:has(.profile-editor__handle input:user-invalid) > .profile-editor__handle-error { display: block; }
-.profile-editor__social-label { display: inline-flex; align-items: center; gap: 8px; }
 .field > span, .field > label, .field > legend { font-size: var(--text-sm); color: var(--muted); font-weight: 500; padding: 0; }
 .field > legend { margin-bottom: 6px; }
 .check { display: flex; gap: 10px; align-items: flex-start; font-size: var(--text-md); }
@@ -303,12 +297,6 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .profile-switch--cover .profile-switch__btn { background: var(--scrim-light); color: var(--text); backdrop-filter: blur(8px); }
 .profile-switch__btn:disabled { opacity: 0.35; cursor: default; }
 .profile__body { padding: 16px; display: flex; flex-direction: column; gap: 18px; }
-.profile__social-links { display: flex; gap: 8px; }
-.profile__social-link { flex: 0 1 auto; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; min-width: 0; min-height: 44px; height: auto; padding-block: 6px; font-weight: 600; }
-.profile__social-content { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; }
-.profile__social-link svg { display: block; flex: none; width: 18px; height: 18px; color: var(--muted); }
-.profile__social-link:is(:hover, :focus-visible) { background: var(--surface-3); border-color: var(--accent); }
-.profile__handle { line-height: 1.5; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .profile__about { white-space: pre-wrap; font-size: var(--text-lg); }
 .profile__section h3 { font-size: var(--text-sm); color: var(--muted); font-weight: 500; margin-bottom: 8px; }
 .profile__safety { border-top: 1px solid var(--line); padding-top: 16px; }

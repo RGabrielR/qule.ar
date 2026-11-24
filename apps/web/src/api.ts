@@ -67,8 +67,6 @@ export type Profile = {
   displayName: string;
   birthdate: string;
   age: number;
-  xUsername: string | null;
-  instagramUsername: string | null;
   about: string | null;
   heightCm: number | null;
   weightKg: number | null;

@@ -6,7 +6,7 @@ import { useMe } from "../App";
 import { APP_NAME } from "../brand";
 import { AlbumViewer, duration, untilLabel } from "../components/AlbumViewer";
 import { Avatar } from "../components/Avatar";
-import { BackIcon, ChevronRightIcon, InstagramIcon, LockIcon, PlusIcon, XSocialIcon } from "../components/Icons";
+import { BackIcon, ChevronRightIcon, LockIcon, PlusIcon } from "../components/Icons";
 import { PhotoCrop } from "../components/PhotoCrop";
 import { preparePhotoForCrop } from "../features/photos/preparePhoto";
 import { HasPlaceSelect } from "../features/place/hasPlace";
@@ -71,7 +71,7 @@ const batchSpot = (b: { isPrivate: boolean; albumId: string | null }) => (b.isPr
 
 function profileForm(p: Profile): Form {
   return {
-    displayName: p.displayName, about: p.about, xUsername: p.xUsername, instagramUsername: p.instagramUsername, heightCm: p.heightCm, weightKg: p.weightKg,
+    displayName: p.displayName, about: p.about, heightCm: p.heightCm, weightKg: p.weightKg,
     bodyType: p.bodyType, position: p.position, tribes: p.tribes, lookingFor: p.lookingFor,
     relationship: p.relationship, pronouns: p.pronouns, hasPlace: p.hasPlace, hivStatus: p.hivStatus, lastTested: p.lastTested,
   };
@@ -158,7 +158,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
     setSaving(true);
     setError("");
     try {
-      await api("/me/profile", { method: "PUT", json: { ...form, xUsername: form.xUsername?.trim() || null, instagramUsername: form.instagramUsername?.trim() || null } });
+      await api("/me/profile", { method: "PUT", json: form });
       await reload();
       navigate("/yo", { replace: true });
     } catch (err) {
@@ -497,28 +497,6 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
           <span>Sobre mí</span>
           <textarea className="input" rows={3} maxLength={500} value={form.about ?? ""} onChange={(e) => set("about", e.target.value || null)} />
         </label>
-        <label className="field">
-          <span className="profile-editor__social-label"><XSocialIcon /> Usuario de X</span>
-          <span className="profile-editor__handle">
-            <span aria-hidden="true">@</span>
-            <input className="input" pattern="\s*[A-Za-z0-9_]{0,15}\s*" aria-describedby="profile-social-visibility profile-social-ownership xUsername-error" autoCapitalize="none" spellCheck={false}
-              title="Hasta 15 letras, números o guiones bajos" value={form.xUsername ?? ""} onChange={(e) => set("xUsername", e.target.value.replace(/^\s*@/, "") || null)} />
-          </span>
-          <small className="profile-editor__handle-error error" id="xUsername-error">Usá hasta 15 letras, números o guiones bajos.</small>
-        </label>
-        <label className="field">
-          <span className="profile-editor__social-label"><InstagramIcon /> Usuario de Instagram</span>
-          <span className="profile-editor__handle">
-            <span aria-hidden="true">@</span>
-            <input className="input" pattern="\s*(?=[A-Za-z0-9_.]{0,30}\s*$)([A-Za-z0-9_]+([.][A-Za-z0-9_]+)*)?\s*" aria-describedby="profile-social-visibility profile-social-ownership instagramUsername-error" autoCapitalize="none" spellCheck={false}
-              title="Hasta 30 letras, números o guiones bajos, con puntos entre ellos" value={form.instagramUsername ?? ""} onChange={(e) => set("instagramUsername", e.target.value.replace(/^\s*@/, "") || null)} />
-          </span>
-          <small className="profile-editor__handle-error error" id="instagramUsername-error">Usá hasta 30 caracteres: letras, números, guiones bajos o puntos. Los puntos van entre caracteres, de a uno.</small>
-        </label>
-        <div className="muted small">
-          <p id="profile-social-ownership">Poné solo tu propia cuenta. Usar la de otra persona es motivo de suspensión.</p>
-          <p id="profile-social-visibility">Lo ve cualquier persona que entre a tu perfil. Si no querés que te reconozcan, no lo pongas.</p>
-        </div>
         <div className="grid2">
           <label className="field">
             <span>Altura (cm)</span>
@@ -546,7 +524,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
         {error && <p className="error" role="alert">{error}</p>}
         <div className="row profile-editor__actions">
           <button type="button" className="btn btn--ghost" onClick={leave} disabled={mediaLocked}>Cancelar</button>
-          <button type="submit" className="btn btn--primary" disabled={mediaLocked}>
+          <button className="btn btn--primary" disabled={mediaLocked}>
             {saving ? "Guardando…" : "Guardar cambios"}
           </button>
         </div>

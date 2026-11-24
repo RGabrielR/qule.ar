@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from "react";
-import { InstagramIcon, XSocialIcon } from "./Icons";
 import type { PublicProfile } from "../api";
 import { hasPlaceLabel } from "../features/place/hasPlace";
 import { ProfileCoverImage } from "../features/profile/ProfileCoverImage";
@@ -67,7 +66,7 @@ export function ProfileCover({ photos, coverPhoto, displayName, age, status, bac
   );
 }
 
-type StatsInput = Pick<PublicProfile, "about" | "xUsername" | "instagramUsername" | "heightCm" | "weightKg" | "bodyType" | "position" | "relationship" | "pronouns" | "hasPlace" | "hivStatus" | "lastTested" | "tribes" | "lookingFor">;
+type StatsInput = Pick<PublicProfile, "about" | "heightCm" | "weightKg" | "bodyType" | "position" | "relationship" | "pronouns" | "hasPlace" | "hivStatus" | "lastTested" | "tribes" | "lookingFor">;
 
 export function ProfileStats({ p, empty = null }: { p: StatsInput; empty?: ReactNode }) {
   const rows: [string, string | null][] = [
@@ -82,30 +81,10 @@ export function ProfileStats({ p, empty = null }: { p: StatsInput; empty?: React
     ["Último test", p.lastTested ? new Date(p.lastTested + "T12:00").toLocaleDateString("es-AR", { month: "long", year: "numeric" }) : null],
   ];
   const visible = rows.filter(([, v]) => v);
-  if (!p.about && !p.xUsername && !p.instagramUsername && !visible.length && !p.tribes.length && !p.lookingFor.length) return empty;
+  if (!p.about && !visible.length && !p.tribes.length && !p.lookingFor.length) return empty;
   return (
     <>
       {p.about && <p className="profile__about">{p.about}</p>}
-      {(p.xUsername || p.instagramUsername) && (
-        <div className="profile__social-links">
-          {p.xUsername && (
-            <a className="chip profile__social-link" href={`https://x.com/${encodeURIComponent(p.xUsername)}`} target="_blank" rel="noopener noreferrer"
-              aria-label={`Abrir @${p.xUsername} en X (se abre en otra pestaña o app)`}>
-              <span className="profile__social-content">
-                <XSocialIcon /><span className="profile__handle">{p.xUsername}</span>
-              </span>
-            </a>
-          )}
-          {p.instagramUsername && (
-            <a className="chip profile__social-link" href={`https://www.instagram.com/${encodeURIComponent(p.instagramUsername)}/`} target="_blank" rel="noopener noreferrer"
-              aria-label={`Abrir @${p.instagramUsername} en Instagram (se abre en otra pestaña o app)`}>
-              <span className="profile__social-content">
-                <InstagramIcon /><span className="profile__handle">{p.instagramUsername}</span>
-              </span>
-            </a>
-          )}
-        </div>
-      )}
       {visible.length > 0 && (
         <dl className="stats">
           {visible.map(([k, v]) => (
