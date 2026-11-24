@@ -196,8 +196,13 @@ export function Conversation() {
 
   async function unsend(m: Dm) {
     setMsgMenu(null);
-    await api(`/conversations/${id}/messages/${m.id}`, { method: "DELETE" }).catch(() => {});
-    setMessages((list) => list.filter((x) => x.id !== m.id));
+    setError("");
+    try {
+      await api(`/conversations/${id}/messages/${m.id}`, { method: "DELETE" });
+      setMessages((list) => list.filter((x) => x.id !== m.id));
+    } catch {
+      setError("No se pudo confirmar el desenvío. Probá de nuevo.");
+    }
   }
 
   const lastMine = [...messages].reverse().find((m) => m.senderId === myId);
