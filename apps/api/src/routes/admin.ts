@@ -14,7 +14,7 @@ import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnle
 import { removeGroup } from "./groups.js";
 import { keepEvidence, purgeSuspendedContent } from "../suspension.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
-import { accessFor, grant, isOwner, logAction, notifyStaff, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
+import { accessFor, grant, isOwner, logAction, notifyStaff, ownerIds, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
 
 const { report, profile, session, groupMessage, directMessage, conversation, pushSubscription, user, group, appeal, staffPermission, modAction } = schema;
 
@@ -503,6 +503,66 @@ adminRoutes.post("/admin/team", requireAccess("owner"), async (c) => {
   const names: Record<string, string> = { reports: "Reportes", sanctions: "Suspensiones", appeals: "Revisiones" };
   await logAction(me.id, perms.length ? "Cambió permisos" : "Sacó todos los permisos", u.id, perms.map((p) => names[p]).join(", ") || null);
   return c.json({ ok: true });
+});
+
+/**
+ * Personas: buscar cuentas por nombre (o por ID o mail exacto) y ver de un vistazo si tienen administración general,
+ * permisos, una suspensión o si están ocultas por reportes urgentes. Solo para la administración general.
+ * Sin búsqueda, cada filtro muestra su lista: equipo, suspendidas, ocultas o las cuentas más nuevas.
+ */
+adminRoutes.get("/admin/people", requireAccess("owner"), async (c) => {
+  const { q, filter } = z.object({
+    q: z.string().trim().max(100).default(""),
+    filter: z.enum(["all", "staff", "suspended", "hidden"]).default("all"),
+  }).parse(c.req.query());
+  const LIMIT = 40;
+  const [owners, staffRows, hidden] = await Promise.all([
+    ownerIds(),
+    db.select({ id: staffPermission.userId, p: staffPermission.permission }).from(staffPermission),
+    autoHiddenUsers(),
+  ]);
+  const perms = new Map<string, string[]>();
+  for (const r of staffRows) perms.set(r.id, [...(perms.get(r.id) ?? []), r.p]);
+
+  const conds = [];
+  if (q) {
+    const like = `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+    conds.push(or(sql`${profile.displayName} ilike ${like}`, eq(user.id, q), sql`lower(${user.email}) = ${q.toLowerCase()}`)!);
+  }
+  if (filter === "staff") conds.push(inArray(user.id, [...new Set([...owners, ...perms.keys()])].concat("")));
+  if (filter === "suspended") conds.push(isNotNull(profile.suspendedAt));
+  if (filter === "hidden") conds.push(inArray(user.id, [...hidden].concat("")));
+  const rows = await db
+    .select({ id: user.id, createdAt: user.createdAt, suspendedAt: profile.suspendedAt, suspendReason: profile.suspendReason })
+    .from(user).innerJoin(profile, eq(profile.userId, user.id))
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(desc(user.createdAt)).limit(LIMIT + 1);
+  const page = rows.slice(0, LIMIT);
+  const ids = page.map((r) => r.id);
+  const [people, open] = await Promise.all([
+    authorsFor(ids),
+    ids.length
+      ? db.select({ id: report.targetUserId, n: sql<number>`count(*)::int` }).from(report)
+        .where(and(inArray(report.targetUserId, ids), eq(report.status, "open"))).groupBy(report.targetUserId)
+      : Promise.resolve([]),
+  ]);
+  const openBy = new Map(open.map((r) => [r.id, r.n]));
+  return c.json({
+    people: page.flatMap((r) => {
+      const a = people.get(r.id);
+      return a ? [{
+        ...a,
+        joinedAt: r.createdAt.toISOString(),
+        owner: owners.includes(r.id),
+        permissions: perms.get(r.id) ?? [],
+        suspendedAt: r.suspendedAt?.toISOString() ?? null,
+        suspendReason: r.suspendReason,
+        hidden: hidden.has(r.id),
+        openReports: openBy.get(r.id) ?? 0,
+      }] : [];
+    }),
+    more: rows.length > LIMIT,
+  });
 });
 
 /** Lo último que hizo moderación. */
