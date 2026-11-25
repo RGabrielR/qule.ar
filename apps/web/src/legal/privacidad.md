@@ -1,6 +1,6 @@
 # Política de privacidad
 
-**Versión beta · 24 de noviembre de 2026**
+**Versión beta · 25 de noviembre de 2026**
 
 En qule.ar tratamos datos muy personales: quién sos, qué buscás y, si lo contás, cosas sobre tu salud. Por eso esta política intenta decir **exactamente** qué guardamos, dónde y quién lo puede ver, sin letra chica. Sigue la **Ley 25.326 de Protección de Datos Personales**.
 
@@ -26,6 +26,7 @@ Para todo lo demás están las [Discusiones del proyecto](https://github.com/RGa
 
 - Descripción, altura, peso, tipo de cuerpo, posición, tribus, qué buscás, situación sentimental y pronombres.
 - **Estado serológico y fecha del último test.** Es un dato de salud: mirá el punto 3.
+- **Perfiles de Instagram y X.** Cuando generás un código para vincular un perfil de Instagram o X, guardamos la red elegida, tu nombre de usuario en esa red, el código y su vencimiento. Tenés 30 minutos para usarlo. Mientras la verificación esté pendiente, solo vos ves ese nombre de usuario en **Editar perfil** de qule.ar. Cuando verificamos el perfil de Instagram o X, guardamos la fecha y la hora y mostramos el enlace en tu perfil de qule.ar.
 - Fotos y videos. Al subirlos les borramos los metadatos, incluida la ubicación GPS.
 
 **Tu ubicación:** para mostrarte gente cerca, el celu nos manda tu ubicación, pero **nunca guardamos la posición exacta**: la redondeamos al centro de una zona de unos 500 metros. Mientras tenés la app abierta, esa zona se actualiza cada unos minutos para que la grilla siga donde estás; con la app cerrada no nos llega nada. Podés ocultar la distancia o usar el modo incógnito. Si la ocultás, no se usa para nada: ni para mostrarla, ni para ordenar la grilla, ni para filtrar por kilómetros.
@@ -54,6 +55,8 @@ Usar qule.ar puede decir algo sobre tu orientación sexual o tu identidad de gé
 
 Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, mandar tus mensajes, avisarte con notificaciones, mandarte mails de la cuenta (solo para confirmar tu mail al crearla, cambiar la contraseña y avisos sobre tu cuenta, como una suspensión: nunca publicidad), revisar reportes y cuidar la seguridad.
 
+**Cómo verificamos tu perfil de Instagram o X.** Cuando tocás **Verificar** en qule.ar, buscamos el código en la biografía pública del perfil que elegiste en esa red. Al consultar el perfil, Instagram o X recibe el nombre de usuario consultado y la dirección IP de nuestro servidor. Leemos la biografía sin guardar su texto. Para evitar consultas repetidas durante un minuto, registramos la hora de la consulta y guardamos temporalmente huellas digitales del nombre de usuario y de los posibles códigos que encontramos.
+
 **Cuidado de menores:** qule.ar es solo para mayores de 18. Para detectar a tiempo si entra alguien menor, la app revisa automáticamente los nombres y las descripciones de los perfiles y los grupos, y busca señales como "+14" o "15 años". Si encuentra una, no borra ni oculta nada: manda el caso a moderación para que lo revise una persona.
 
 **No** vendemos datos, **no** mostramos publicidad y **no** armamos perfiles para terceros.
@@ -64,7 +67,7 @@ Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, m
 
 **Quién los ve:**
 
-- **Otras personas de la app:** ven tu perfil, tus fotos públicas y tu distancia aproximada, si no la ocultaste. Tus álbumes privados los ve solo quien vos elijas.
+- **Otras personas de la app:** ven tu perfil, tus fotos públicas y tu distancia aproximada, si no la ocultaste. Si verificás tu perfil de Instagram o X, quienes visiten tu perfil de qule.ar podrán seguir el enlace y reconocerte en esa red. Tus álbumes privados los ve solo quien vos elijas.
 - **Moderación:** para revisar un reporte, quien modera puede ver el mensaje o el perfil reportado, y la copia que se guarda al reportarlo (mirá el punto 6).
 - **Quienes mantienen el servidor:** técnicamente pueden acceder a la base de datos y a los archivos. Hoy los mensajes **no están cifrados de punta a punta**: los privados, las fotos, los videos y los datos de salud se guardan cifrados, pero la clave está en el mismo servidor y la app los descifra ahí para mostrártelos. Solo acceden cuando hace falta para arreglar un problema o por una orden judicial.
 - **Proveedores que usamos para que la app funcione:**
@@ -80,6 +83,7 @@ Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, m
 ## 6. Cuánto tiempo los guardamos
 
 - Mientras tengas la cuenta.
+- **Perfiles de Instagram y X.** Aunque venza el código, el nombre de usuario de Instagram o X queda pendiente en qule.ar hasta que lo quites o lo reemplaces. En **Editar perfil → Tus redes**, tocá **Cancelar** para quitar un perfil de Instagram o X pendiente de verificación, o **Cambiar** para quitar el enlace a uno ya verificado. En ambos casos borramos de tu perfil de qule.ar el nombre de usuario de esa red y sus datos de verificación.
 - **Si borrás tu cuenta**, se borran en el momento tu perfil, fotos, videos, mensajes, favoritos y todo lo asociado, salvo lo que forme parte de un reporte de moderación (mirá abajo). Puede quedar una copia en los backups hasta **14 días**, y después se borra sola.
 - **Si desenviás un mensaje privado**, se borra para las dos personas.
 - **Si borrás un mensaje en un grupo**, se borra: deja de verse para todas las personas y el texto se elimina.
