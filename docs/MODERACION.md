@@ -65,11 +65,11 @@ Hay quien reporta mucho y sin fundamento: para tapar los reportes de verdad, par
 Ninguna señal decide sola. Puede ser alguien que encontró varios problemas de verdad: mirá sus reportes antes de decidir. Las opciones son:
 
 - **Que sus reportes no cuenten.** Siguen entrando y se ven en la lista (marcados "no cuenta"), pero no ocultan perfiles ni grupos, no mandan avisos, no suman personas en las tarjetas y **no alcanzan para una suspensión preventiva**. Se puede deshacer ("Que vuelvan a contar").
-- **Descartar sus reportes abiertos** de una vez.
+- **Descartar sus reportes de la última hora** de una vez (pide confirmación). Los urgentes y los anteriores se revisan de a uno.
 - **Suspender** a quien reporta, con el diálogo de siempre.
-- **Ignorar** la tarjeta: vuelve solo si la cuenta manda reportes nuevos y sigue habiendo alguna señal.
+- **Ignorar** la tarjeta: vuelve solo cuando pasó una hora, la cuenta mandó reportes nuevos y sigue habiendo alguna señal. Si la tarjeta era por reportar a muchas personas en una hora, mientras está activa sus reportes urgentes no mandan avisos; ignorarla los devuelve.
 
-A quien reporta no se le dice nada, ni a quien reporta de buena fe ni a quien quedó marcado. Además hay un tope de 15 reportes por hora y 40 por día por persona. Todo queda en el registro de moderación. El nombre de quien reporta lo ve solo la administración general; el resto del equipo ve "Una cuenta" con los números y puede actuar igual.
+A quien reporta no se le dice nada, ni a quien reporta de buena fe ni a quien quedó marcado. Además hay un tope de 15 reportes por hora y 40 por día por persona. Todo queda en el registro de moderación. El nombre de quien reporta lo ve solo la administración general; el resto del equipo ve "Una cuenta" con los números y puede actuar igual (el panel no recibe el id de la cuenta: cada tarjeta tiene un identificador propio).
 
 ## Qué hacer en cada caso
 
@@ -80,7 +80,7 @@ A quien reporta no se le dice nada, ni a quien reporta de buena fe ni a quien qu
 
 ### Contenido sexual de menores (el caso más grave)
 1. **No descargues, no reenvíes y no hagas capturas del contenido.** Tenerlo o pasarlo es delito (art. 128 del Código Penal), aunque sea para denunciarlo.
-2. **Suspendé la cuenta** enseguida. Así deja de estar visible.
+2. **Suspendé la cuenta** enseguida. Así deja de estar visible: sus fotos y mensajes desaparecen de la app, pero con un reporte urgente abierto todos sus archivos quedan guardados en el servidor como prueba (ver "Las pruebas").
 3. **No borres el mensaje ni la cuenta.** Hace falta como prueba.
 4. **Denuncialo** ante el Ministerio Público Fiscal (la Unidad Fiscal Especializada en Ciberdelincuencia, UFECI) o en la policía. Indicá el ID de la cuenta y la fecha, y avisá a quien administra el servidor para que preserve los datos.
 5. Seguí las indicaciones de la fiscalía.
@@ -105,6 +105,7 @@ Al reportar, la app guarda una copia de lo reportado: el texto del mensaje y sus
 
 - Si **descartás** el reporte, la copia se borra.
 - Si el reporte **termina en una medida** (borrar el mensaje o suspender), la copia se conserva como prueba.
+- **Al suspender** se borra lo público de la persona: sus mensajes en grupos (también los que tenía en cola), sus reacciones en grupos, sus fotos, álbumes y videos, y las fotos que mandó por privado. Quienes tienen los grupos o las charlas abiertas lo ven desaparecer en vivo. Antes de borrar se guarda la prueba: si tiene un reporte urgente abierto o que terminó en una medida, **todos** sus archivos quedan guardados con ese reporte; los demás reportes sobre su perfil guardan sus fotos públicas. Los textos de sus mensajes privados no se borran: son privados y son la prueba de quien los recibió. Si después se reactiva la cuenta, lo borrado no vuelve.
 - Los archivos guardados solo los puede pedir moderación. El panel dice cuántos hay, pero **no los muestra ni hace falta descargarlos**. Si una fiscalía los pide, quien administra el servidor los entrega.
 
 ## Reglas para quien modera
@@ -113,7 +114,7 @@ Al reportar, la app guarda una copia de lo reportado: el texto del mensaje y sus
 - **No compartas** fuera del equipo de moderación nada de lo que ves en un reporte.
 - **Escribí siempre el motivo** al suspender. Queda registrado y es lo que ve la persona suspendida.
 - **Cuidado con los reportes falsos.** Si muchas cuentas nuevas reportan a la misma persona sin motivo, puede ser un ataque. Descartá esos reportes y, si hace falta, suspendé a quienes los mandan.
-- **Si te equivocaste**, la suspensión se puede levantar desde la pestaña Suspendidas.
+- **Si te equivocaste**, la suspensión se puede levantar desde la pestaña Suspendidas. Lo que se borró al suspender (mensajes en grupos, fotos y álbumes) no vuelve.
 
 ## Permisos del equipo
 

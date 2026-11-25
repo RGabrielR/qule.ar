@@ -35,7 +35,7 @@ test("reportes de mala fe: señales y reportes que no cuentan", async (t) => {
   const { adminRoutes } = await import("./routes/admin.js");
   const { socialRoutes } = await import("./routes/social.js");
   const { autoHiddenUsers } = await import("./moderation.js");
-  const { reportSpamAlerts } = await import("./reportSpam.js");
+  const { alertKey, reportSpamAlerts } = await import("./reportSpam.js");
 
   const app = new Hono<AppEnv>();
   app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
@@ -125,18 +125,21 @@ test("reportes de mala fe: señales y reportes que no cuentan", async (t) => {
 
   // ---------- Que sus reportes no cuenten ----------
   // Solo con Suspensiones (o la administración general)
-  assert.equal((await request(`/api/admin/report-spam/${nuevas[0].id}/mute`, ayuda, json("POST", {}))).status, 403);
+  assert.equal((await request(`/api/admin/report-spam/${alertKey(nuevas[0].id)}/mute`, ayuda, json("POST", {}))).status, 403);
+  // Se actúa con el identificador de la tarjeta, no con el de la cuenta
+  assert.equal((await request(`/api/admin/report-spam/${nuevas[0].id}/mute`, sanciones, json("POST", {}))).status, 404);
   for (const n of nuevas.slice(0, 2)) {
-    const res = await request(`/api/admin/report-spam/${n.id}/mute`, sanciones, json("POST", { reason: "Cuentas nuevas que reportan juntas" }));
+    const res = await request(`/api/admin/report-spam/${alertKey(n.id)}/mute`, sanciones, json("POST", { reason: "Cuentas nuevas que reportan juntas" }));
     assert.equal(res.status, 200);
   }
   assert.ok(!(await autoHiddenUsers()).has(blanco.id), "con un solo reporte que cuenta, vuelve a la grilla");
   const panel = await (await request("/api/admin/report-spam", sanciones)).json() as {
-    alerts: { reporterId: string }[]; muted: { reporterId: string; reporter: unknown; reason: string }[];
+    alerts: { id: string }[]; muted: { id: string; reporter: unknown; reason: string }[];
   };
-  assert.ok(!panel.alerts.some((a) => a.reporterId === nuevas[0].id), "ya decidido: sale de las tarjetas");
-  assert.deepEqual(panel.muted.map((m) => m.reporterId).sort(), nuevas.slice(0, 2).map((n) => n.id).sort());
+  assert.ok(!panel.alerts.some((a) => a.id === alertKey(nuevas[0].id)), "ya decidido: sale de las tarjetas");
+  assert.deepEqual(panel.muted.map((m) => m.id).sort(), nuevas.slice(0, 2).map((n) => alertKey(n.id)).sort());
   assert.equal(panel.muted[0].reporter, null, "sin nombre si no es administración general");
+  assert.ok(!nuevas.some((n) => JSON.stringify(panel).includes(n.id)), "sin el id de la cuenta");
   // En los reportes se ven igual, marcados, y no suman personas
   const reports = await (await request("/api/admin/reports", sanciones)).json() as
     { subject: string; subjectReporters: number; reporterMuted: boolean }[];
@@ -154,7 +157,7 @@ test("reportes de mala fe: señales y reportes que no cuentan", async (t) => {
   const sinBase = await request(`/api/admin/users/${sospechado.id}/suspend`, ayuda, json("POST", { reason: "Parece menor" }));
   assert.equal(sinBase.status, 403);
   // Volver a contar: ahora sí alcanza
-  assert.equal((await request(`/api/admin/report-spam/${nuevas[0].id}/unmute`, sanciones, { method: "POST" })).status, 200);
+  assert.equal((await request(`/api/admin/report-spam/${alertKey(nuevas[0].id)}/unmute`, sanciones, { method: "POST" })).status, 200);
   const conBase = await request(`/api/admin/users/${sospechado.id}/suspend`, ayuda, json("POST", { reason: "Parece menor" }));
   assert.equal(conBase.status, 200);
 

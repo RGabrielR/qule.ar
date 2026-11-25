@@ -13,18 +13,21 @@ type History = { total: number; open: number; dismissed: number; actioned: numbe
 
 /** Una cuenta que reporta de una forma que vale la pena mirar. */
 export type ReportSpamAlert = {
-  reporterId: string;
+  /** Identificador de la tarjeta: no deja saber de qué cuenta es. */
+  id: string;
   /** Con nombre solo para la administración general, como en los reportes. */
   reporter: Author | null;
   signals: ReporterSignal[];
   targets: number;
   lastHour: number;
   since: string;
+  /** Los que se descartan en bloque: abiertos, de la última hora y no urgentes. */
+  dismissable: number;
   history: History;
 };
 
-/** Una cuenta cuyos reportes dejaron de contar. */
-export type MutedReporter = { reporterId: string; reporter: Author | null; mutedAt: string; reason: string | null; history: History };
+/** Una cuenta cuyos reportes dejaron de contar. `id` tampoco deja saber de qué cuenta es. */
+export type MutedReporter = { id: string; reporter: Author | null; mutedAt: string; reason: string | null; history: History };
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const fmt = (iso: string) => new Date(iso).toLocaleDateString("es-AR", { day: "numeric", month: "short" });
@@ -63,16 +66,19 @@ function HistoryLine({ h }: { h: History }) {
 
 /**
  * Quién reporta: cuentas que reportan de una forma para mirar, arriba de los reportes abiertos. No esconde nada y
- * no decide nada: muestra los datos y deja actuar. A la persona no se le avisa de nada de esto.
+ * no decide nada: muestra los datos y deja actuar. A la persona no se le avisa de nada de esto. El equipo actúa con el
+ * identificador de cada tarjeta, sin ver de qué cuenta es (salvo la administración general, que ve el nombre).
  */
 export function ReportSpamAlerts({ act, onSuspend, refresh }: {
   act: (fn: () => Promise<unknown>) => Promise<void>;
-  onSuspend: (target: { id: string; name: string; reason: string }) => void;
+  onSuspend: (target: { url: string; name: string; reason: string }) => void;
   /** Cambia cuando el panel se recarga (por ejemplo, después de suspender). */
   refresh: unknown;
 }) {
   const [data, setData] = useState<{ alerts: ReportSpamAlert[]; muted: MutedReporter[] }>({ alerts: [], muted: [] });
   const [reload, setReload] = useState(0);
+  /** La tarjeta cuyo descarte en bloque se está confirmando. */
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   useEffect(() => {
     api<{ alerts: ReportSpamAlert[]; muted: MutedReporter[] }>("/admin/report-spam").then(setData, () => setData({ alerts: [], muted: [] }));
@@ -80,7 +86,10 @@ export function ReportSpamAlerts({ act, onSuspend, refresh }: {
 
   const { alerts, muted } = data;
   if (!alerts.length && !muted.length) return null;
-  const done = () => setReload((n) => n + 1);
+  const done = () => {
+    setConfirming(null);
+    setReload((n) => n + 1);
+  };
   const post = (path: string, json?: unknown) => act(() => api(path, { method: "POST", json })).then(done);
 
   return (
@@ -94,8 +103,9 @@ export function ReportSpamAlerts({ act, onSuspend, refresh }: {
       )}
       {alerts.map((a) => {
         const name = a.reporter?.name ?? "Una cuenta";
+        const burst = a.signals.some((s) => s.kind === "burst");
         return (
-          <article key={a.reporterId} className="rcard spam-alert">
+          <article key={a.id} className="rcard spam-alert">
             <div className="rcard__head">
               <span className="pill pill--reason">Para revisar: cómo reporta</span>
             </div>
@@ -109,22 +119,46 @@ export function ReportSpamAlerts({ act, onSuspend, refresh }: {
             <ul className="spam-alert__signals small">
               {a.signals.map((s) => <li key={s.kind}>{signalText(s)}</li>)}
             </ul>
-            <div className="rcard__actions">
-              <button className="btn btn--small" onClick={() => post(`/admin/report-spam/${a.reporterId}/mute`, { reason: reasonFor(a).slice(0, 300) })}>
-                Que sus reportes no cuenten
-              </button>
-              {a.history.open > 0 && (
-                <button className="btn btn--small" onClick={() => post(`/admin/report-spam/${a.reporterId}/dismiss`)}>
-                  {a.history.open === 1 ? "Descartar su reporte abierto" : `Descartar sus ${a.history.open} reportes abiertos`}
+            {burst && (
+              <p className="muted small">
+                Mientras tanto, sus reportes urgentes no te mandan avisos. Si eran reportes de verdad, ignorá la tarjeta y
+                lo urgente vuelve a avisar.
+              </p>
+            )}
+            {confirming === a.id ? (
+              <div className="rcard__actions" role="group" aria-label="Confirmar descarte">
+                <p className="small">
+                  ¿Descartar {plural(a.dismissable, "reporte", "reportes")}? Son los de la última hora, sin los urgentes.
+                  Se borran las pruebas guardadas y no se puede deshacer.
+                </p>
+                <button className="btn btn--small btn--danger" onClick={() => post(`/admin/report-spam/${a.id}/dismiss`)}>
+                  Sí, descartar
                 </button>
-              )}
-              <button className="btn btn--small btn--danger" onClick={() => onSuspend({ id: a.reporterId, name: a.reporter?.name ?? "esta cuenta", reason: reasonFor(a).slice(0, 300) })}>
-                Suspender
-              </button>
-              <button className="btn btn--small btn--ghost" onClick={() => post(`/admin/report-spam/${a.reporterId}/ignore`)}>
-                Ignorar
-              </button>
-            </div>
+                <button className="btn btn--small btn--ghost" onClick={() => setConfirming(null)}>
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <div className="rcard__actions">
+                <button className="btn btn--small" onClick={() => post(`/admin/report-spam/${a.id}/mute`, { reason: reasonFor(a).slice(0, 300) })}>
+                  Que sus reportes no cuenten
+                </button>
+                {a.dismissable > 0 && (
+                  <button className="btn btn--small" onClick={() => setConfirming(a.id)}>
+                    Descartar {plural(a.dismissable, "reporte", "reportes")} de la última hora
+                  </button>
+                )}
+                <button
+                  className="btn btn--small btn--danger"
+                  onClick={() => onSuspend({ url: `/admin/report-spam/${a.id}/suspend`, name: a.reporter?.name ?? "esta cuenta", reason: reasonFor(a).slice(0, 300) })}
+                >
+                  Suspender
+                </button>
+                <button className="btn btn--small btn--ghost" onClick={() => post(`/admin/report-spam/${a.id}/ignore`)}>
+                  Ignorar
+                </button>
+              </div>
+            )}
           </article>
         );
       })}
@@ -135,7 +169,7 @@ export function ReportSpamAlerts({ act, onSuspend, refresh }: {
           </summary>
           <ul>
             {muted.map((m) => (
-              <li key={m.reporterId} className="spam-muted__item">
+              <li key={m.id} className="spam-muted__item">
                 <span className="rcard__who">
                   {m.reporter && <Avatar src={m.reporter.photo} name={m.reporter.name} size={32} />}
                   <span>
@@ -145,7 +179,7 @@ export function ReportSpamAlerts({ act, onSuspend, refresh }: {
                 </span>
                 {m.reason && <span className="small rcard__note">{m.reason}</span>}
                 <span className="rcard__actions">
-                  <button className="btn btn--small btn--ghost" onClick={() => post(`/admin/report-spam/${m.reporterId}/unmute`)}>
+                  <button className="btn btn--small btn--ghost" onClick={() => post(`/admin/report-spam/${m.id}/unmute`)}>
                     Que vuelvan a contar
                   </button>
                 </span>

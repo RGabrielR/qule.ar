@@ -18,7 +18,8 @@ process.env.DATA_KEY ??= randomBytes(32).toString("base64");
 
 const { db, schema, runMigrations, closeDb } = await import("./db/index.js");
 const { nearbyPage, parseNearbyFilters } = await import("./routes/nearby.js");
-const { ageFrom, thumbUrl } = await import("./lib.js");
+const { forgetUnlisted } = await import("./verification.js");
+const { ageFrom, imageUrl, thumbUrl } = await import("./lib.js");
 const { distanceLabel, visibleKm } = await import("./geo.js");
 const { REPORT_REASONS } = await import("./moderation.js");
 
@@ -130,7 +131,7 @@ async function reference(me: { userId: string; cellLat: number | null; cellLng: 
     hasMore: list.length > f.offset + 60,
     total: list.length,
     people: page.map(({ p, km, age }) => ({
-      id: p.userId, name: p.displayName, age, photo: thumbUrl(first.get(p.userId)), online: false,
+      id: p.userId, name: p.displayName, age, photo: thumbUrl(first.get(p.userId)), coverPhoto: imageUrl(first.get(p.userId)), online: false,
       recent: Date.now() - p.lastSeenAt.getTime() < 15 * 60_000, favorite: favs.has(p.userId),
       distance: km != null ? distanceLabel(km) : null,
     })),
@@ -252,9 +253,13 @@ test("una cuenta nueva aparece en Gente recién cuando confirma el mail", async 
     { userId: old, displayName: "Vieja", birthdate: "1990-01-01", bodyType: "confirmar-mail" },
   ]);
   try {
+    // Las cuentas recién creadas no están en la lista en memoria de otra prueba anterior
+    forgetUnlisted();
     const q = parseNearbyFilters({ bodyType: "confirmar-mail" });
     assert.deepEqual((await nearbyPage(MES["sin ubicación"], q)).people.map((p) => p.id), [old]);
     await db.update(schema.user).set({ emailVerified: true }).where(inArray(schema.user.id, [id]));
+    // En la app lo hace auth.ts al confirmar el mail
+    forgetUnlisted();
     assert.deepEqual((await nearbyPage(MES["sin ubicación"], q)).people.map((p) => p.id).sort(), [id, old].sort());
   } finally {
     await db.delete(schema.user).where(inArray(schema.user.id, [id, old]));

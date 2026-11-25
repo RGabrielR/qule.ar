@@ -1,5 +1,8 @@
-import { and, desc, eq, gte, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { createHmac } from "node:crypto";
+import { and, desc, eq, gte, inArray, isNotNull, notInArray, sql, type SQL } from "drizzle-orm";
+import { dataKey } from "./crypt.js";
 import { db, schema } from "./db/index.js";
+import { URGENT_REASONS } from "./moderation.js";
 
 /**
  * Reportes de mala fe: cuentas que reportan de una forma que vale la pena mirar.
@@ -20,7 +23,12 @@ import { db, schema } from "./db/index.js";
  *   cuentas nuevas o creadas juntas: quien reportó lo mismo desde una cuenta vieja no aparece.
  *
  * Qué puede hacer moderación: suspender a quien reporta, hacer que sus reportes dejen de contar (tabla report_mute),
- * descartar sus reportes abiertos de una vez o ignorar la tarjeta. La app no suspende sola a nadie.
+ * descartar sus reportes de la última hora o ignorar la tarjeta. La app no suspende sola a nadie.
+ * - Con la ráfaga ("burst"), los reportes urgentes de esa cuenta dejan de mandar avisos al instante. Ignorar la tarjeta
+ *   los devuelve (si eran reportes de verdad, que avisen).
+ * - Descartar en bloque nunca toca los reportes urgentes ni los de antes de la última hora: esos se revisan de a uno.
+ * - Quién reporta no se le muestra al equipo (solo a la administración general): cada tarjeta tiene un identificador
+ *   propio (alertKey) y la cuenta se resuelve en el servidor.
  *
  * Los reportes de una cuenta que no cuenta siguen entrando y se ven en el panel, pero no ocultan perfiles ni grupos,
  * no mandan avisos urgentes, no suman personas en las tarjetas y no alcanzan para una suspensión preventiva.
@@ -37,7 +45,10 @@ export const PILE_ON_REPORTERS = 3;
 export const NEW_ACCOUNT_DAYS = 7;
 export const SIGNUP_CLUSTER_MS = 60 * 60 * 1000;
 
-/** Acción en el registro de moderación con la que se ignora una tarjeta (vuelve si la cuenta manda reportes nuevos). */
+/**
+ * Acción en el registro de moderación con la que se ignora una tarjeta. Vuelve cuando pasó la ventana de una hora, la
+ * cuenta mandó reportes nuevos y sigue habiendo alguna señal.
+ */
 export const REPORT_SPAM_IGNORED = "Ignoró una alerta de spam de reportes";
 export const REPORTS_MUTED = "Hizo que los reportes de una cuenta dejen de contar";
 export const REPORTS_UNMUTED = "Hizo que los reportes de una cuenta vuelvan a contar";
@@ -73,6 +84,57 @@ export async function recentReportTargets(reporterId: string, now = new Date()):
   return r?.n ?? 0;
 }
 
+/** Cuentas cuya tarjeta alguien ignoró desde `since`. */
+async function ignoredSince(ids: string[], since: Date): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const rows = await db.select({ id: modAction.targetId }).from(modAction)
+    .where(and(eq(modAction.action, REPORT_SPAM_IGNORED), inArray(modAction.targetId, ids), gte(modAction.createdAt, since)));
+  return new Set(rows.flatMap((r) => (r.id ? [r.id] : [])));
+}
+
+/**
+ * Si esta cuenta está en ráfaga de reportes: sobre el umbral y sin que nadie haya ignorado la tarjeta en la ventana.
+ * Mientras lo está, sus reportes urgentes no mandan aviso al instante.
+ */
+export async function reportSpamStatus(reporterId: string, now = new Date()): Promise<{ targets: number; flagged: boolean }> {
+  const targets = await recentReportTargets(reporterId, now);
+  if (targets < REPORT_SPAM_TARGETS) return { targets, flagged: false };
+  const ignored = await ignoredSince([reporterId], new Date(now.getTime() - REPORT_SPAM_WINDOW_MS));
+  return { targets, flagged: !ignored.has(reporterId) };
+}
+
+/** Identificador de una tarjeta (o de una cuenta cuyos reportes no cuentan), que no deja saber de qué cuenta es. */
+export const alertKey = (reporterId: string) =>
+  createHmac("sha256", dataKey()).update(`report-spam:${reporterId}`).digest("base64url").slice(0, 22);
+
+/** La cuenta detrás de una tarjeta activa, o null si la tarjeta ya no está. */
+export async function resolveAlert(key: string, now = new Date()): Promise<string | null> {
+  const alerts = await reportSpamAlerts(now);
+  return alerts.find((a) => alertKey(a.reporterId) === key)?.reporterId ?? null;
+}
+
+/** La cuenta detrás de un identificador de la lista de reportes que no cuentan, o null si ya volvieron a contar. */
+export async function resolveMuted(key: string): Promise<string | null> {
+  const ids = await mutedReporters();
+  return [...ids].find((id) => alertKey(id) === key) ?? null;
+}
+
+/** Condición SQL: los reportes que se descartan en bloque (abiertos, de la última hora y no urgentes). */
+const dismissableSince = (since: Date): SQL => and(
+  eq(report.status, "open"),
+  gte(report.createdAt, since),
+  notInArray(report.reason, [...URGENT_REASONS]),
+)!;
+
+/** Los reportes que se descartan en bloque: abiertos, de la última hora y no urgentes. */
+export async function dismissableReportsBy(reporterId: string, now = new Date()): Promise<string[]> {
+  const since = new Date(now.getTime() - REPORT_SPAM_WINDOW_MS);
+  const rows = await db.select({ id: report.id }).from(report)
+    .where(and(eq(report.reporterId, reporterId), dismissableSince(since)))
+    .orderBy(desc(report.createdAt));
+  return rows.map((r) => r.id);
+}
+
 export type ReporterSignal =
   | { kind: "burst"; targets: number; lastHour: number }
   | { kind: "dismissed"; dismissed: number; resolved: number }
@@ -90,6 +152,8 @@ export type ReportSpamAlert = {
   lastHour: number;
   /** Su primer reporte de la última hora (o el último que mandó, si no hay de la última hora). */
   since: string;
+  /** Reportes que se descartarían en bloque (abiertos, de la última hora, no urgentes). */
+  dismissable: number;
   /** Cómo terminaron sus reportes de los últimos HISTORY_DAYS días. */
   history: ReporterHistory;
 };
@@ -178,7 +242,7 @@ export async function reportSpamAlerts(now = new Date()): Promise<ReportSpamAler
   ])];
   if (!candidates.length) return [];
 
-  const [suspended, muted, ignored, latest, history] = await Promise.all([
+  const [suspended, muted, ignored, latest, history, dismissable] = await Promise.all([
     db.select({ id: profile.userId }).from(profile).where(and(inArray(profile.userId, candidates), isNotNull(profile.suspendedAt))),
     db.select({ id: reportMute.userId }).from(reportMute).where(inArray(reportMute.userId, candidates)),
     db.select({ id: modAction.targetId, at: sql<string>`max(${modAction.createdAt})` }).from(modAction)
@@ -187,6 +251,9 @@ export async function reportSpamAlerts(now = new Date()): Promise<ReportSpamAler
     db.select({ id: report.reporterId, at: sql<string>`max(${report.createdAt})` }).from(report)
       .where(inArray(report.reporterId, candidates)).groupBy(report.reporterId),
     historyOf(candidates, now),
+    db.select({ id: report.reporterId, n: sql<number>`count(*)::int` }).from(report)
+      .where(and(inArray(report.reporterId, candidates), dismissableSince(hourAgo)))
+      .groupBy(report.reporterId),
   ]);
   const skip = new Set([...suspended, ...muted].map((x) => x.id));
   const ignoredAt = new Map(ignored.map((x) => [x.id!, new Date(x.at).getTime()]));
@@ -195,9 +262,9 @@ export async function reportSpamAlerts(now = new Date()): Promise<ReportSpamAler
   const out: ReportSpamAlert[] = [];
   for (const id of candidates) {
     if (skip.has(id)) continue;
-    // Ignorada: no vuelve hasta que la cuenta mande un reporte nuevo y siga habiendo alguna señal
+    // Ignorada: no vuelve hasta que pase la ventana, la cuenta mande un reporte nuevo y siga habiendo alguna señal
     const ig = ignoredAt.get(id);
-    if (ig !== undefined && ig >= (latestAt.get(id) ?? 0)) continue;
+    if (ig !== undefined && (ig >= hourAgo.getTime() || ig >= (latestAt.get(id) ?? 0))) continue;
     const h = history.get(id)!;
     const b = burstBy.get(id);
     const signals: ReporterSignal[] = [];
@@ -214,6 +281,7 @@ export async function reportSpamAlerts(now = new Date()): Promise<ReportSpamAler
       targets: b?.targets ?? 0,
       lastHour: b?.lastHour ?? 0,
       since: new Date(b?.since ?? latestAt.get(id) ?? now).toISOString(),
+      dismissable: dismissable.find((d) => d.id === id)?.n ?? 0,
       history: h,
     });
   }
@@ -228,12 +296,4 @@ export async function mutedReporterList(now = new Date()): Promise<MutedReporter
   const rows = await db.select().from(reportMute).orderBy(desc(reportMute.createdAt)).limit(200);
   const history = await historyOf(rows.map((r) => r.userId), now);
   return rows.map((r) => ({ reporterId: r.userId, mutedAt: r.createdAt.toISOString(), reason: r.reason, history: history.get(r.userId)! }));
-}
-
-/** Los reportes abiertos de una cuenta, para descartarlos de una vez. */
-export async function openReportsBy(reporterId: string): Promise<string[]> {
-  const rows = await db.select({ id: report.id }).from(report)
-    .where(and(eq(report.reporterId, reporterId), eq(report.status, "open")))
-    .orderBy(desc(report.createdAt));
-  return rows.map((r) => r.id);
 }
