@@ -1,6 +1,6 @@
 import { ChatPresenceDot } from "../features/messages/chatPresence";
 import { compareDmOrder, DM_EVENTS, type DmReadReceipt } from "@mortero/shared/realtime";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, getSocket, upload, type ChatContact, type Dm, type ReactionEvent } from "../api";
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
@@ -17,6 +17,11 @@ import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../featur
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
 import { Watermark } from "../features/photos/Watermark";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
+import { chatDateFormat, chatDay, useChatToday } from "../features/messages/chatDates";
+
+function addMessage(list: Dm[], message: Dm) {
+  return list.some((m) => m.id === message.id) ? list : [...list, message].sort(compareDmOrder);
+}
 
 /** Texto corto para la cita en el composer y en la burbuja. */
 function replyPreview(m: Dm) {
@@ -54,6 +59,7 @@ export function Conversation() {
   const typingTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const myId = me?.user.id;
   const albumNoticeTime = useAlbumNoticeTime(messages);
+  const today = useChatToday();
 
   useEffect(() => {
     setPhotoMessageId(null);
@@ -84,7 +90,7 @@ export function Conversation() {
     const onMsg = (m: Dm) => {
       if (m.conversationId !== id) return;
       setTyping(false);
-      applyMessageUpdate((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
+      applyMessageUpdate((list) => addMessage(list, m));
       if (m.senderId !== myId && !m.readAt) receipts.schedule(m.id);
     };
     // Un mensaje que cambió (el aviso de álbum muestra siempre el estado actual; al reactivarse sube al final).
@@ -214,7 +220,7 @@ export function Conversation() {
     try {
       const m = await api<Dm>(`/conversations/${id}/messages`, { method: "POST", json: { body, replyToId: wasReplying?.id } });
       stickToBottom.current = true;
-      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
+      setMessages((list) => addMessage(list, m));
     } catch (err) {
       setText((t) => t || body);
       if (wasReplying) setReplyTo(wasReplying);
@@ -238,7 +244,7 @@ export function Conversation() {
     try {
       const m = await upload<Dm>(`/conversations/${id}/messages`, file, extra);
       stickToBottom.current = true;
-      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
+      setMessages((list) => addMessage(list, m));
     } catch (err) {
       if (wasReplying) setReplyTo(wasReplying);
       setError((err as Error).message);
@@ -277,6 +283,7 @@ export function Conversation() {
   const lastMine = [...messages].reverse().find((m) => m.senderId === myId);
   const openPhotoMessage = messages.find((m) => m.id === photoMessageId && m.conversationId === id);
   const openPhoto = openPhotoMessage?.photo;
+  let previousDay: string | undefined;
 
   const lastSeen = lastMine && (lastMine.readAt || (seen?.conversationId === id &&
     ((seen.readAtById.get(lastMine.id) ?? "") >= lastMine.createdAt || (seen.through && compareDmOrder(lastMine, seen.through) <= 0))));
@@ -302,14 +309,18 @@ export function Conversation() {
 
       <div className="chat__list chat__list--dm" role="log" aria-label="Mensajes" ref={listRef} onScroll={onListScroll}>
         {messages.map((m) => {
+          const sentAt = new Date(m.createdAt);
+          const day = chatDay(sentAt);
+          const startsDay = day !== previousDay;
+          previousDay = day;
           const mine = m.senderId === myId;
           const kind = albumNoticeKind(m, albumNoticeTime);
           const albumNotice = kind === "album" || kind === "album_revoked" || kind === "album_expired";
           const albumText = <><LockIcon /> {mine ? "Le compartiste tu álbum privado" : "Te compartió su álbum privado"}{m.body ? ` por ${m.body}` : ""}</>;
           const expiry = albumExpiryLabel(m, albumNoticeTime);
           const quoted = m.replyTo;
-          return (
-            <div id={`dm-${m.id}`} key={m.id} className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""}`}>
+          const bubble = (
+            <div id={`dm-${m.id}`} className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""}`}>
               {quoted && (quoted.authorName && loadedMessageIds.has(quoted.id) ? (
                 <button
                   type="button"
@@ -361,7 +372,7 @@ export function Conversation() {
               )}
               <div className="bubble__meta">
                 {expiry && `${expiry} · `}
-                <time dateTime={m.createdAt}>{new Date(m.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</time>
+                <time dateTime={m.createdAt}>{sentAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</time>
               </div>
               <ReactionBar reactions={m.reactions ?? []} myId={myId} mine={mine} onToggle={(k) => react(m, k)} />
               {(
@@ -383,6 +394,12 @@ export function Conversation() {
                 </>
               )}
             </div>
+          );
+          return (
+            <Fragment key={m.id}>
+              {startsDay && <time className="chat__date" dateTime={day}>{day === today ? "Hoy" : chatDateFormat.format(sentAt)}</time>}
+              {bubble}
+            </Fragment>
           );
         })}
         {lastSeen && messages[messages.length - 1]?.id === lastMine.id && <p className="seen">Visto</p>}
