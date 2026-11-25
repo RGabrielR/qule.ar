@@ -51,7 +51,7 @@ test("mantener apretado un chat permite silenciar, eliminar, reportar y bloquear
 
     await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
     await inbox.clock.runFor(550);
-    await expect(menu.getByRole("menuitem")).toHaveText(["Silenciar", "Eliminar chat", "Bloquear", "Reportar"]);
+    await expect(menu.getByRole("menuitem")).toHaveText(["Silenciar", "Vaciar chat", "Bloquear", "Reportar"]);
     await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     await expect(inbox).toHaveURL(/\/mensajes$/);
     await menu.getByRole("menuitem", { name: "Silenciar" }).tap();
@@ -65,7 +65,7 @@ test("mantener apretado un chat permite silenciar, eliminar, reportar y bloquear
     await senderItem.click({ button: "right" });
     await expect(senderMenu).toHaveCount(0);
     await senderItem.press("Shift+F10");
-    await expect(senderMenu.getByRole("menuitem")).toHaveText(["Silenciar", "Eliminar chat", "Bloquear", "Reportar"]);
+    await expect(senderMenu.getByRole("menuitem")).toHaveText(["Silenciar", "Vaciar chat", "Bloquear", "Reportar"]);
     await expect(page.locator("html")).not.toHaveAttribute("data-theme", "penumbra");
     await page.keyboard.press("Escape");
     await expect(senderItem).toBeFocused();
@@ -79,13 +79,13 @@ test("mantener apretado un chat permite silenciar, eliminar, reportar y bloquear
     await expect(item).toBeFocused();
 
     await holdChat();
-    await menu.getByRole("menuitem", { name: "Eliminar chat" }).tap();
-    const remove = inbox.getByRole("dialog", { name: "¿Eliminar este chat?" });
+    await menu.getByRole("menuitem", { name: "Vaciar chat" }).tap();
+    const remove = inbox.getByRole("dialog", { name: "¿Vaciar este chat?" });
     await remove.getByRole("button", { name: "Cancelar" }).tap();
     await expect(item).toBeVisible();
     await holdChat();
-    await menu.getByRole("menuitem", { name: "Eliminar chat" }).tap();
-    await remove.getByRole("button", { name: "Eliminar chat" }).tap();
+    await menu.getByRole("menuitem", { name: "Vaciar chat" }).tap();
+    await remove.getByRole("button", { name: "Vaciar chat" }).tap();
     await expect(item).toHaveCount(0);
     expect(await (await mobile.request.get(`${apiPath}/messages`)).json()).toMatchObject({ messages: [] });
     const read = await mobile.request.post(`${apiPath}/read`, { headers, data: { messageIds: [oldId] } });
@@ -105,8 +105,8 @@ test("mantener apretado un chat permite silenciar, eliminar, reportar y bloquear
 
     const headerMenu = inbox.getByRole("button", { name: "Opciones del chat" });
     await headerMenu.tap();
-    await expect(menu.getByRole("menuitem")).toHaveText(["Activar avisos", "Eliminar chat", "Bloquear", "Reportar"]);
-    await menu.getByRole("menuitem", { name: "Eliminar chat" }).tap();
+    await expect(menu.getByRole("menuitem")).toHaveText(["Activar avisos", "Vaciar chat", "Bloquear", "Reportar"]);
+    await menu.getByRole("menuitem", { name: "Vaciar chat" }).tap();
     await remove.getByRole("button", { name: "Cancelar" }).tap();
     await expect(headerMenu).toBeFocused();
     await headerMenu.tap();
