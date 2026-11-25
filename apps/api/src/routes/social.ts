@@ -6,7 +6,7 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { db, schema } from "../db/index.js";
 import {
-  ageFrom, authorsFor, imageUrl, isBlocked, mediaOut, newId, reactionsFor, requireProfile, requireUser, serializeDm, type AppEnv, type ReactionSummary,
+  ageFrom, authorsFor, canOpenLinks, imageUrl, isBlocked, mediaOut, newId, reactionsFor, requireProfile, requireUser, serializeDm, type AppEnv, type ReactionSummary,
 } from "../lib.js";
 import { emitToUser, isOnline } from "../realtime.js";
 import { distanceLabel, visibleKm } from "../geo.js";
@@ -17,7 +17,7 @@ import { pushTo } from "../push.js";
 import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
 import { limit } from "../ratelimit.js";
-import { recentReportTargets, REPORT_SPAM_TARGETS } from "../reportSpam.js";
+import { REPORT_SPAM_TARGETS, reportSpamStatus } from "../reportSpam.js";
 import { notifyStaff } from "../staff.js";
 
 const { profile, photo, block, report, conversation, directMessage } = schema;
@@ -229,7 +229,7 @@ socialRoutes.get("/conversations", async (c) => {
     .where(eq(directMessage.conversationId, conversation.id))
     .orderBy(desc(directMessage.createdAt), desc(directMessage.id)).limit(1).as("last_message");
   const [authors, latest, unreadCounts] = await Promise.all([
-    authorsFor(visible.map(otherIdFor)),
+    authorsFor(visible.map(otherIdFor), { presence: true }),
     db.select().from(conversation).innerJoinLateral(lastMessage, sql`true`).where(inArray(conversation.id, ids)),
     db.select({ id: directMessage.conversationId, unread: sql<number>`count(*)::int` }).from(directMessage)
       .where(and(inArray(directMessage.conversationId, ids), ne(directMessage.senderId, me.id), isNull(directMessage.readAt)))
@@ -276,7 +276,7 @@ socialRoutes.get("/conversations/:id", async (c) => {
   const me = c.get("user");
   const { conv, otherId } = await myConversation(c.req.param("id"), me.id);
   if (await isBlocked(me.id, otherId)) return c.notFound();
-  const authors = await authorsFor([otherId]);
+  const authors = await authorsFor([otherId], { presence: true });
   return c.json({ id: conv.id, other: authors.get(otherId) });
 });
 
@@ -298,7 +298,7 @@ socialRoutes.get("/conversations/:id/summary", async (c) => {
   if (!last) return c.json(null);
   const [states, authors] = await Promise.all([
     albumNoticeStates(me.id, [{ message: last.message, otherId }]),
-    authorsFor([otherId]),
+    authorsFor([otherId], { presence: true }),
   ]);
   return c.json({
     id: conv.id, lastMessageAt: new Date(Math.max(conv.lastMessageAt.getTime(), last.message.createdAt.getTime())).toISOString(),
@@ -314,16 +314,20 @@ socialRoutes.get("/conversations/:id/messages", async (c) => {
   const conds = [eq(directMessage.conversationId, conv.id)];
   if (before) conds.push(lt(directMessage.createdAt, new Date(before)));
   const rows = await db
-    .select()
+    .select({ message: directMessage, senderCreatedAt: schema.user.createdAt })
     .from(directMessage)
+    .innerJoin(schema.user, eq(directMessage.senderId, schema.user.id))
     .where(and(...conds))
     .orderBy(desc(directMessage.createdAt), desc(directMessage.id))
     .limit(50);
+  const loaded = rows.map(({ message }) => message);
+  const linksOk = new Map(rows.map(({ message, senderCreatedAt }) => [message.id, canOpenLinks(message.createdAt, senderCreatedAt)]));
   const [reactions, states] = await Promise.all([
-    reactionsFor(rows.map((m) => m.id)),
-    albumNoticeStates(me.id, rows.map((message) => ({ message, otherId }))),
+    reactionsFor(loaded.map((m) => m.id)),
+    albumNoticeStates(me.id, loaded.map((message) => ({ message, otherId }))),
   ]);
-  const messages = (await serializeDms(rows.reverse(), reactions)).map((m) => ({ ...m, ...states.get(m.id) }));
+  const messages = (await serializeDms(loaded.reverse(), reactions))
+    .map((m) => ({ ...m, ...states.get(m.id), canOpenLinks: linksOk.get(m.id) ?? false }));
   return c.json({ messages, hasMore: rows.length === 50 });
 });
 
@@ -368,7 +372,8 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
   await db.update(conversation)
     .set({ lastMessageAt: sql`greatest(${conversation.lastMessageAt}, ${now.toISOString()})` })
     .where(eq(conversation.id, conv.id));
-  const [msg] = await serializeDms([row]);
+  const [serialized] = await serializeDms([row]);
+  const msg = { ...serialized, canOpenLinks: canOpenLinks(row.createdAt, me.createdAt) };
   emitToUser(me.id, DM_EVENTS.message, msg);
   emitToUser(otherId, DM_EVENTS.message, msg);
   // Notificación discreta (sin nombre ni contenido). Se manda siempre: si la app está abierta y a la vista,
@@ -598,11 +603,13 @@ socialRoutes.post("/reports", async (c) => {
 /**
  * Después de guardar un reporte: lo urgente (menores, contenido íntimo sin consentimiento, amenazas) le avisa a
  * moderación al instante, salvo que quien reporta esté en alerta de spam de reportes (ver reportSpam.ts). En ese caso
- * el reporte queda igual en la cola, y moderación recibe un solo aviso de la alerta cuando salta.
+ * el reporte queda igual en la cola, y moderación recibe un solo aviso de la alerta cuando salta. Si moderación ignora
+ * la alerta, sus reportes urgentes vuelven a avisar.
  */
 async function afterReport(reporterId: string, reason: string) {
-  const targets = await recentReportTargets(reporterId).catch(() => 0);
-  if (targets >= REPORT_SPAM_TARGETS) {
+  // Si alguien ignoró la alerta (eran reportes de verdad), lo urgente vuelve a avisar al instante
+  const { targets, flagged } = await reportSpamStatus(reporterId).catch(() => ({ targets: 0, flagged: false }));
+  if (flagged) {
     if (targets === REPORT_SPAM_TARGETS) {
       notifyStaff("sanctions", {
         title: "Posible spam de reportes",

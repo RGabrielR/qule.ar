@@ -100,9 +100,13 @@ test("las fotos y los videos se guardan cifrados en el disco", async () => {
   const back = await readImage(key);
   assert.equal(back?.subarray(8, 12).toString(), "WEBP");
   // La miniatura también queda cifrada
-  const thumb = await readImage(key, true);
+  const thumb = await readImage(key, "thumb");
   assert.equal(thumb?.subarray(8, 12).toString(), "WEBP");
   assert.ok(isEncryptedBlob(await readFile(path.join(dataDir, "uploads", "thumbs", key))));
+  // Y la de la portada (#194)
+  const cover = await readImage(key, "cover");
+  assert.equal(cover?.subarray(8, 12).toString(), "WEBP");
+  assert.ok(isEncryptedBlob(await readFile(path.join(dataDir, "uploads", "thumbs", `cover-${key}`))));
   // No queda ningún temporal suelto
   assert.deepEqual((await readdir(path.join(dataDir, "uploads"))).filter((f) => f.endsWith(".tmp")), []);
 

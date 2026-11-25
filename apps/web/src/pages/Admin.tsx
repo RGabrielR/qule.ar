@@ -171,7 +171,7 @@ export function Admin() {
           has={has}
           act={act}
           onSuspend={(r) => r.target?.id && setSuspending({
-            id: r.target.id, name: r.target.name, reason: `Reportes por ${r.reason}`, preventive: !has("sanctions"),
+            url: `/admin/users/${r.target.id}/suspend`, name: r.target.name, reason: `Reportes por ${r.reason}`, preventive: !has("sanctions"),
           })}
           onRemoveGroup={setRemoving}
         />
@@ -345,8 +345,11 @@ export function Admin() {
   );
 }
 
-/** A quién se suspende: la persona reportada, o quien satura el canal de reportes (ver ReportSpamAlerts). */
-type SuspendTarget = { id: string; name: string; reason: string; preventive: boolean };
+/**
+ * A quién se suspende: la persona reportada, o quien satura el canal de reportes (ver ReportSpamAlerts). `url` es la
+ * ruta que suspende: en la alerta va con su identificador, porque el equipo no ve de qué cuenta es.
+ */
+type SuspendTarget = { url: string; name: string; reason: string; preventive: boolean };
 
 function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onClose: () => void; onDone: () => void }) {
   const { preventive } = target;
@@ -357,7 +360,7 @@ function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onC
     setBusy(true);
     setError("");
     try {
-      await api(`/admin/users/${target.id}/suspend`, { method: "POST", json: { reason } });
+      await api(target.url, { method: "POST", json: { reason } });
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -369,7 +372,7 @@ function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onC
       <div className="sheet" role="dialog" aria-modal aria-labelledby="suspend-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
         <h2 id="suspend-title">Suspender a {target.name}</h2>
-        <p className="muted small">Se cierran sus sesiones, deja de aparecer en la app y se cierran sus reportes abiertos. Se puede reactivar después.</p>
+        <p className="muted small">Se cierran sus sesiones, deja de aparecer en la app y se cierran sus reportes abiertos. También se borran sus mensajes en grupos y todo lo que subió: fotos, álbumes, videos y fotos que mandó por privado. Lo que sea prueba de un reporte queda guardado. La cuenta se puede reactivar después, pero lo borrado no vuelve.</p>
         {preventive && (
           <p className="small">Es una <b>suspensión preventiva</b>: hacela si hay indicios de que es menor de edad. Después alguien con el permiso Suspensiones la revisa y decide si se mantiene.</p>
         )}

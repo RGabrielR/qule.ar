@@ -14,6 +14,8 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 
 export const LIMITS = {
+  nearby: { max: 60, windowMs: MIN, message: "Hiciste muchas búsquedas. Probá de nuevo en un momento." },
+  socket: { max: 30, windowMs: MIN, message: "Demasiados intentos de conexión." },
   /** Mensajes privados de texto */
   dm: { max: 40, windowMs: MIN, message: "Vas muy rápido. Esperá un momento y seguí." },
   /** Charlas nuevas con alguien con quien nunca hablaste (el spam masivo empieza así) */

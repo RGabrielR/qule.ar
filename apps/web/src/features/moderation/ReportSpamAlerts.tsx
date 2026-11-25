@@ -4,12 +4,15 @@ import { Avatar } from "../../components/Avatar";
 
 /** Una cuenta que reportó a muchas personas en poco tiempo (ver apps/api/src/reportSpam.ts y la discusión #219). */
 export type ReportSpamAlert = {
-  reporterId: string;
+  /** Identificador de la alerta: no deja saber de qué cuenta es. */
+  id: string;
   /** Con nombre solo para la administración general, como en los reportes. */
   reporter: Author | null;
   targets: number;
   lastHour: number;
   since: string;
+  /** Los que se descartan en bloque: abiertos, de la última hora y no urgentes. */
+  dismissable: number;
   history: { total: number; open: number; dismissed: number; actioned: number };
 };
 
@@ -21,19 +24,24 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
  */
 export function ReportSpamAlerts({ act, onSuspend, refresh }: {
   act: (fn: () => Promise<unknown>) => Promise<void>;
-  onSuspend: (target: { id: string; name: string; reason: string }) => void;
+  onSuspend: (target: { url: string; name: string; reason: string }) => void;
   /** Cambia cuando el panel se recarga (por ejemplo, después de suspender). */
   refresh: unknown;
 }) {
   const [alerts, setAlerts] = useState<ReportSpamAlert[]>([]);
   const [reload, setReload] = useState(0);
+  /** La alerta cuyo descarte en bloque se está confirmando. */
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   useEffect(() => {
     api<ReportSpamAlert[]>("/admin/report-spam").then(setAlerts, () => setAlerts([]));
   }, [refresh, reload]);
 
   if (!alerts.length) return null;
-  const done = () => setReload((n) => n + 1);
+  const done = () => {
+    setConfirming(null);
+    setReload((n) => n + 1);
+  };
 
   return (
     <section className="reports spam-alerts" aria-label="Alertas de spam de reportes">
@@ -41,7 +49,7 @@ export function ReportSpamAlerts({ act, onSuspend, refresh }: {
         const name = a.reporter?.name ?? "Una cuenta";
         const reason = `Spam de reportes: reportó a ${plural(a.targets, "persona", "personas")} en una hora, casi siempre sin fundamento. Satura el canal y tapa los reportes reales.`;
         return (
-          <article key={a.reporterId} className="rcard rcard--urgent spam-alert">
+          <article key={a.id} className="rcard rcard--urgent spam-alert">
             <div className="rcard__head">
               <span className="pill pill--reason">Posible spam de reportes</span>
             </div>
@@ -58,21 +66,36 @@ export function ReportSpamAlerts({ act, onSuspend, refresh }: {
             </div>
             <p className="muted small">
               Sus reportes siguen en la lista de abajo, pero ya no te mandan avisos urgentes. Si eran reportes de verdad
-              (por ejemplo, encontró varios perfiles falsos), ignorá la alerta.
+              (por ejemplo, encontró varios perfiles falsos), ignorá la alerta y lo urgente vuelve a avisar.
             </p>
-            <div className="rcard__actions">
-              <button className="btn btn--small btn--danger" onClick={() => onSuspend({ id: a.reporterId, name: a.reporter?.name ?? "esta cuenta", reason })}>
-                Suspender a quien reporta
-              </button>
-              {a.history.open > 0 && (
-                <button className="btn btn--small" onClick={() => act(() => api(`/admin/report-spam/${a.reporterId}/dismiss`, { method: "POST" })).then(done)}>
-                  Descartar sus {plural(a.history.open, "reporte abierto", "reportes abiertos")}
+            {confirming === a.id ? (
+              <div className="rcard__actions" role="group" aria-label="Confirmar descarte">
+                <p className="small">
+                  ¿Descartar {plural(a.dismissable, "reporte", "reportes")}? Son los de la última hora, sin los urgentes.
+                  Se borran las pruebas guardadas y no se puede deshacer.
+                </p>
+                <button className="btn btn--small btn--danger" onClick={() => act(() => api(`/admin/report-spam/${a.id}/dismiss`, { method: "POST" })).then(done)}>
+                  Sí, descartar
                 </button>
-              )}
-              <button className="btn btn--small btn--ghost" onClick={() => act(() => api(`/admin/report-spam/${a.reporterId}/ignore`, { method: "POST" })).then(done)}>
-                Ignorar
-              </button>
-            </div>
+                <button className="btn btn--small btn--ghost" onClick={() => setConfirming(null)}>
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <div className="rcard__actions">
+                <button className="btn btn--small btn--danger" onClick={() => onSuspend({ url: `/admin/report-spam/${a.id}/suspend`, name: a.reporter?.name ?? "esta cuenta", reason })}>
+                  Suspender a quien reporta
+                </button>
+                {a.dismissable > 0 && (
+                  <button className="btn btn--small" onClick={() => setConfirming(a.id)}>
+                    Descartar {plural(a.dismissable, "reporte", "reportes")} de la última hora
+                  </button>
+                )}
+                <button className="btn btn--small btn--ghost" onClick={() => act(() => api(`/admin/report-spam/${a.id}/ignore`, { method: "POST" })).then(done)}>
+                  Ignorar
+                </button>
+              </div>
+            )}
           </article>
         );
       })}
