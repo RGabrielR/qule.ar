@@ -257,6 +257,10 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 
 .chat__list--dm { display: flex; flex-direction: column; gap: 4px; padding: 12px; }
 .bubble { position: relative; align-self: flex-start; max-width: min(78%, 440px); background: var(--surface-2); border-radius: var(--radius-2xl) var(--radius-2xl) var(--radius-2xl) var(--radius-xs); padding: 8px 12px 6px; }
+.send-failure { display: flex; align-items: center; gap: 4px; color: var(--muted); overflow-wrap: anywhere; }
+.chat__list--dm > .send-failure { align-self: flex-end; max-width: 85%; text-align: right; }
+.gmsg > .send-failure { grid-column: 2 / -1; }
+.send-failure .iconbtn svg { width: 16px; height: 16px; }
 .bubble p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .bubble time, .bubble__meta { display: block; text-align: right; font-size: var(--text-2xs); color: var(--muted); margin-top: 2px; }
 .bubble--mine { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius-2xl) var(--radius-2xl) var(--radius-xs) var(--radius-2xl); }
