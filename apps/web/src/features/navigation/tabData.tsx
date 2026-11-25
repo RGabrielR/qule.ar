@@ -12,7 +12,7 @@ function useTabResource<T>(path: string, onUnauthorized: () => void, fallback?: 
   const [data, setData] = useState<T | null>(null);
   const currentData = useRef<T | null>(null);
   const updatedAt = useRef<number | null>(null);
-  const inFlight = useRef<{ controller: AbortController; again: boolean } | null>(null);
+  const inFlight = useRef<{ controller: AbortController; again: boolean; settled: Promise<void> } | null>(null);
   const update = useCallback((value: T | null) => {
     currentData.current = value;
     setData(value);
@@ -23,7 +23,8 @@ function useTabResource<T>(path: string, onUnauthorized: () => void, fallback?: 
     return true;
   }, []);
 
-  const load = useCallback((mode: Refresh = "recent") => {
+  // La promesa se cumple cuando termina el pedido, incluido el que se repite si algo cambió mientras tanto.
+  const load = useCallback((mode: Refresh = "recent"): Promise<void> => {
     if (mode === "clear") {
       inFlight.current?.controller.abort();
       inFlight.current = null;
@@ -33,15 +34,18 @@ function useTabResource<T>(path: string, onUnauthorized: () => void, fallback?: 
     if (mode === "recent") {
       // Si la lista tiene más de 15 segundos, se sigue mostrando mientras llega la nueva: así cambiar de pestaña
       // nunca deja la pantalla vacía esperando al servidor. Los eventos en vivo ya la mantienen al día.
-      if (updatedAt.current !== null && Date.now() - updatedAt.current < FRESH_MS) return;
+      if (updatedAt.current !== null && Date.now() - updatedAt.current < FRESH_MS) return Promise.resolve();
     }
     if (inFlight.current) {
       if (mode === "refresh") inFlight.current.again = true;
-      return;
+      return inFlight.current.settled;
     }
 
+    let finish = () => {};
+    const settled = new Promise<void>((resolve) => { finish = resolve; });
+
     function fetchData() {
-      const request = { controller: new AbortController(), again: false };
+      const request = { controller: new AbortController(), again: false, settled };
       inFlight.current = request;
       const { signal } = request.controller;
       api<T>(path, { signal, cache: "no-store" }).then((value) => {
@@ -58,12 +62,14 @@ function useTabResource<T>(path: string, onUnauthorized: () => void, fallback?: 
           update(fallback);
         }
       }).finally(() => {
-        if (inFlight.current !== request) return;
+        if (inFlight.current !== request) return finish();
         inFlight.current = null;
         if (request.again) fetchData();
+        else finish();
       });
     }
     fetchData();
+    return settled;
   }, [path, onUnauthorized, fallback, update]);
 
   useLayoutEffect(() => () => {
@@ -78,7 +84,8 @@ type TabData = {
   groups: MyGroup[] | null;
   invites: MyInvite[] | null;
   conversations: ConversationSummary[] | null;
-  refreshGroups: (mode?: Refresh) => void;
+  refreshGroups: (mode?: Refresh) => Promise<void>;
+  refreshConversations: (mode?: Refresh) => Promise<void>;
   refreshAfterBlock: () => void;
 };
 
@@ -96,10 +103,10 @@ export function TabDataProvider({ children, onUnauthorized, userId }: { children
   const [invites, loadInvites] = useTabResource<MyInvite[]>("/invites", onUnauthorized);
   const [conversations, loadConversations, inbox] = useTabResource("/conversations", onUnauthorized, NO_CONVERSATIONS);
   const resetInbox = useLiveInbox(userId, inbox, loadConversations, onUnauthorized);
-  const refreshGroups = useCallback((mode?: Refresh) => {
-    loadGroups(mode);
-    loadInvites(mode);
-  }, [loadGroups, loadInvites]);
+  const refreshGroups = useCallback(
+    (mode?: Refresh) => Promise.all([loadGroups(mode), loadInvites(mode)]).then(() => {}),
+    [loadGroups, loadInvites],
+  );
 
   useLayoutEffect(() => {
     if (pathname === "/grupos") refreshGroups();
@@ -132,7 +139,7 @@ export function TabDataProvider({ children, onUnauthorized, userId }: { children
   }
 
   return (
-    <TabDataContext.Provider value={{ groups, invites, conversations, refreshGroups, refreshAfterBlock }}>
+    <TabDataContext.Provider value={{ groups, invites, conversations, refreshGroups, refreshConversations: loadConversations, refreshAfterBlock }}>
       {children}
     </TabDataContext.Provider>
   );
