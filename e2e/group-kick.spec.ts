@@ -27,7 +27,7 @@ test("quien modera puede expulsar desde el menú de un mensaje del chat", async 
 
   await page.goto(`/grupos/${id}`);
   const message = page.locator(".gmsg").filter({ hasText: "mensaje molesto" });
-  await message.getByRole("button", { name: "Opciones del mensaje" }).click();
+  await message.press("Shift+F10");
   page.once("dialog", (dialog) => {
     expect(dialog.message()).toContain(`¿Expulsar a ${member.name} del grupo?`);
     void dialog.accept();

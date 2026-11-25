@@ -9,7 +9,7 @@ test("los números del antispam se pueden borrar y reescribir, y avisan cuando s
   const created = await page.request.post("/api/groups", { data: { name: "Reglas de prueba" }, headers: { Origin: baseURL! } });
   await expect(created).toBeOK();
   const { id } = await created.json();
-  await page.goto(`/grupos/${id}/info`);
+  await page.goto(`/grupos/${id}/editar`);
 
   const seconds = page.getByRole("textbox", { name: "Segundos por mensaje" });
   const burst = page.getByRole("textbox", { name: "Ráfaga (mensajes seguidos)" });
@@ -21,14 +21,14 @@ test("los números del antispam se pueden borrar y reescribir, y avisan cuando s
   await burst.fill("60");
   await expect(burst).toHaveAttribute("aria-invalid", "true");
   await expect(burst).toHaveAccessibleDescription("Entre 1 y 10");
-  await page.getByRole("button", { name: "Guardar ajustes" }).click();
+  await page.getByRole("button", { name: "Guardar cambios" }).click();
   await expect(page.getByRole("alert")).toHaveText("Revisá los números marcados.");
 
   await burst.fill("05");
   await expect(burst).toHaveValue("5");
   await expect(burst).toHaveAttribute("aria-invalid", "false");
-  await page.getByRole("button", { name: "Guardar ajustes" }).click();
-  await expect(page.getByRole("button", { name: "Guardado ✓" })).toBeVisible();
+  await page.getByRole("button", { name: "Guardar cambios" }).click();
+  await expect(page.getByRole("button", { name: "Guardado" })).toBeVisible();
   const saved = await (await page.request.get(`/api/groups/${id}`)).json();
   expect(saved.rules).toMatchObject({ intervalSeconds: 5, burst: 5 });
 });

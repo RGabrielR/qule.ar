@@ -67,11 +67,11 @@ for (const [width, columns] of [[375, 3], [650, 4]]) {
     expect(await grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length)).toBe(columns);
     await more.tap();
     await expect(profiles).toHaveCount(120);
-    await expect(profiles.nth(119)).toHaveAccessibleName("Perfil 120, 30");
+    await expect(profiles.nth(119)).toHaveAccessibleName("Perfil 120");
     expect(requests).toContainEqual({ offset: 120, limit: 1 });
     await more.tap();
     await expect(profiles).toHaveCount(125);
     await expect(more).toBeHidden();
-    await expect(profiles.nth(124)).toHaveAccessibleName("Perfil 125, 30");
+    await expect(profiles.nth(124)).toHaveAccessibleName("Perfil 125");
   });
 }
