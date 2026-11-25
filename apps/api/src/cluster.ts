@@ -1,7 +1,7 @@
 import cluster, { type Worker } from "node:cluster";
 import { availableParallelism } from "node:os";
 import { setupPrimary } from "@socket.io/cluster-adapter";
-import { countHit, isSharedMsg, sweepHits, type SharedMsg } from "./shared.js";
+import { countHit, isSharedMsg, MAX_ACCOUNT_SOCKETS, sweepHits, type SharedMsg } from "./shared.js";
 
 /**
  * Cuántos procesos del API corren a la vez. Node usa un solo núcleo por proceso, así que con varios se
@@ -55,12 +55,24 @@ export function runPrimary(workers: number) {
 
   const fork = (leader: boolean) => {
     const w = cluster.fork({ LEADER: leader ? "1" : "0" });
+    const reservations = new Map<number, string>();
     w.on("message", (m: unknown) => {
       if (!isSharedMsg(m)) return;
       if (m.qule === "hit") {
         w.send({ qule: "hit:r", id: m.id, ok: countHit(hits, m.key, m.max, m.windowMs, m.force) } satisfies SharedMsg);
-      } else if (m.qule === "online") {
-        changeOnline(w.id, m.userId, m.delta);
+      } else if (m.qule === "socket:reserve") {
+        const ok = (total.get(m.userId) ?? 0) < MAX_ACCOUNT_SOCKETS;
+        if (ok) {
+          reservations.set(m.id, m.userId);
+          changeOnline(w.id, m.userId, 1);
+        }
+        w.send({ qule: "hit:r", id: m.id, ok } satisfies SharedMsg);
+      } else if (m.qule === "socket:release") {
+        const userId = reservations.get(m.id);
+        if (userId) {
+          reservations.delete(m.id);
+          changeOnline(w.id, userId, -1);
+        }
       } else if (m.qule === "online:snapshot") {
         w.send({ qule: "online:snapshot", ids: [...total.keys()] } satisfies SharedMsg);
       } else if (m.qule === "bcast") {
