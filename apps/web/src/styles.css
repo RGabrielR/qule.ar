@@ -151,7 +151,8 @@ input[type="date"].input { width: auto; min-width: 0; height: 48px; appearance: 
 .segmented button[aria-selected="true"], .segmented button[aria-checked="true"] { background: var(--surface-3); color: var(--text); }
 
 /* ---------- Layout con barra de pestañas ---------- */
-.shell { height: 100%; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; border-inline: 1px solid var(--line); }
+.shell { --people-grid-columns: 3; height: 100%; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; border-inline: 1px solid var(--line); }
+@media (min-width: 560px) { .shell { --people-grid-columns: 4; } }
 html:has(.shell--thread), body:has(.shell--thread) { overflow: hidden; overscroll-behavior: none; }
 .shell--thread { position: fixed; inset-inline: 0; top: var(--chat-top, 0px); height: var(--chat-height, 100dvh); overflow: clip; }
 .shell__main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -423,8 +424,7 @@ a.gcard:hover { background: var(--surface); }
 .toast--upload-error { width: max-content; overflow-wrap: anywhere; border-color: var(--danger-line); color: var(--danger); }
 
 /* ---------- Cerca (grilla) ---------- */
-.grid { list-style: none; margin: 0; padding: 2px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
-@media (min-width: 560px) { .grid { grid-template-columns: repeat(4, 1fr); } }
+.grid { list-style: none; margin: 0; padding: 2px; display: grid; grid-template-columns: repeat(var(--people-grid-columns), 1fr); gap: 2px; }
 .tile { display: block; position: relative; aspect-ratio: 1; overflow: hidden; background: var(--surface-2); }
 .tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.2s; }
 .tile:hover img { transform: scale(1.03); }

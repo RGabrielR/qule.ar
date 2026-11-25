@@ -230,6 +230,17 @@ test("no aparecen bloqueos, ocultos por reportes, incógnito ni suspendidos", as
   assert.ok(seen.has("u800"), "dos reportes no alcanzan para ocultar");
 });
 
+test("Cerca permite completar una tanda y devuelve el siguiente desplazamiento", async () => {
+  const me = MES["con ubicación"];
+  const regular = await nearbyPage(me, parseNearbyFilters({}));
+  const first = await nearbyPage(me, parseNearbyFilters({ limit: "3" }));
+  const next = await nearbyPage(me, parseNearbyFilters({ offset: String(first.nextOffset), limit: "4" }));
+  assert.equal(first.nextOffset, 3);
+  assert.equal(next.nextOffset, 7);
+  assert.deepEqual([...first.people, ...next.people], regular.people.slice(0, 7));
+  assert.throws(() => parseNearbyFilters({ limit: "61" }));
+});
+
 test("tener lugar: sin filtro no deja a nadie afuera, y con los dos solo quedan quienes lo dijeron", async () => {
   const me = MES["con ubicación"];
   const all = await nearbyPage(me, parseNearbyFilters({}));
