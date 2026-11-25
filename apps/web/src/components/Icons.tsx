@@ -3,6 +3,14 @@ const base = {
   strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true,
 };
 
+export const InstagramIcon = () => (
+  <svg {...base}><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r=".5" /></svg>
+);
+
+export const XSocialIcon = () => (
+  <svg {...base}><path d="M4 3h4.5L20 21h-4.5zM20 3l-7.6 8.6M4 21l7.6-8.6" /></svg>
+);
+
 export const GroupIcon = () => (
   <svg {...base}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" /><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c1.9.7 3.1 2.4 3.5 5.2" /></svg>
 );

@@ -1,5 +1,5 @@
 import {
-  pgTable, text, timestamp, boolean, integer, date, jsonb, uniqueIndex, index, primaryKey, doublePrecision,
+  bigint, pgTable, varchar, text, timestamp, boolean, integer, date, jsonb, uniqueIndex, index, primaryKey, doublePrecision,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { encryptedMessageText, encryptedText } from "../crypt.js";
@@ -57,10 +57,16 @@ export const verification = pgTable("verification", {
 /** Valores posibles de profile.hasPlace. Sin dato (null) es "sin decir". */
 export const HAS_PLACE = ["si", "no"] as const;
 
+export type SocialProof = { code: string; expires: number; retryAt?: number } | { verified: true; verifiedAt?: string };
+
 export const profile = pgTable("profile", {
   userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
   displayName: text("display_name").notNull(),
   birthdate: date("birthdate").notNull(),
+  xProof: jsonb("x_proof").$type<SocialProof>(),
+  instagramProof: jsonb("instagram_proof").$type<SocialProof>(),
+  xUsername: varchar("x_username", { length: 15 }),
+  instagramUsername: varchar("instagram_username", { length: 30 }),
   about: text("about"),
   heightCm: integer("height_cm"),
   weightKg: integer("weight_kg"),
@@ -433,3 +439,11 @@ export const mailLog = pgTable("mail_log", {
   kind: text("kind").notNull(), // reset | account
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("mail_log_created_idx").on(t.createdAt), index("mail_log_to_idx").on(t.toHash, t.createdAt)]);
+
+
+// Una fila por red. El bloqueo de fila comparte el cupo entre procesos.
+export const bioQuota = pgTable("bio_quota", {
+  network: text("network").primaryKey(),
+  reads: jsonb("reads").$type<{ handle: string; at: number; codes?: string[] | null }[]>().notNull().default([]),
+  pausedUntil: bigint("paused_until", { mode: "number" }).notNull().default(0),
+});

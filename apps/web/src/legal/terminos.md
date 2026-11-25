@@ -1,6 +1,6 @@
 # Términos y condiciones
 
-**Versión beta · 21 de noviembre de 2026**
+**Versión beta · 25 de noviembre de 2026**
 
 Te damos la bienvenida a qule.ar. Al crear tu cuenta aceptás estos términos y la [Política de privacidad](/privacidad). Los escribimos en criollo para que se entiendan.
 
@@ -54,6 +54,10 @@ Las reglas completas de convivencia están en el [Código de conducta](https://g
 - Lo que subís (fotos, videos, textos y mensajes) sigue siendo tuyo. Nos das permiso para guardarlo y mostrarlo dentro de la app, solo a quienes elegiste que lo vean y solo para que la app funcione. No lo vendemos ni lo usamos para publicidad.
 - Sos responsable de lo que publicás y de tener derecho a publicarlo.
 - Podemos ocultar o borrar contenido que rompa estas reglas, sobre todo si alguien lo reporta.
+
+**Tus perfiles de Instagram y X.** Vos elegís si querés mostrar un enlace a tu perfil de Instagram o de X en tu perfil de qule.ar. Vinculá solo perfiles propios. Cuando generás un código, guardamos tu nombre de usuario de la red que elegiste. Pegá el código en la biografía de ese perfil de Instagram o X y tocá **Verificar** en qule.ar. El enlace aparece en tu perfil de qule.ar solo si encontramos el código en esa biografía.
+
+Verificar un perfil de Instagram o X indica que pudiste editar su biografía en ese momento. Después podés borrar el código de esa red. Para quitar el enlace de qule.ar, entrá en **Editar perfil → Tus redes** y tocá **Cambiar**. Si querés vincular otro perfil de Instagram o X, verificá ese perfil con un código nuevo.
 
 ## 6. Moderación
 

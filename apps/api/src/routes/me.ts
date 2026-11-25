@@ -1,4 +1,7 @@
-import { and, asc, eq, or } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
+import { withBioWait, checkBioCode } from "../bioQuota.js";
+import { validHandle } from "../socialBio.js";
+import { sql, and, asc, eq, or } from "drizzle-orm";
 import { mailEnabled } from "../mail.js";
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -144,6 +147,10 @@ meRoutes.get("/me", requireUser, async (c) => {
   const photos = await db.select().from(photo).where(eq(photo.userId, u.id)).orderBy(asc(photo.position));
   const albums = await myAlbums(u.id);
   const access = await accessFor(u);
+  const [xProof, instagramProof] = p ? await Promise.all([
+    withBioWait("x", p.xProof),
+    withBioWait("instagram", p.instagramProof),
+  ]) : [null, null];
   return c.json({
     // isAdmin: entra al panel de moderación. access: qué puede hacer ahí (ver staff.ts)
     // emailVerified: si confirmó el mail. listed: si aparece en Gente (ver nearby.ts, cuentas nuevas sin confirmar no)
@@ -152,13 +159,79 @@ meRoutes.get("/me", requireUser, async (c) => {
       ? (() => {
           const { cellLat, cellLng, ...rest } = p;
           // A la propia persona solo le decimos si tiene ubicación, no la celda
-          return { ...rest, age: ageFrom(p.birthdate), hasLocation: cellLat != null && cellLng != null };
+          return { ...rest, xProof, instagramProof, age: ageFrom(p.birthdate), hasLocation: cellLat != null && cellLng != null };
         })()
       : null,
     photos: photos.map((x) => ({ id: x.id, position: x.position, isPrivate: x.isPrivate, albumId: x.albumId, ...mediaOut(x) })),
     // Álbumes privados, en orden (el primero es el álbum por defecto)
     albums: albums.map((a) => ({ id: a.id, name: a.name })),
   });
+});
+
+meRoutes.post("/me/social/:network/:action", requireUser, requireProfile, async (c) => {
+  const network = c.req.param("network");
+  const action = c.req.param("action");
+  if (network !== "x" && network !== "instagram") return c.notFound();
+  const name = network === "x" ? "xUsername" : "instagramUsername";
+  const proof = network === "x" ? "xProof" : "instagramProof";
+  const owner = eq(profile.userId, c.get("user").id);
+  if (action === "remove") {
+    const expected = z.object({ handle: z.string(), version: z.string() }).safeParse(await c.req.json());
+    if (!expected.success) throw new HTTPException(400, { message: "Recargá el perfil antes de cambiar la cuenta." });
+    const version = sql`case when ${profile[proof]} ? 'code' then 'code:' || (${profile[proof]}->>'code')
+      when ${profile[proof]} ? 'verified' then 'verified:' || coalesce(${profile[proof]}->>'verifiedAt', '')
+      else 'legacy' end`;
+    const removed = await db.update(profile).set({ [name]: null, [proof]: null }).where(and(owner,
+      eq(profile[name], expected.data.handle), sql`${version} = ${expected.data.version}`)).returning({ id: profile.userId });
+    if (!removed.length) throw new HTTPException(409, { message: "La cuenta cambió. Revisá el perfil actualizado." });
+    return c.json({ ok: true });
+  }
+  const body = z.object({ handle: z.string().trim().toLowerCase() }).safeParse(await c.req.json());
+  if (!body.success || !validHandle(network, body.data.handle)) throw new HTTPException(400, { message: "Revisá el nombre de usuario." });
+  const { handle } = body.data;
+  if (action === "start") {
+    await limit(c.get("user").id, "socialProof");
+    const code = randomBytes(10).toString("hex");
+    const changed = await db.update(profile).set({ [name]: handle, [proof]: { code, expires: Date.now() + 30 * 60_000 } })
+      .where(and(owner, sql`${profile[proof]}->>'verified' IS DISTINCT FROM 'true'`)).returning({ id: profile.userId });
+    if (!changed.length) throw new HTTPException(409, { message: "Tocá Cambiar para quitar la cuenta verificada." });
+    return c.json({ code });
+  }
+  if (action !== "verify") return c.notFound();
+  const p = c.get("profile")!;
+  const pending = p[proof];
+  const stale = () => new HTTPException(409, { message: "Pedí un código nuevo para esta cuenta." });
+  if (p[name] !== handle || !pending || !("code" in pending) || pending.expires <= Date.now()) throw stale();
+
+  const retry = (status: 422 | 429 | 503, error: string, until: number) => {
+    const seconds = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+    return c.json({ error }, status, { "Retry-After": String(seconds) });
+  };
+  const now = Date.now();
+  if (pending.retryAt && pending.retryAt > now) return retry(429, "Esperá un momento para volver a verificar.", pending.retryAt);
+  const attempt = { ...pending, retryAt: now + 60_000 };
+  const unexpired = sql`(${profile[proof]}->>'expires')::bigint > extract(epoch from clock_timestamp()) * 1000`;
+  const result = await checkBioCode(network, handle, pending.code, async tx => {
+    const claimed = await tx.update(profile).set({ [proof]: attempt }).where(and(owner,
+      eq(profile[name], handle), eq(profile[proof], pending),
+      unexpired
+    )).returning({ id: profile.userId });
+    if (!claimed.length) throw stale();
+  });
+  if (result.kind === "paused") {
+    // Una pausa descubierta por el lector llega después de confirmar la reserva.
+    if (result.attemptRecorded) {
+      await db.update(profile).set({ [proof]: pending }).where(and(owner, eq(profile[proof], attempt)));
+    }
+    return retry(429, "Esperá un momento para verificar en esta red.", result.until);
+  }
+  if (result.kind === "unavailable") return retry(503, "No pudimos leer la biografía pública.", attempt.retryAt);
+  if (result.kind === "missing") return retry(422, "Todavía no pudimos confirmar el código. Revisá tu biografía y volvé a probar.", attempt.retryAt);
+  const changed = await db.update(profile).set({ [proof]: { verified: true, verifiedAt: new Date().toISOString() } }).where(and(owner,
+    eq(profile[name], handle), eq(profile[proof], attempt), unexpired
+  )).returning({ id: profile.userId });
+  if (!changed.length) throw stale();
+  return c.json({ ok: true });
 });
 
 meRoutes.put("/me/profile", requireUser, async (c) => {

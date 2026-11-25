@@ -26,6 +26,7 @@ import { toqueRoutes } from "./routes/toques.js";
 import { appealRoutes } from "./routes/appeals.js";
 import { securityHeaders } from "./security.js";
 import { limitApiBody } from "./requestBody.js";
+import { sweepBioReads } from "./bioQuota.js";
 import { sweepExpiredPhotos } from "./expiring.js";
 import { purgeRemovedGroups, scanExistingGroups } from "./moderation.js";
 import { signalReady } from "./shared.js";
@@ -38,6 +39,8 @@ const leader = !cluster.isWorker || process.env.LEADER === "1";
 
 if (leader) {
   await runMigrations();
+  await sweepBioReads();
+  setInterval(() => sweepBioReads().catch(e => console.error("sweepBioReads", e)), 10_000).unref();
   const encryptedProfiles = await encryptLegacyHealth(db);
   if (encryptedProfiles) console.log(`Datos de salud cifrados: ${encryptedProfiles} perfiles`);
   // Mensajes privados y copias de reportes de antes del cifrado: de a tandas y en segundo plano

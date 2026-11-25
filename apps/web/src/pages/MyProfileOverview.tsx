@@ -57,7 +57,10 @@ export function MyProfileOverview() {
         <section aria-labelledby="my-profile-details">
           <h2 id="my-profile-details" className="section__title">Sobre vos</h2>
           <div className="stack">
-            <ProfileStats p={profile} empty={<p className="muted">Agregá los datos que quieras mostrar desde Editar perfil.</p>} />
+            <ProfileStats p={{ ...profile,
+              xUsername: profile.xProof && "verified" in profile.xProof ? profile.xUsername : null,
+              instagramUsername: profile.instagramProof && "verified" in profile.instagramProof ? profile.instagramUsername : null,
+            }} empty={<p className="muted">Agregá los datos que quieras mostrar desde Editar perfil.</p>} />
           </div>
         </section>
 

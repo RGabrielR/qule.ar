@@ -169,6 +169,13 @@
       "when": 1795528276795,
       "tag": "0023_avisos_album",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795640005238,
+      "tag": "0024_verificacion_redes_sociales",
+      "breakpoints": true
     }
   ]
 }

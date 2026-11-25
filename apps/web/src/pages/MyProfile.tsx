@@ -11,10 +11,11 @@ import { PhotoCrop } from "../components/PhotoCrop";
 import { preparePhotoForCrop } from "../features/photos/preparePhoto";
 import { HasPlaceSelect } from "../features/place/hasPlace";
 import { AlbumHeader, MoveTo, NewAlbum } from "../features/photos/AlbumHeader";
+import { SocialAccount } from "../features/profile/SocialAccount";
 import { useEditorKeyboard } from "../features/profile/useEditorKeyboard";
 import { BODY_TYPES, HIV_STATUS, LOOKING_FOR, POSITIONS, PRONOUNS, RELATIONSHIP, TRIBES } from "../options";
 
-type Form = Omit<Profile, "birthdate" | "age">;
+type Form = Omit<Profile, "birthdate" | "age" | "xUsername" | "instagramUsername" | "xProof" | "instagramProof">;
 
 function Select({ label, value, options, onChange }: { label: string; value: string | null; options: string[]; onChange: (v: string | null) => void }) {
   return (
@@ -485,6 +486,13 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
           const items = privatePhotos.filter((p) => p.albumId === viewing.albumId);
           return a && items.length ? <AlbumViewer items={items} start={viewing.index} title={a.name} onClose={() => setViewing(null)} /> : null;
         })()}
+      </section>
+
+      <section className="section form">
+        <h2 className="section__title">Tus redes</h2>
+        <p className="muted small">Cuando verifiques tu cuenta, el enlace se va a ver en tu perfil. Podés quitarlo cuando quieras.</p>
+        <SocialAccount network="instagram" saved={profile.instagramUsername} proof={profile.instagramProof} reload={reload} />
+        <SocialAccount network="x" saved={profile.xUsername} proof={profile.xProof} reload={reload} />
       </section>
 
       <form className="section form profile-editor__form" onSubmit={save}>
