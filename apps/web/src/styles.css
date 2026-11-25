@@ -185,7 +185,11 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .topbar__sub { color: var(--muted); font-size: var(--text-xs); display: flex; align-items: center; gap: 5px; margin-top: 2px; }
 .topbar__who { display: flex; align-items: center; gap: 10px; }
 .topbar__actions { display: flex; align-items: center; gap: 4px; }
-.conversation-header-menu { position: relative; margin-left: auto; }
+.conversation-header-menu { position: relative; margin-left: auto; z-index: var(--z-raised); }
+.topbar__link::after { content: ""; position: absolute; inset: 0; }
+.topbar__link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Los botones quedan por encima del enlace que cubre la barra. */
+.topbar--linked > .iconbtn, .topbar--linked .group-actions > .iconbtn { position: relative; z-index: var(--z-raised); }
 .iconbtn--busy { animation: blink 1.2s infinite; }
 .iconbtn--done { color: var(--accent); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
