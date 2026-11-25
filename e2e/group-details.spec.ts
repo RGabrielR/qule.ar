@@ -3,7 +3,7 @@ import { createAccount, signIn } from "./fixtures";
 
 test.use({ viewport: { width: 375, height: 812 } });
 
-test("los detalles abiertos desde Todos los grupos permiten entrar al chat", async ({ page, baseURL }) => {
+test("los detalles conservan el origen al abrirse desde Grupos o desde el chat", async ({ page, baseURL }) => {
   const owner = await createAccount(baseURL!, "Ana Grupos");
   await signIn(page, owner);
   const name = "Caminatas de fin de semana por la ciudad";
@@ -47,8 +47,25 @@ test("los detalles abiertos desde Todos los grupos permiten entrar al chat", asy
 
   await page.getByRole("button", { name: "Volver", exact: true }).click();
   await expect(page).toHaveURL(new URL(chat, baseURL!).href);
-  await page.getByRole("heading", { name }).getByRole("link").click();
+  const header = page.locator("header").filter({ has: page.getByRole("button", { name: "Volver a Grupos" }) });
+  const detailsLink = header.getByRole("link", { name, exact: true });
+  await detailsLink.focus();
+  await detailsLink.press("Enter");
+
+  for (const target of [header.locator(".gcard__icon"), header.locator(".topbar__sub"), header]) {
+    await expect(page).toHaveURL(new URL(details, baseURL!).href);
+    await expect(requests).toBeVisible();
+    await expect(viewChat).toHaveCount(0);
+    await page.getByRole("button", { name: "Volver", exact: true }).click();
+    await expect(detailsLink).toBeVisible();
+    const box = (await target.boundingBox())!;
+    const x = target === header ? 2 : box.width / 2;
+    const y = target === header ? 2 : box.height / 2;
+    await page.mouse.click(box.x + x, box.y + y);
+  }
+
   await expect(page).toHaveURL(new URL(details, baseURL!).href);
-  await expect(requests).toBeVisible();
-  await expect(viewChat).toHaveCount(0);
+  await page.getByRole("button", { name: "Volver", exact: true }).click();
+  await page.getByRole("button", { name: "Volver a Grupos" }).click();
+  await expect(page).toHaveURL(new URL("/grupos", baseURL!).href);
 });

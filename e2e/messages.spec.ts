@@ -8,6 +8,29 @@ function gate() {
   return { wait, release };
 }
 
+test("el espacio libre de la barra del chat privado abre el perfil", async ({ page, baseURL }) => {
+  const sender = await createAccount(baseURL!, "Luz Chat");
+  const recipient = await createAccount(baseURL!, "Mar Chat");
+  await page.setViewportSize({ width: 375, height: 700 });
+  await signIn(page, sender);
+  await openProfile(page, recipient);
+  const profileUrl = page.url();
+  await page.getByRole("button", { name: "Mandar mensaje" }).click();
+
+  const back = page.getByRole("button", { name: "Volver", exact: true });
+  const header = page.locator("header").filter({ has: back });
+  await expect(header.getByRole("link", { name: new RegExp(recipient.name) })).toBeVisible();
+  const chatUrl = page.url();
+  const bounds = (await header.boundingBox())!;
+  await header.click({ position: { x: bounds.width - 4, y: bounds.height / 2 } });
+  await expect(page).toHaveURL(profileUrl);
+
+  await page.goBack();
+  await expect(page).toHaveURL(chatUrl);
+  await back.click();
+  await expect(page).toHaveURL(profileUrl);
+});
+
 test("abre una foto del chat para quien la manda y quien la recibe", async ({ page, browser, baseURL }) => {
   const sender = await createAccount(baseURL!, "Luz Fotos");
   const recipient = await createAccount(baseURL!, "Mar Fotos");

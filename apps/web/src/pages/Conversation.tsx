@@ -271,10 +271,10 @@ export function Conversation() {
 
   return (
     <div className="chat">
-      <header className="topbar topbar--thread">
+      <header className="topbar topbar--thread topbar--linked">
         <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
         {other && (
-          <Link to={`/perfil/${other.id}`} className="topbar__who">
+          <Link to={`/perfil/${other.id}`} className="topbar__who topbar__link">
             <Avatar src={other.photo} name={other.name} size={36} />
             <span>
               <b>{other.name}</b> <span className="muted">{other.age}</span>
