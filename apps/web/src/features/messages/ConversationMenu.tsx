@@ -55,7 +55,7 @@ export function ConversationMenu({ id, className, anchor, onClose, muted, canMod
           !anchor.current?.contains(event.relatedTarget) && !menu.current?.contains(event.relatedTarget)) onClose();
       }}>
       <button type="button" role="menuitem" onClick={() => act("mute")}>{muted ? "Activar avisos" : "Silenciar"}</button>
-      <button type="button" role="menuitem" onClick={() => act("remove")} className="danger">Eliminar chat</button>
+      <button type="button" role="menuitem" onClick={() => act("remove")} className="danger">Vaciar chat</button>
       {canModerate && <button type="button" role="menuitem" onClick={() => act("block")} className="danger">Bloquear</button>}
       {canModerate && <button type="button" role="menuitem" onClick={() => act("report")}>Reportar</button>}
     </div>
