@@ -11,6 +11,7 @@ import { useSectionBack } from "../useSectionBack";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
+import { useKeyboardAfterSend } from "../features/chat/useKeyboardAfterSend";
 import { MessageText } from "../features/chat/MessageText";
 import { batchReadReceipts } from "../features/messages/readReceipts";
 import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
@@ -60,6 +61,7 @@ export function Conversation() {
   const stickToBottom = useRef(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const keyboard = useKeyboardAfterSend(inputRef);
   const expiringNext = useRef(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const myId = me?.user.id;
@@ -225,7 +227,7 @@ export function Conversation() {
     if (!body) return;
     const wasReplying = replyTo;
     // Mandar con el botón le saca el foco al campo y cierra el teclado. Se lo devolvemos.
-    inputRef.current?.focus({ preventScroll: true });
+    keyboard.restore();
     setError("");
     setText("");
     setReplyTo(null);
@@ -505,7 +507,7 @@ export function Conversation() {
             }}
           />
           <div className="composer__action">
-            <button className="sendbtn" aria-label="Mandar" disabled={!text.trim()} onMouseDown={(e) => e.preventDefault()}><SendIcon /></button>
+            <button className="sendbtn" aria-label="Mandar" disabled={!text.trim()} onPointerDown={keyboard.onPointerDown} onMouseDown={(e) => e.preventDefault()}><SendIcon /></button>
           </div>
         </div>
       </form>
