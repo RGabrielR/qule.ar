@@ -6,6 +6,7 @@ import { Avatar } from "../components/Avatar";
 import { BellOffIcon } from "../components/Icons";
 import { useConversationActions } from "../features/messages/ConversationActions";
 import { ConversationMenuRow } from "../features/messages/ConversationMenuRow";
+import { usePullToRefresh } from "../features/navigation/pullToRefresh";
 import { useTabData } from "../features/navigation/tabData";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { useRememberScroll } from "../features/navigation/viewMemory";
@@ -20,7 +21,7 @@ function ago(iso: string) {
 
 export function Inbox() {
   const { me } = useMe();
-  const { conversations: list } = useTabData();
+  const { conversations: list, refreshConversations } = useTabData();
   const albumNoticeTime = useAlbumNoticeTime(list?.map(({ last }) => last) ?? []);
   const [query, setQuery] = useState("");
   const [unread, setUnread] = useState(false);
@@ -32,11 +33,13 @@ export function Inbox() {
   const filtered = list?.filter((chat) => (!unread || chat.unread > 0)
     && words.every((word) => normalize(chat.other?.name ?? "").includes(word)));
   useRememberScroll(pageRef, list != null);
+  const pullRefresh = usePullToRefresh(pageRef, () => refreshConversations("refresh"));
 
   return (
     <div className="page" ref={pageRef}>
       <header className="topbar"><h1 className="topbar__title">Mensajes</h1></header>
       {errorNotice}
+      {pullRefresh}
       {!!list?.length && (
         <div className="searchbar form">
           <label className="field">
