@@ -582,6 +582,9 @@ a.gcard:hover { background: var(--surface); }
 .modfilters .chips { flex-wrap: wrap; }
 .modreports__more { display: flex; justify-content: center; padding: 0 16px 16px; }
 .rcard--urgent { border-color: var(--danger-strong); }
+/* Alertas de spam de reportes (features/moderation/ReportSpamAlerts.tsx), arriba de la lista de reportes */
+.spam-alerts { padding-bottom: 0; }
+.spam-alert .pill--reason { text-transform: none; }
 .rcard__summary { color: var(--muted); }
 .rcard__notes summary { cursor: pointer; }
 .rcard__notes ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }

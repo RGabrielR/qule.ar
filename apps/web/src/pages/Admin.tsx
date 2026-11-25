@@ -7,6 +7,7 @@ import { BackIcon } from "../components/Icons";
 import { DialogFocus } from "../components/DialogFocus";
 import { PERMISSION_LABELS } from "../staff";
 import { ModerationNotices } from "../features/moderation/ModerationNotices";
+import { ReportSpamAlerts } from "../features/moderation/ReportSpamAlerts";
 import { ReportGroups } from "../features/moderation/ReportGroups";
 import type { Report } from "../features/moderation/types";
 
@@ -71,7 +72,7 @@ export function Admin() {
   const [reports, setReports] = useState<Report[] | null>(null);
   const [suspended, setSuspended] = useState<Suspended[] | null>(null);
   const [removed, setRemoved] = useState<RemovedGroup[] | null>(null);
-  const [suspending, setSuspending] = useState<Report | null>(null);
+  const [suspending, setSuspending] = useState<SuspendTarget | null>(null);
   const [removing, setRemoving] = useState<Report | null>(null);
   const [error, setError] = useState("");
   // Hasta que termina la primera carga no se muestra el panel; si el servidor dice que no hay permiso, se sale.
@@ -158,6 +159,10 @@ export function Admin() {
 
       {error && <div className="notice notice--error" role="alert">{error}</div>}
 
+      {tab === "open" && (has("owner") || has("sanctions")) && (
+        <ReportSpamAlerts act={act} onSuspend={(t) => setSuspending({ ...t, preventive: false })} refresh={reports} />
+      )}
+
       {(tab === "open" || tab === "closed") && reports && (
         <ReportGroups
           key={tab}
@@ -165,7 +170,9 @@ export function Admin() {
           status={tab}
           has={has}
           act={act}
-          onSuspend={setSuspending}
+          onSuspend={(r) => r.target?.id && setSuspending({
+            id: r.target.id, name: r.target.name, reason: `Reportes por ${r.reason}`, preventive: !has("sanctions"),
+          })}
           onRemoveGroup={setRemoving}
         />
       )}
@@ -322,8 +329,7 @@ export function Admin() {
       )}
       {suspending && (
         <SuspendDialog
-          report={suspending}
-          preventive={!has("sanctions")}
+          target={suspending}
           onClose={() => setSuspending(null)}
           onDone={() => { setSuspending(null); load(); }}
         />
@@ -339,15 +345,19 @@ export function Admin() {
   );
 }
 
-function SuspendDialog({ report, preventive, onClose, onDone }: { report: Report; preventive: boolean; onClose: () => void; onDone: () => void }) {
-  const [reason, setReason] = useState(`Reportes por ${report.reason}`);
+/** A quién se suspende: la persona reportada, o quien satura el canal de reportes (ver ReportSpamAlerts). */
+type SuspendTarget = { id: string; name: string; reason: string; preventive: boolean };
+
+function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onClose: () => void; onDone: () => void }) {
+  const { preventive } = target;
+  const [reason, setReason] = useState(target.reason);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function submit() {
     setBusy(true);
     setError("");
     try {
-      await api(`/admin/users/${report.target?.id}/suspend`, { method: "POST", json: { reason } });
+      await api(`/admin/users/${target.id}/suspend`, { method: "POST", json: { reason } });
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -358,7 +368,7 @@ function SuspendDialog({ report, preventive, onClose, onDone }: { report: Report
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal aria-labelledby="suspend-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
-        <h2 id="suspend-title">Suspender a {report.target?.name}</h2>
+        <h2 id="suspend-title">Suspender a {target.name}</h2>
         <p className="muted small">Se cierran sus sesiones, deja de aparecer en la app y se cierran sus reportes abiertos. Se puede reactivar después.</p>
         {preventive && (
           <p className="small">Es una <b>suspensión preventiva</b>: hacela si hay indicios de que es menor de edad. Después alguien con el permiso Suspensiones la revisa y decide si se mantiene.</p>

@@ -12,6 +12,7 @@ import { disconnectUser, emitToGroup, emitToUser } from "../realtime.js";
 import { deleteImage } from "../storage.js";
 import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
 import { removeGroup } from "./groups.js";
+import { openReportsBy, REPORT_SPAM_IGNORED, reportSpamAlerts } from "../reportSpam.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
 
@@ -198,6 +199,34 @@ async function closeReports(ids: string[], adminId: string, status: "dismissed" 
   // Descartado: la copia del mensaje y los archivos guardados como prueba se liberan
   if (status === "dismissed") await releaseEvidence(ids);
 }
+
+// ---------- Alerta de spam de reportes (ver reportSpam.ts y la discusión #219) ----------
+// Quién reporta solo lo ve con nombre la administración general (como en los reportes). El resto del equipo con el
+// permiso Suspensiones ve la alerta con los números y puede actuar igual.
+
+adminRoutes.get("/admin/report-spam", requireAccess("owner", "sanctions"), async (c) => {
+  const owner = (await accessFor(c.get("user"))).includes("owner");
+  const alerts = await reportSpamAlerts();
+  const people = owner ? await authorsFor(alerts.map((a) => a.reporterId)) : new Map();
+  return c.json(alerts.map((a) => ({
+    ...a,
+    reporter: owner ? people.get(a.reporterId) ?? null : null,
+  })));
+});
+
+adminRoutes.post("/admin/report-spam/:id/dismiss", requireAccess("owner", "sanctions"), async (c) => {
+  const admin = c.get("user");
+  const reporterId = c.req.param("id");
+  const ids = await openReportsBy(reporterId);
+  await closeReports(ids, admin.id, "dismissed", "Descartado en bloque: spam de reportes");
+  await logAction(admin.id, "Descartó en bloque los reportes de una cuenta (spam de reportes)", reporterId, `${ids.length} reportes`);
+  return c.json({ ok: true, dismissed: ids.length });
+});
+
+adminRoutes.post("/admin/report-spam/:id/ignore", requireAccess("owner", "sanctions"), async (c) => {
+  await logAction(c.get("user").id, REPORT_SPAM_IGNORED, c.req.param("id"));
+  return c.json({ ok: true });
+});
 
 /** Descartar varios reportes de una vez (todos los de una misma persona o grupo). */
 adminRoutes.post("/admin/reports/dismiss", requireAccess("reports"), async (c) => {

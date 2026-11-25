@@ -17,6 +17,8 @@ import { pushTo } from "../push.js";
 import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
 import { limit } from "../ratelimit.js";
+import { recentReportTargets, REPORT_SPAM_TARGETS } from "../reportSpam.js";
+import { notifyStaff } from "../staff.js";
 
 const { profile, photo, block, report, conversation, directMessage } = schema;
 
@@ -550,7 +552,7 @@ socialRoutes.post("/reports", async (c) => {
       reason: rest.reason, details: rest.details,
       targetName: g.name, messageBody: [g.name, g.description].filter(Boolean).join(" · "),
     });
-    if (isUrgent(rest.reason)) notifyModeratorsUrgent(rest.reason).catch((e) => console.error("notifyModeratorsUrgent", e));
+    await afterReport(me.id, rest.reason);
     return c.json({ ok: true });
   }
   if (!maybeUser) throw new HTTPException(400, { message: "Falta a quién reportás" });
@@ -589,7 +591,27 @@ socialRoutes.post("/reports", async (c) => {
     id: newId(), reporterId: me.id, targetUserId: userId, ...rest,
     targetName: target?.name ?? null, messageBody, evidenceKeys,
   });
-  // Lo urgente (menores, contenido íntimo sin consentimiento, amenazas) le avisa a moderación al instante
-  if (isUrgent(rest.reason)) notifyModeratorsUrgent(rest.reason).catch((e) => console.error("notifyModeratorsUrgent", e));
+  await afterReport(me.id, rest.reason);
   return c.json({ ok: true });
 });
+
+/**
+ * Después de guardar un reporte: lo urgente (menores, contenido íntimo sin consentimiento, amenazas) le avisa a
+ * moderación al instante, salvo que quien reporta esté en alerta de spam de reportes (ver reportSpam.ts). En ese caso
+ * el reporte queda igual en la cola, y moderación recibe un solo aviso de la alerta cuando salta.
+ */
+async function afterReport(reporterId: string, reason: string) {
+  const targets = await recentReportTargets(reporterId).catch(() => 0);
+  if (targets >= REPORT_SPAM_TARGETS) {
+    if (targets === REPORT_SPAM_TARGETS) {
+      notifyStaff("sanctions", {
+        title: "Posible spam de reportes",
+        body: "Una cuenta reportó a muchas personas en poco tiempo. Revisalo en Moderación.",
+        url: "/admin",
+        tag: "spam-reportes",
+      }).catch((e) => console.error("notifyStaff", e));
+    }
+    return;
+  }
+  if (isUrgent(reason)) notifyModeratorsUrgent(reason).catch((e) => console.error("notifyModeratorsUrgent", e));
+}
