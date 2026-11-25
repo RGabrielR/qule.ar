@@ -33,6 +33,7 @@ import { Settings } from "./pages/Settings";
 import { ChatIcon, GridIcon, GroupIcon, UserIcon } from "./components/Icons";
 import { Nearby } from "./pages/Nearby";
 import { Favorites, Toques, Views } from "./pages/People";
+import { PeopleTabs } from "./features/people/PeopleTabs";
 import { useUnseenToques } from "./features/toques/useUnseenToques";
 import { useLocationSync } from "./location";
 
@@ -78,7 +79,8 @@ export function App() {
         <Route path="/bienvenida" element={<RequireAuth><Onboarding /></RequireAuth>} />
         <Route element={<RequireAuth needProfile><Shell /></RequireAuth>}>
           <Route path="/" element={<Navigate to="/cerca" replace />} />
-          <Route path="/cerca" element={<Nearby />} />
+          <Route path="/cerca" element={<PeopleView />} />
+          <Route path="/cerca/toques" element={<PeopleView showToques />} />
           <Route path="/grupos" element={<Groups />} />
           <Route path="/grupos/:id" element={<GroupChat />} />
           <Route path="/grupos/:id/info" element={<GroupInfo />} />
@@ -93,7 +95,7 @@ export function App() {
           <Route path="/yo/configuracion" element={<Settings />} />
           <Route path="/visitas" element={<Views />} />
           <Route path="/favoritos" element={<Favorites />} />
-          <Route path="/toques" element={<Toques />} />
+          <Route path="/toques" element={<Navigate to="/cerca/toques" replace />} />
           <Route element={<RequirePermission allows={(me) => me.user.isAdmin} />}>
             <Route path="/admin" element={<Admin />} />
           </Route>
@@ -129,6 +131,14 @@ function RequirePermission({ allows }: { allows: (me: Me) => boolean }) {
   const { me } = useMe();
   if (!me || !allows(me)) return <Navigate to="/" replace />;
   return <Outlet />;
+}
+
+const UnseenToquesContext = createContext(0);
+
+function PeopleView({ showToques = false }: { showToques?: boolean }) {
+  const unseen = useContext(UnseenToquesContext);
+  const tabs = <PeopleTabs unseen={unseen} />;
+  return showToques ? <Toques tabs={tabs} /> : <Nearby tabs={tabs} />;
 }
 
 type Toast = { id: number; text: string; to?: string };
@@ -197,7 +207,7 @@ function ShellContent() {
   return (
     <div ref={chatShell} className={`shell${inThread ? " shell--thread" : ""}${canSwipeTabs ? " shell--swipe" : ""}`}>
       <main className="shell__main" ref={main} {...swipeHandlers}>
-        <Outlet />
+        <UnseenToquesContext.Provider value={toques}><Outlet /></UnseenToquesContext.Provider>
       </main>
       {!inThread && <TermsBanner />}
       {!inThread && <VerifyEmailBanner />}
@@ -211,6 +221,7 @@ function ShellContent() {
         <nav className="tabbar" aria-label="Secciones">
           <NavLink to={TAB_PATHS[0]} state={nearbyEntry ? { nearbyEntry } : undefined} className="tabbar__item">
             <GridIcon /> <span>Gente</span>
+            {toques > 0 && <b className="badge" aria-label={toques === 1 ? "1 toque nuevo" : `${toques > 99 ? "99+" : toques} toques nuevos`}>{toques > 99 ? "99+" : toques}</b>}
           </NavLink>
           <NavLink to={TAB_PATHS[1]} className="tabbar__item">
             <GroupIcon /> <span>Grupos</span>
@@ -222,7 +233,6 @@ function ShellContent() {
           </NavLink>
           <NavLink to={TAB_PATHS[3]} className="tabbar__item">
             <UserIcon /> <span>Yo</span>
-            {toques > 0 && <b className="badge" aria-label={toques === 1 ? "1 toque nuevo" : `${toques > 99 ? "99+" : toques} toques nuevos`}>{toques > 99 ? "99+" : toques}</b>}
           </NavLink>
         </nav>
       )}

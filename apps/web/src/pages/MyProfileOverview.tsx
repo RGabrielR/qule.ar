@@ -46,7 +46,7 @@ export function MyProfileOverview() {
           <nav className="quicklinks" aria-label="Tu actividad">
             <Link to="/visitas" className="quicklink"><EyeIcon /> Quién me vio</Link>
             <Link to="/favoritos" className="quicklink"><StarIcon size={18} /> Favoritos</Link>
-            <Link to="/toques" className="quicklink">
+            <Link to="/cerca/toques" className="quicklink">
               <img src="/reacciones/rayo.svg" alt="" width={18} height={18} /> Toques
               {unseen > 0 && <span className="badge badge--inline" aria-label={`${unseen} sin ver`}>{unseen}</span>}
             </Link>

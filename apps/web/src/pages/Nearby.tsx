@@ -75,7 +75,7 @@ type NearbyPosition = { userId: string; query: string; top: number; count: numbe
 const positions = new Map<string, NearbyPosition>();
 const POSITION_LIMIT = 20;
 
-export function Nearby() {
+export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
   const { me, reload } = useMe();
   const location = useLocation();
   const navigate = useNavigate();
@@ -321,6 +321,7 @@ export function Nearby() {
         )}
       </header>
 
+      {tabs}
       <InstallBanner />
 
       <p className="sr-only" aria-live="polite">{updating === "done" ? "Ubicación actualizada" : ""}</p>
