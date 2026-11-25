@@ -45,6 +45,8 @@ test("solicitudes vuelve a la pantalla de origen y abre desde un aviso", async (
     await expect(applicantPage.getByRole("heading", { name: "Solicitudes", exact: true })).toHaveCount(0);
 
     await page.goto(info);
+    const detailsMenu = page.getByRole("button", { name: /^Opciones del grupo/ });
+    await detailsMenu.click();
     const detailsLink = page.getByRole("link", { name: "Solicitudes 1" });
     await detailsLink.click();
     const heading = page.getByRole("heading", { name: "Solicitudes", exact: true });
@@ -52,6 +54,7 @@ test("solicitudes vuelve a la pantalla de origen y abre desde un aviso", async (
     await expect(page.getByText(applicant.name)).toBeVisible();
     await page.getByRole("button", { name: "Volver", exact: true }).click();
     await expect(page).toHaveURL(new URL(info, baseURL!).href);
+    await detailsMenu.click();
     await expect(detailsLink).toBeVisible();
 
     await page.getByRole("button", { name: "Volver", exact: true }).click();
@@ -199,6 +202,7 @@ test("el acceso a solicitudes se habilita al pasar de miembro a moderador", asyn
     const options = memberPage.getByRole("button", { name: /^Opciones del grupo/ });
     await memberPage.goto(`${chat}/info`);
     await expect(memberPage.getByRole("heading", { name: "Grupo de permisos" })).toBeVisible();
+    await options.click();
     await expect(requests).toHaveCount(0);
     await memberPage.goto(`${chat}/solicitudes`);
     await expect(memberPage).toHaveURL(new URL(chat, baseURL!).href);
@@ -215,7 +219,12 @@ test("el acceso a solicitudes se habilita al pasar de miembro a moderador", asyn
     await memberPage.getByRole("button", { name: "Volver", exact: true }).click();
     await expect(memberPage).toHaveURL(new URL(chat, baseURL!).href);
     await memberPage.goto(`${chat}/info`);
+    await options.click();
     await expect(requests).toBeVisible();
+    await expect(memberPage.getByRole("link", { name: "Editar grupo" })).toHaveCount(0);
+    await memberPage.getByRole("link", { name: "Invitaciones", exact: true }).click();
+    await expect(memberPage.getByRole("heading", { name: "Invitaciones", exact: true })).toBeVisible();
+    await expect(memberPage.getByRole("button", { name: "Invitar gente" })).toBeVisible();
   } finally {
     await memberPage.close();
   }
