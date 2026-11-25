@@ -33,6 +33,7 @@ import { Settings } from "./pages/Settings";
 import { ChatIcon, GridIcon, GroupIcon, UserIcon } from "./components/Icons";
 import { Nearby } from "./pages/Nearby";
 import { Favorites, Toques, Views } from "./pages/People";
+import { useUnseenToques } from "./features/toques/useUnseenToques";
 import { useLocationSync } from "./location";
 
 type MeState = { me: Me | null; loading: boolean; reload: () => Promise<void> };
@@ -145,6 +146,7 @@ function ShellContent() {
   const loc = useLocation();
   const { main, enabled: canSwipeTabs, ...swipeHandlers } = useTabSwipe();
   const { me } = useMe();
+  const toques = useUnseenToques(!!me?.profile);
 
   // Si compartiste tu ubicación, se mantiene al día mientras usás la app (por si te moviste o te fuiste de viaje)
   useLocationSync(!!me?.profile?.hasLocation);
@@ -220,6 +222,7 @@ function ShellContent() {
           </NavLink>
           <NavLink to={TAB_PATHS[3]} className="tabbar__item">
             <UserIcon /> <span>Yo</span>
+            {toques > 0 && <b className="badge" aria-label={toques === 1 ? "1 toque nuevo" : `${toques > 99 ? "99+" : toques} toques nuevos`}>{toques > 99 ? "99+" : toques}</b>}
           </NavLink>
         </nav>
       )}
