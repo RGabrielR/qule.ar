@@ -430,6 +430,19 @@ export function GroupChat() {
     updatePublished((list) => list.filter((x) => x.id !== m.id));
   }
 
+  /** Expulsar desde el chat, sin buscar a la persona en la lista de integrantes. El servidor decide si se puede. */
+  async function kick(m: GroupMessage) {
+    setMenuFor(null);
+    if (!confirm(`¿Expulsar a ${m.author.name} del grupo? Va a tener que esperar para volver a pedir entrar.`)) return;
+    setNotice(null);
+    try {
+      await api(`/groups/${id}/members/${m.author.id}`, { method: "DELETE" });
+      setNotice({ kind: "info", text: `${m.author.name} ya no está en el grupo.` });
+    } catch (err) {
+      setNotice({ kind: "error", text: (err as Error).message });
+    }
+  }
+
   if (!info) return <div className="chat" />;
   const rulesText = slowModeText(info.rules);
 
@@ -543,6 +556,7 @@ export function GroupChat() {
                       <Link role="menuitem" to={`/perfil/${m.author.id}`}>Ver perfil</Link>
                       <button role="menuitem" onClick={() => { setMenuFor(null); setReporting(m); }}>Reportar mensaje</button>
                       {isMod && <button role="menuitem" className="danger" onClick={() => remove(m)}>Borrar (moderación)</button>}
+                      {isMod && !info.isGeneral && <button role="menuitem" className="danger" onClick={() => void kick(m)}>Expulsar del grupo</button>}
                     </>
                   )}
                 </div>
