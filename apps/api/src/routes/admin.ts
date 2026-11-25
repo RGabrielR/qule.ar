@@ -12,6 +12,7 @@ import { disconnectUser, emitToGroup, emitToUser } from "../realtime.js";
 import { deleteImage } from "../storage.js";
 import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
 import { removeGroup } from "./groups.js";
+import { AUTO_SUSPENDED, pendingAutoSuspensions } from "../autoSuspend.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
 
@@ -102,6 +103,7 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
   const totalBy = new Map(totals.map((t) => [t.id ?? "", t.n]));
 
   const hidden = await autoHiddenUsers();
+  const autoSuspend = await pendingAutoSuspensions();
   const hiddenGroups = await autoHiddenGroups();
   // Grupos reportados (pueden estar dados de baja: moderación los sigue viendo)
   const gids = [...new Set(rows.flatMap((r) => (r.groupId ? [r.groupId] : [])))];
@@ -183,6 +185,8 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
       evidenceFiles: r.evidenceKeys.length,
       urgent: isUrgent(r.reason),
       targetAutoHidden: hidden.has(tid),
+      // Varias personas la reportaron por lo mismo: si nadie lo revisa, se suspende sola en esta fecha
+      targetAutoSuspendAt: autoSuspend.get(tid)?.at ?? null,
     });
   }
   // Lo más nuevo primero; el panel agrupa, ordena y filtra (y avisa arriba si hay urgentes)
@@ -254,15 +258,23 @@ const PREVENTIVE = "Suspendió una cuenta de forma preventiva (menor de edad)";
 const CONFIRMED = "Confirmó una suspensión preventiva";
 const KEPT_ON_APPEAL = "Mantuvo una suspensión al revisarla";
 
-/** De estas cuentas suspendidas, cuáles tienen una suspensión preventiva que nadie revisó todavía. */
-async function pendingPreventive(ids: string[]): Promise<Set<string>> {
-  if (!ids.length) return new Set();
+/**
+ * De estas cuentas suspendidas, cuáles tienen una suspensión que nadie revisó todavía: la preventiva (menor de edad)
+ * o la automática (reportes de varias personas, ver autoSuspend.ts). Devuelve cuál de las dos.
+ */
+async function pendingReview(ids: string[]): Promise<Map<string, "preventive" | "automatic">> {
+  if (!ids.length) return new Map();
   const rows = await db.select({ targetId: modAction.targetId, action: modAction.action }).from(modAction)
-    .where(and(inArray(modAction.targetId, ids), inArray(modAction.action, [SUSPENDED, PREVENTIVE, CONFIRMED, KEPT_ON_APPEAL])))
+    .where(and(inArray(modAction.targetId, ids), inArray(modAction.action, [SUSPENDED, PREVENTIVE, AUTO_SUSPENDED, CONFIRMED, KEPT_ON_APPEAL])))
     .orderBy(desc(modAction.createdAt));
   const last = new Map<string, string>();
   for (const r of rows) if (r.targetId && !last.has(r.targetId)) last.set(r.targetId, r.action);
-  return new Set(ids.filter((id) => last.get(id) === PREVENTIVE));
+  const out = new Map<string, "preventive" | "automatic">();
+  for (const id of ids) {
+    if (last.get(id) === PREVENTIVE) out.set(id, "preventive");
+    else if (last.get(id) === AUTO_SUSPENDED) out.set(id, "automatic");
+  }
+  return out;
 }
 
 /** Suspender una cuenta: se cierran sus sesiones y deja de aparecer. Cierra sus reportes abiertos. */
@@ -324,7 +336,7 @@ adminRoutes.post("/admin/users/:id/confirm-suspension", requireAccess("sanctions
   const me = c.get("user");
   const target = c.req.param("id");
   const [p] = await db.select({ by: profile.suspendedBy, at: profile.suspendedAt }).from(profile).where(eq(profile.userId, target));
-  if (!p?.at || !(await pendingPreventive([target])).has(target)) throw new HTTPException(409, { message: "No hay una suspensión preventiva para revisar" });
+  if (!p?.at || !(await pendingReview([target])).has(target)) throw new HTTPException(409, { message: "No hay una suspensión para revisar" });
   if (p.by === me.id) throw new HTTPException(403, { message: "Esta suspensión la hiciste vos: la tiene que revisar otra persona del equipo" });
   await logAction(me.id, CONFIRMED, target);
   return c.json({ ok: true });
@@ -338,12 +350,13 @@ adminRoutes.get("/admin/suspended", requireAccess("sanctions", "appeals"), async
     .where(isNotNull(profile.suspendedAt))
     .orderBy(desc(profile.suspendedAt));
   const people = await authorsFor(rows.map((r) => r.id));
-  const pending = await pendingPreventive(rows.map((r) => r.id));
+  const pending = await pendingReview(rows.map((r) => r.id));
   return c.json(rows.map((r) => ({
     ...people.get(r.id)!,
     reason: r.reason,
     suspendedAt: r.at!.toISOString(),
-    preventive: pending.has(r.id),
+    preventive: pending.get(r.id) === "preventive",
+    automatic: pending.get(r.id) === "automatic",
     suspendedByMe: r.by === me.id,
   })));
 });
@@ -505,7 +518,7 @@ adminRoutes.get("/admin/log", requireAccess("owner"), async (c) => {
   const people = await authorsFor(rows.flatMap((r) => (r.actorId ? [r.actorId] : [])));
   return c.json(rows.map((r) => ({
     id: r.id,
-    actor: r.actorId ? people.get(r.actorId)?.name ?? "Cuenta sin perfil" : "Cuenta borrada",
+    actor: r.actorId ? people.get(r.actorId)?.name ?? "Cuenta sin perfil" : r.action.startsWith(AUTO_SUSPENDED) ? "La app" : "Cuenta borrada",
     action: r.action,
     targetId: r.targetId,
     details: r.details,

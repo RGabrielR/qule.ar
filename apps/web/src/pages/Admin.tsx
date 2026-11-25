@@ -15,6 +15,8 @@ type Suspended = Author & {
   suspendedAt: string;
   /** Suspensión preventiva (por menor de edad, con el permiso Reportes) que falta revisar. */
   preventive: boolean;
+  /** Suspensión automática (varias personas la reportaron por lo mismo y nadie lo revisó a tiempo) que falta revisar. */
+  automatic: boolean;
   suspendedByMe: boolean;
 };
 type RemovedGroup = { id: string; name: string; description: string | null; removedAt: string; reason: string | null; purgeAt: string };
@@ -188,9 +190,14 @@ export function Admin() {
                     {s.suspendedByMe ? " La hiciste vos, así que la revisa otra persona del equipo." : " Mantenela o reactivá la cuenta."}
                   </p>
                 )}
+                {s.automatic && (
+                  <p className="small">
+                    <b>Automática, falta revisarla.</b> Varias personas la reportaron por lo mismo y nadie lo revisó a tiempo. Mantenela o reactivá la cuenta.
+                  </p>
+                )}
                 {has("sanctions") && (
                   <div className="rcard__actions">
-                    {s.preventive && !s.suspendedByMe && (
+                    {(s.preventive || s.automatic) && !s.suspendedByMe && (
                       <button className="btn btn--small btn--danger" onClick={() => act(() => api(`/admin/users/${s.id}/confirm-suspension`, { method: "POST" }))}>Mantener</button>
                     )}
                     <button className="btn btn--small" onClick={() => act(() => api(`/admin/users/${s.id}/unsuspend`, { method: "POST" }))}>Reactivar cuenta</button>

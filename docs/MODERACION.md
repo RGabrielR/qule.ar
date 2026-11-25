@@ -24,6 +24,12 @@ En Argentina, una plataforma no responde por lo que publican otras personas **mi
 
 **Ocultamiento por precaución.** Si un perfil recibe reportes urgentes de **3 personas distintas** que todavía nadie revisó, deja de aparecer en "Cerca" y en las listas para invitar a grupos. No es una suspensión: la cuenta sigue funcionando. Vuelve a aparecer cuando moderación cierra esos reportes. Así se limita el daño si nadie llega a revisarlo enseguida.
 
+**Suspensión automática.** Si **5 personas distintas** reportan a la misma cuenta **por el mismo motivo** en **3 semanas** y esos reportes siguen abiertos, a quienes tienen el permiso Suspensiones (y a la administración general, siempre) les llega un aviso, y en el reporte aparece cuándo se suspende sola. Si en **24 horas** nadie descarta esos reportes ni actúa, la app suspende la cuenta. Queda en Suspendidas como "Automática, falta revisarla": alguien del equipo la **mantiene** o **reactiva la cuenta**, y la persona puede pedir una revisión como en cualquier suspensión.
+
+- **Qué no cuenta:** el motivo "otro", reportar varias veces a la misma persona, los reportes descartados, los de hace más de 3 semanas y los de cuentas con menos de 48 horas o suspendidas. Así no sirve para atacar a alguien con cuentas recién creadas.
+- **Al equipo no lo suspende sola:** si pasa con alguien del equipo, le avisa a la administración general.
+- **Si no corresponde:** descartá los reportes antes de que se cumplan las 24 horas, o reactivá la cuenta después.
+
 ## Grupos
 
 - **Se pueden reportar** al abrir la vista previa del grupo o desde **Ver detalles** si ya sos parte. Los motivos son los mismos que para las personas.

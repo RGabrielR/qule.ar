@@ -17,6 +17,7 @@ import { pushTo } from "../push.js";
 import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
 import { limit } from "../ratelimit.js";
+import { warnIfReachingAutoSuspend } from "../autoSuspend.js";
 
 const { profile, photo, block, report, conversation, directMessage } = schema;
 
@@ -591,5 +592,7 @@ socialRoutes.post("/reports", async (c) => {
   });
   // Lo urgente (menores, contenido íntimo sin consentimiento, amenazas) le avisa a moderación al instante
   if (isUrgent(rest.reason)) notifyModeratorsUrgent(rest.reason).catch((e) => console.error("notifyModeratorsUrgent", e));
+  // Si con este reporte ya son varias personas por lo mismo, moderación tiene un día para revisarlo (ver autoSuspend.ts)
+  warnIfReachingAutoSuspend(userId, rest.reason, me.id).catch((e) => console.error("warnIfReachingAutoSuspend", e));
   return c.json({ ok: true });
 });
