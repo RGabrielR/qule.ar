@@ -4,10 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const dataDir = mkdtempSync(join(tmpdir(), "qule-e2e-"));
-const server = spawn(process.execPath, ["--import", "tsx", "apps/api/src/index.ts"], {
+const server = spawn(process.execPath, ["--import", "./e2e/social-bio-fixture.mjs", "--import", "tsx", "apps/api/src/index.ts"], {
   stdio: "inherit",
   env: {
     PATH: process.env.PATH,
+    TMPDIR: tmpdir(),
     PORT: process.env.PORT,
     APP_URL: process.env.APP_URL,
     DATA_DIR: dataDir,

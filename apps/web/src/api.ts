@@ -6,7 +6,7 @@ import { SOCKET_RETRY_ERRORS } from "@mortero/shared/realtime";
 export const authClient = createAuthClient({ baseURL: window.location.origin, basePath: "/api/auth" });
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public retrySeconds = 0) {
     super(message);
   }
 }
@@ -20,7 +20,7 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
     body: json !== undefined ? JSON.stringify(json) : rest.body,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error ?? "Algo salió mal");
+  if (!res.ok) throw new ApiError(res.status, data.error ?? "Algo salió mal", Number(res.headers.get("Retry-After")) || 0);
   return data as T;
 }
 
@@ -80,7 +80,13 @@ export type MyAlbum = { id: string; name: string };
 /** Un álbum privado de otra persona que me compartieron (o mío, en mi propio perfil). */
 export type SharedAlbum = { id: string; name: string; count: number; videos: number; items: Media[]; expiresAt: string | null };
 
+export type SocialProof = { verified: true; verifiedAt?: string } | { code: string; expires: number; retryAt?: number } | null;
+
 export type Profile = {
+  xUsername: string | null;
+  instagramUsername: string | null;
+  xProof?: SocialProof;
+  instagramProof?: SocialProof;
   displayName: string;
   birthdate: string;
   age: number;

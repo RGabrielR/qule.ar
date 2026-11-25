@@ -61,6 +61,8 @@ socialRoutes.get("/users/:id", async (c) => {
     displayName: p.displayName,
     age: ageFrom(p.birthdate),
     about: p.about,
+    xUsername: p.xProof && "verified" in p.xProof ? p.xUsername : null,
+    instagramUsername: p.instagramProof && "verified" in p.instagramProof ? p.instagramUsername : null,
     heightCm: p.heightCm,
     weightKg: p.weightKg,
     bodyType: p.bodyType,
