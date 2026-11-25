@@ -2,6 +2,7 @@ import { and, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from "drizzle-
 import { db, schema } from "./db/index.js";
 import { sendMail, suspendedMail } from "./mail.js";
 import { disconnectUser } from "./realtime.js";
+import { keepEvidence } from "./suspension.js";
 import { accessFor, isOwner, notifyStaff } from "./staff.js";
 
 /**
@@ -148,6 +149,9 @@ export async function runAutoSuspensions(now = new Date()): Promise<number> {
     if (!p) continue;
     await db.delete(session).where(eq(session.userId, t.id));
     disconnectUser(t.id);
+    // La prueba se guarda ya. Lo público (mensajes en grupos, fotos, álbumes) no se borra todavía: podría ser un
+    // ataque de varias cuentas. Se borra cuando alguien del equipo la mantiene (confirm-suspension).
+    await keepEvidence(t.id);
     // Como al suspender a mano: los reportes abiertos quedan cerrados con la medida (y se conservan como prueba)
     await db.update(report)
       .set({ status: "actioned", resolvedBy: null, resolvedAt: now, resolution: "Cuenta suspendida automáticamente" })

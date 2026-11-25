@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { verifySolution } from "./botCheck.js";
+import { forgetUnlisted } from "./verification.js";
 import { db, schema } from "./db/index.js";
 import { env } from "./env.js";
 import { resetMail, sendMail, verifyMail } from "./mail.js";
@@ -66,6 +67,8 @@ export const auth = betterAuth({
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     expiresIn: 24 * 60 * 60,
+    // Al confirmar, que aparezca en Gente sin esperar a que venza la lista en memoria (ver verification.ts)
+    afterEmailVerification: async () => forgetUnlisted(),
     sendVerificationEmail: async ({ user, url }) => {
       // Tope por dirección y general en mail.ts
       void sendMail(verifyMail(user.email, url), "verify");

@@ -101,6 +101,7 @@ Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, m
 - La base de datos no es accesible desde internet: solo la ve la app.
 - Al servidor solo se entra con clave SSH, con bloqueo de intentos fallidos y actualizaciones de seguridad automáticas.
 - A las fotos y los videos les borramos los metadatos y la ubicación.
+- No podemos impedir capturas de pantalla. Por eso, las fotos de los álbumes privados, las que te mandan por privado y las temporales se muestran con el nombre de quien las mira encima, y se esconden cuando salís de la app. Esa marca se dibuja en tu pantalla: no se guarda ni se le manda a nadie.
 - Las notificaciones no dicen quién te escribió ni qué.
 
 Lo que todavía no hacemos: cifrar el resto de los datos guardados en el servidor (por ejemplo, los mensajes de los grupos) ni los mensajes de punta a punta. La clave que cifra los mensajes privados, las fotos y los videos está en el mismo servidor: protege las copias y los backups, pero no a alguien que tome el control del servidor entero. Ningún sistema es 100 % seguro, y menos uno en beta. Si pasa algo que afecte tus datos, te vamos a avisar.

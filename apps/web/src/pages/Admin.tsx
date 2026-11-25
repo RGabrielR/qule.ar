@@ -366,7 +366,7 @@ function SuspendDialog({ report, preventive, onClose, onDone }: { report: Report
       <div className="sheet" role="dialog" aria-modal aria-labelledby="suspend-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
         <h2 id="suspend-title">Suspender a {report.target?.name}</h2>
-        <p className="muted small">Se cierran sus sesiones, deja de aparecer en la app y se cierran sus reportes abiertos. Se puede reactivar después.</p>
+        <p className="muted small">Se cierran sus sesiones, deja de aparecer en la app y se cierran sus reportes abiertos. También se borran sus mensajes en grupos y todo lo que subió: fotos, álbumes, videos y fotos que mandó por privado. Lo que sea prueba de un reporte queda guardado. La cuenta se puede reactivar después, pero lo borrado no vuelve.</p>
         {preventive && (
           <p className="small">Es una <b>suspensión preventiva</b>: hacela si hay indicios de que es menor de edad. Después alguien con el permiso Suspensiones la revisa y decide si se mantiene.</p>
         )}

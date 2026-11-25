@@ -28,6 +28,7 @@ En Argentina, una plataforma no responde por lo que publican otras personas **mi
 
 - **Qué no cuenta:** el motivo "otro", reportar varias veces a la misma persona, los reportes descartados, los de hace más de 3 semanas y los de cuentas con menos de 48 horas o suspendidas. Así no sirve para atacar a alguien con cuentas recién creadas.
 - **Al equipo no lo suspende sola:** si pasa con alguien del equipo, le avisa a la administración general.
+- **Lo público se borra recién cuando una persona la mantiene.** Al suspender sola, la app guarda la prueba pero no borra los mensajes en grupos, las fotos ni los álbumes, por si fue un ataque. Se borran cuando alguien del equipo la **mantiene** (en Suspendidas o al responder una revisión).
 - **Si no corresponde:** descartá los reportes antes de que se cumplan las 24 horas, o reactivá la cuenta después.
 
 ## Grupos
@@ -68,7 +69,7 @@ Hoy busca: "-18", "+14" (y cualquier "+" seguido de un número menor de 18; "+18
 
 ### Contenido sexual de menores (el caso más grave)
 1. **No descargues, no reenvíes y no hagas capturas del contenido.** Tenerlo o pasarlo es delito (art. 128 del Código Penal), aunque sea para denunciarlo.
-2. **Suspendé la cuenta** enseguida. Así deja de estar visible.
+2. **Suspendé la cuenta** enseguida. Así deja de estar visible: sus fotos y mensajes desaparecen de la app, pero con un reporte urgente abierto todos sus archivos quedan guardados en el servidor como prueba (ver "Las pruebas").
 3. **No borres el mensaje ni la cuenta.** Hace falta como prueba.
 4. **Denuncialo** ante el Ministerio Público Fiscal (la Unidad Fiscal Especializada en Ciberdelincuencia, UFECI) o en la policía. Indicá el ID de la cuenta y la fecha, y avisá a quien administra el servidor para que preserve los datos.
 5. Seguí las indicaciones de la fiscalía.
@@ -93,6 +94,7 @@ Al reportar, la app guarda una copia de lo reportado: el texto del mensaje y sus
 
 - Si **descartás** el reporte, la copia se borra.
 - Si el reporte **termina en una medida** (borrar el mensaje o suspender), la copia se conserva como prueba.
+- **Al suspender** se borra lo público de la persona: sus mensajes en grupos (también los que tenía en cola), sus reacciones en grupos, sus fotos, álbumes y videos, y las fotos que mandó por privado. Quienes tienen los grupos o las charlas abiertas lo ven desaparecer en vivo. Antes de borrar se guarda la prueba: si tiene un reporte urgente abierto o que terminó en una medida, **todos** sus archivos quedan guardados con ese reporte; los demás reportes sobre su perfil guardan sus fotos públicas. Los textos de sus mensajes privados no se borran: son privados y son la prueba de quien los recibió. Si después se reactiva la cuenta, lo borrado no vuelve.
 - Los archivos guardados solo los puede pedir moderación. El panel dice cuántos hay, pero **no los muestra ni hace falta descargarlos**. Si una fiscalía los pide, quien administra el servidor los entrega.
 
 ## Reglas para quien modera
@@ -101,7 +103,7 @@ Al reportar, la app guarda una copia de lo reportado: el texto del mensaje y sus
 - **No compartas** fuera del equipo de moderación nada de lo que ves en un reporte.
 - **Escribí siempre el motivo** al suspender. Queda registrado y es lo que ve la persona suspendida.
 - **Cuidado con los reportes falsos.** Si muchas cuentas nuevas reportan a la misma persona sin motivo, puede ser un ataque. Descartá esos reportes y, si hace falta, suspendé a quienes los mandan.
-- **Si te equivocaste**, la suspensión se puede levantar desde la pestaña Suspendidas.
+- **Si te equivocaste**, la suspensión se puede levantar desde la pestaña Suspendidas. Lo que se borró al suspender (mensajes en grupos, fotos y álbumes) no vuelve.
 
 ## Permisos del equipo
 

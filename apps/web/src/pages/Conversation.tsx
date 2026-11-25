@@ -1,7 +1,8 @@
+import { ChatPresenceDot } from "../features/messages/chatPresence";
 import { compareDmOrder, DM_EVENTS, type DmReadReceipt } from "@mortero/shared/realtime";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { api, getSocket, upload, type Author, type Dm, type ReactionEvent } from "../api";
+import { api, getSocket, upload, type ChatContact, type Dm, type ReactionEvent } from "../api";
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
@@ -10,9 +11,11 @@ import { useSectionBack } from "../useSectionBack";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
+import { MessageText } from "../features/chat/MessageText";
 import { batchReadReceipts } from "../features/messages/readReceipts";
 import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
+import { Watermark } from "../features/photos/Watermark";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
 
 /** Texto corto para la cita en el composer y en la burbuja. */
@@ -29,7 +32,7 @@ export function Conversation() {
   const { me } = useMe();
   const nav = useNavigate();
   const goBack = useSectionBack("/mensajes");
-  const [other, setOther] = useState<Author | null>(null);
+  const [other, setOther] = useState<ChatContact | null>(null);
   const [messages, setMessages] = useState<Dm[]>([]);
   const [seen, setSeen] = useState<{ conversationId: string; readAtById: Map<string, string>; through?: Pick<Dm, "createdAt" | "id"> }>();
   const [text, setText] = useDraft(`dm:${me?.user.id ?? ""}:${id}`);
@@ -63,7 +66,7 @@ export function Conversation() {
       beforeHistory?.push(update);
       setMessages(update);
     };
-    api<{ other: Author }>(`/conversations/${id}`)
+    api<{ other: ChatContact }>(`/conversations/${id}`)
       .then((c) => alive && setOther(c.other))
       .catch(() => nav("/mensajes", { replace: true }));
     api<{ messages: Dm[]; hasMore: boolean }>(`/conversations/${id}/messages`).then((d) => {
@@ -76,7 +79,7 @@ export function Conversation() {
       const oldestLoaded = d.messages[0];
       if (oldestLoaded && d.hasMore) receipts.includeOlderMessages(oldestLoaded.id);
       receipts.schedule(...loaded.filter((message) => message.senderId !== myId && !message.readAt).map(({ id }) => id));
-    }).catch(() => { beforeHistory = null; });
+    }).catch(() => { beforeHistory = null; if (alive) setError("No se pudo cargar la charla."); });
     const s = getSocket();
     const onMsg = (m: Dm) => {
       if (m.conversationId !== id) return;
@@ -157,17 +160,17 @@ export function Conversation() {
     }
   }
 
-  useLayoutEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, typing]);
+  function followLatestMessage() {
+    const list = listRef.current;
+    if (list && stickToBottom.current) list.scrollTop = list.scrollHeight;
+  }
+
+  useLayoutEffect(followLatestMessage, [messages, typing]);
 
   useLayoutEffect(() => {
     const list = listRef.current;
     if (!list) return;
-    const observer = new ResizeObserver(() => {
-      if (stickToBottom.current) list.scrollTop = list.scrollHeight;
-    });
+    const observer = new ResizeObserver(followLatestMessage);
     observer.observe(list);
     return () => observer.disconnect();
   }, []);
@@ -204,12 +207,13 @@ export function Conversation() {
     if (!body) return;
     const wasReplying = replyTo;
     // Mandar con el botón le saca el foco al campo y cierra el teclado. Se lo devolvemos.
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
     setError("");
     setText("");
     setReplyTo(null);
     try {
       const m = await api<Dm>(`/conversations/${id}/messages`, { method: "POST", json: { body, replyToId: wasReplying?.id } });
+      stickToBottom.current = true;
       setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
     } catch (err) {
       setText((t) => t || body);
@@ -233,6 +237,7 @@ export function Conversation() {
     if (wasReplying) extra.replyToId = wasReplying.id;
     try {
       const m = await upload<Dm>(`/conversations/${id}/messages`, file, extra);
+      stickToBottom.current = true;
       setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
     } catch (err) {
       if (wasReplying) setReplyTo(wasReplying);
@@ -255,7 +260,13 @@ export function Conversation() {
 
   async function unsend(m: Dm) {
     setMsgMenu(null);
-    await api(`/conversations/${id}/messages/${m.id}`, { method: "DELETE" }).catch(() => {});
+    setError("");
+    try {
+      await api(`/conversations/${id}/messages/${m.id}`, { method: "DELETE" });
+    } catch {
+      setError("No se pudo confirmar el desenvío. Probá de nuevo.");
+      return;
+    }
     setReplyTo((r) => (r?.id === m.id ? null : r));
     setMessages((list) => list
       .filter((x) => x.id !== m.id)
@@ -264,7 +275,8 @@ export function Conversation() {
 
   const loadedMessageIds = new Set(messages.map((m) => m.id));
   const lastMine = [...messages].reverse().find((m) => m.senderId === myId);
-  const openPhoto = messages.find((m) => m.id === photoMessageId && m.conversationId === id)?.photo;
+  const openPhotoMessage = messages.find((m) => m.id === photoMessageId && m.conversationId === id);
+  const openPhoto = openPhotoMessage?.photo;
 
   const lastSeen = lastMine && (lastMine.readAt || (seen?.conversationId === id &&
     ((seen.readAtById.get(lastMine.id) ?? "") >= lastMine.createdAt || (seen.through && compareDmOrder(lastMine, seen.through) <= 0))));
@@ -277,7 +289,11 @@ export function Conversation() {
           <Link to={`/perfil/${other.id}`} className="topbar__who">
             <Avatar src={other.photo} name={other.name} size={36} />
             <span>
-              <b>{other.name}</b> <span className="muted">{other.age}</span>
+              <span className="chat-contact-name">
+                <ChatPresenceDot state={other.presence} />
+                <b>{other.name}</b>
+                <span className="muted">{other.age}</span>
+              </span>
               {typing && <span className="typing-label">escribiendo…</span>}
             </span>
           </Link>
@@ -335,11 +351,12 @@ export function Conversation() {
               ) : (
                 <>
                   {m.photo && (
-                    <button type="button" className="bubble__photo-button" aria-label="Abrir foto" onClick={() => setPhotoMessageId(m.id)}>
-                      <img className="bubble__photo" src={m.photo} alt="" loading="lazy" />
+                    <button type="button" className={`bubble__photo-button${mine ? "" : " private-media"}`} aria-label="Abrir foto" onClick={() => setPhotoMessageId(m.id)}>
+                      <img className="bubble__photo" src={m.photo} alt="" loading="lazy" onLoad={followLatestMessage} />
+                      {!mine && <Watermark />}
                     </button>
                   )}
-                  {m.body && <p>{m.body}</p>}
+                  {m.body && <p>{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>}
                 </>
               )}
               <div className="bubble__meta">
@@ -455,7 +472,7 @@ export function Conversation() {
         </div>
       </form>
 
-      {openPhoto && <ChatPhotoViewer src={openPhoto} onClose={() => setPhotoMessageId(null)} />}
+      {openPhoto && <ChatPhotoViewer src={openPhoto} watermark={openPhotoMessage?.senderId !== myId} onClose={() => setPhotoMessageId(null)} />}
       {viewer && <ExpiringViewer src={viewer.src} seconds={viewer.seconds} onClose={() => setViewer(null)} />}
     </div>
   );
@@ -471,9 +488,12 @@ function ExpiringViewer({ src, seconds, onClose }: { src: string; seconds: numbe
     if (left <= 0) onClose();
   }, [left, onClose]);
   return (
-    <div className="viewer" role="dialog" aria-modal aria-label="Foto temporal" onClick={onClose}>
+    <div className="viewer private-media" role="dialog" aria-modal aria-label="Foto temporal" onClick={onClose}>
       <div className="viewer__bar"><span style={{ width: `${(left / seconds) * 100}%` }} /></div>
-      <img src={src} alt="Foto temporal" onContextMenu={(e) => e.preventDefault()} draggable={false} />
+      <div className="viewer__photo">
+        <img src={src} alt="Foto temporal" onContextMenu={(e) => e.preventDefault()} draggable={false} />
+        <Watermark />
+      </div>
       <p className="viewer__note">Se cierra en {Math.max(left, 0)} s y no se puede volver a abrir. Tocá para cerrar.</p>
     </div>
   );

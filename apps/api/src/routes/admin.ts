@@ -13,6 +13,7 @@ import { deleteImage } from "../storage.js";
 import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
 import { removeGroup } from "./groups.js";
 import { AUTO_SUSPENDED, pendingAutoSuspensions } from "../autoSuspend.js";
+import { keepEvidence, purgeSuspendedContent } from "../suspension.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
 
@@ -277,7 +278,7 @@ async function pendingReview(ids: string[]): Promise<Map<string, "preventive" | 
   return out;
 }
 
-/** Suspender una cuenta: se cierran sus sesiones y deja de aparecer. Cierra sus reportes abiertos. */
+/** Suspender una cuenta: se cierran sus sesiones, deja de aparecer y se borra lo que publicó. Cierra sus reportes abiertos. */
 adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports"), async (c) => {
   const admin = c.get("user");
   const target = c.req.param("id");
@@ -302,10 +303,15 @@ adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports
   if (!p) throw new HTTPException(404, { message: "Esa cuenta no existe" });
   await db.delete(session).where(eq(session.userId, target));
   disconnectUser(target);
+  // Primero la prueba: los reportes guardan los archivos que necesitan antes de que se borren (ver suspension.ts)
+  await keepEvidence(target);
   const open = await db.select({ id: report.id }).from(report)
     .where(and(eq(report.targetUserId, target), eq(report.status, "open")));
   await closeReports(open.map((r) => r.id), admin.id, "actioned", `Cuenta suspendida: ${reason}`);
-  await logAction(admin.id, preventive ? PREVENTIVE : SUSPENDED, target, reason);
+  // Después se borra lo público: mensajes en grupos, fotos, álbumes, videos y fotos por privado (ver suspension.ts)
+  const purged = await purgeSuspendedContent(target);
+  await logAction(admin.id, preventive ? PREVENTIVE : SUSPENDED, target,
+    `${reason} · Se borraron ${purged.groupMessages} mensajes en grupos y ${purged.files} archivos`);
   if (preventive) {
     await notifyStaff(
       "sanctions",
@@ -336,9 +342,13 @@ adminRoutes.post("/admin/users/:id/confirm-suspension", requireAccess("sanctions
   const me = c.get("user");
   const target = c.req.param("id");
   const [p] = await db.select({ by: profile.suspendedBy, at: profile.suspendedAt }).from(profile).where(eq(profile.userId, target));
-  if (!p?.at || !(await pendingReview([target])).has(target)) throw new HTTPException(409, { message: "No hay una suspensión para revisar" });
+  const kind = p?.at ? (await pendingReview([target])).get(target) : undefined;
+  if (!kind) throw new HTTPException(409, { message: "No hay una suspensión para revisar" });
   if (p.by === me.id) throw new HTTPException(403, { message: "Esta suspensión la hiciste vos: la tiene que revisar otra persona del equipo" });
-  await logAction(me.id, CONFIRMED, target);
+  // La automática no borró lo público (podía ser un ataque): se borra ahora que una persona la mantiene
+  const purged = kind === "automatic" ? await purgeSuspendedContent(target) : null;
+  await logAction(me.id, CONFIRMED, target,
+    purged ? `Se borraron ${purged.groupMessages} mensajes en grupos y ${purged.files} archivos` : null);
   return c.json({ ok: true });
 });
 
@@ -417,6 +427,8 @@ adminRoutes.post("/admin/appeals/:id/resolve", requireAccess("appeals"), async (
   await db.update(appeal)
     .set({ status: decision === "lift" ? "lifted" : "upheld", response, reviewedBy: me.id, reviewedAt: new Date() })
     .where(eq(appeal.id, a.id));
+  // Si era una suspensión automática sin revisar, mantenerla también borra lo público (ver confirm-suspension)
+  if (decision === "uphold" && (await pendingReview([a.userId])).get(a.userId) === "automatic") await purgeSuspendedContent(a.userId);
   if (decision === "lift") {
     // Solo si sigue siendo la misma suspensión
     await db.update(profile).set({ suspendedAt: null, suspendReason: null, suspendedBy: null })

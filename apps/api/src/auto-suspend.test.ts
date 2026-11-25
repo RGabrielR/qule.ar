@@ -112,6 +112,10 @@ test("suspensión automática por reportes de varias personas", async (t) => {
   // Al equipo no lo suspende la app
   for (const p of people.slice(0, 5)) await report(p, team, "acoso", ago(48));
 
+  // Tito tiene una foto de perfil (no hay archivo: purgar no falla si falta)
+  await db.insert(schema.photo).values({ id: "foto-tito", userId: tito.id, key: "no-existe.webp" });
+  const titoPhotos = async () => (await db.select().from(schema.photo).where(eq(schema.photo.userId, tito.id))).length;
+
   // Pasan las 24 h sin que nadie lo revise: Tito se suspende solo; el resto, no
   const later = new Date(now.getTime() + 23 * HOUR);
   assert.equal(await runAutoSuspensions(later), 1);
@@ -134,6 +138,9 @@ test("suspensión automática por reportes de varias personas", async (t) => {
   assert.equal(await runAutoSuspensions(later), 0);
   assert.equal((await db.select().from(schema.modAction).where(eq(schema.modAction.targetId, team.id))).length, 1);
 
+  // Lo público no se borra todavía: podría ser un ataque
+  assert.equal(await titoPhotos(), 1, "la foto sigue hasta que una persona la mantenga");
+
   // Queda para revisar, como la preventiva; alguien del equipo la mantiene
   const suspended = await (await request("/api/admin/suspended", mod)).json() as { id: string; automatic: boolean; preventive: boolean }[];
   const s = suspended.find((x) => x.id === tito.id);
@@ -142,6 +149,7 @@ test("suspensión automática por reportes de varias personas", async (t) => {
   assert.equal((await request(`/api/admin/users/${tito.id}/confirm-suspension`, mod, { method: "POST" })).status, 200);
   const again = await (await request("/api/admin/suspended", mod)).json() as { id: string; automatic: boolean }[];
   assert.equal(again.find((x) => x.id === tito.id)?.automatic, false);
+  assert.equal(await titoPhotos(), 0, "al mantenerla se borra lo público");
 
   // Si moderación descarta reportes, dejan de contar: Lola, ahora por "acoso", 5 personas y uno descartado
   for (const p of people.slice(0, 5)) await report(p, lola, "acoso", ago(48));
