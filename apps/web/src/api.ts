@@ -163,6 +163,11 @@ export type NearbyPerson = {
   favorite: boolean;
 };
 
+/** Encuesta de un grupo: solo totales, nunca quién votó qué. myVote es mi opción (null si no voté). */
+export type Poll = { options: string[]; counts: number[]; total: number; myVote?: number | null };
+/** Totales nuevos de una encuesta, en vivo (sin el voto de nadie). */
+export type PollEvent = { groupId: string; messageId: string; counts: number[]; total: number };
+
 export type GroupMessage = {
   id: string;
   groupId: string;
@@ -173,6 +178,8 @@ export type GroupMessage = {
   author: Pick<Author, "id" | "name" | "photo">;
   replyTo: { id: string; authorName: string; body: string | null } | null;
   reactions: { kind: string; by: string[] }[];
+  /** Si es una encuesta: el texto (body) es la pregunta. Ver features/polls. */
+  poll?: Poll | null;
   /** Si los links se pueden tocar: la cuenta que lo mandó tenía más de 24 h (ver canOpenLinks en el API). */
   canOpenLinks?: boolean;
 };

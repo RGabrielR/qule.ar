@@ -28,6 +28,8 @@ export const LIMITS = {
   report: { max: 15, windowMs: HOUR, message: "Mandaste muchos reportes. Si es urgente, esperá un rato y volvé a intentar." },
   /** Toques a cualquier persona (a una misma ya hay un límite de uno cada 12 horas) */
   toque: { max: 40, windowMs: HOUR, message: "Mandaste muchos toques. Probá de nuevo en un rato." },
+  /** Votos en encuestas de grupos (cambiar de opción cuenta como otro voto) */
+  pollVote: { max: 120, windowMs: HOUR, message: "Cambiaste muchas veces tu voto. Probá de nuevo en un rato." },
   /** Aceptar o rechazar solicitudes en lote (cada pedido resuelve hasta 200) */
   bulkRequests: { max: 60, windowMs: HOUR, message: "Resolviste muchas solicitudes de una. Probá de nuevo en un rato." },
   /** Pedidos de revisión de una suspensión (igual hay uno por suspensión y una sola ampliación) */

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router";
-import { api, ApiError, getSocket, type GroupInfo, type GroupMessage, type ReactionEvent } from "../api";
+import { api, ApiError, getSocket, type GroupInfo, type GroupMessage, type PollEvent, type ReactionEvent } from "../api";
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
@@ -14,6 +14,9 @@ import { GroupActions } from "../features/groups/GroupActions";
 import { slowModeText } from "../features/groups/groupRules";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
+import { CreatePollButton, CreatePollDialog } from "../features/polls/CreatePollDialog";
+import { PollCard } from "../features/polls/PollCard";
+import { applyMyVote, applyPollTotals } from "../features/polls/polls";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { useSectionBack } from "../useSectionBack";
 
@@ -43,6 +46,7 @@ export function GroupChat() {
   const [editing, setEditing] = useState<string | null>(null);
   const [text, setText] = useDraft(`group:${me?.user.id ?? ""}:${id}`, editing === null);
   const [phrasesOpen, setPhrasesOpen] = useState(false);
+  const [pollOpen, setPollOpen] = useState(false);
   const [notice, setNotice] = useState<{ kind: "info" | "error"; text: string } | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
@@ -275,6 +279,11 @@ export function GroupChat() {
       livePublished((list) => list.map((x) => (x.id === p.messageId ? { ...x, reactions: p.reactions } : x)), true);
     };
     s.on("reaction", onReaction);
+    // Encuestas: llegan solo los totales; mi voto lo guarda cada pantalla
+    const onPoll = (p: PollEvent) => {
+      if (p.groupId === id) livePublished((list) => applyPollTotals(list, p), true);
+    };
+    s.on("group:poll", onPoll);
     return () => {
       request?.abort();
       s.off("disconnect", onDisconnect);
@@ -286,6 +295,7 @@ export function GroupChat() {
       s.off("group:cancelled", onCancelled);
       s.off("group:deleted", onDeleted);
       s.off("reaction", onReaction);
+      s.off("group:poll", onPoll);
     };
   }, [id, isMember]);
 
@@ -365,23 +375,49 @@ export function GroupChat() {
         await api(`/groups/${id}/messages/${wasEditing}`, { method: "PATCH", json: { body } });
         return;
       }
-      const r = await api<{ message: GroupMessage; reasons: string[] }>(`/groups/${id}/messages`, {
-        method: "POST",
-        json: { body, replyToId: wasReplying?.id },
-      });
-      jumpToEnd();
-      if (r.message.status === "queued") {
-        setQueued((q) => (q.some((x) => x.id === r.message.id) ? q : [...q, r.message]));
-        const why = r.reasons.length ? ` (${r.reasons.join(", ")})` : "";
-        setNotice({ kind: "info", text: `Tu mensaje quedó en cola${why}. Sale solo cuando te toque.` });
-      } else {
-        setMessages((list) => (list.some((x) => x.id === r.message.id) ? list : [...list, r.message]));
-      }
+      await post({ body, replyToId: wasReplying?.id });
     } catch (err) {
       setText((t) => t || body);
       if (wasEditing) setEditing(wasEditing);
       if (wasReplying) setReplyTo(wasReplying);
       setNotice({ kind: "error", text: (err as Error).message });
+    }
+  }
+
+  /** Publica un mensaje o una encuesta. Si te toca esperar, queda en cola como cualquier mensaje. */
+  async function post(json: { body: string; replyToId?: string; poll?: { options: string[] } }) {
+    const r = await api<{ message: GroupMessage; reasons: string[] }>(`/groups/${id}/messages`, { method: "POST", json });
+    jumpToEnd();
+    if (r.message.status === "queued") {
+      setQueued((q) => (q.some((x) => x.id === r.message.id) ? q : [...q, r.message]));
+      const why = r.reasons.length ? ` (${r.reasons.join(", ")})` : "";
+      setNotice({
+        kind: "info",
+        text: json.poll
+          ? `Tu encuesta quedó en cola${why}. Sale sola cuando te toque.`
+          : `Tu mensaje quedó en cola${why}. Sale solo cuando te toque.`,
+      });
+    } else {
+      setMessages((list) => (list.some((x) => x.id === r.message.id) ? list : [...list, r.message]));
+    }
+  }
+
+  async function createPoll(question: string, options: string[]) {
+    setNotice(null);
+    await post({ body: question, poll: { options } });
+  }
+
+  /** Votar, cambiar el voto o sacarlo (option = null). */
+  async function vote(m: GroupMessage, option: number | null) {
+    const same = option !== null && m.poll?.myVote === option;
+    if (same) return;
+    try {
+      const r = await api<{ counts: number[]; total: number; myVote: number | null }>(
+        `/groups/${id}/polls/${m.id}/vote`, { method: "PUT", json: { option } },
+      );
+      updatePublished((list) => applyMyVote(list, m.id, r));
+    } catch (e) {
+      setNotice({ kind: "error", text: (e as Error).message });
     }
   }
 
@@ -522,7 +558,11 @@ export function GroupChat() {
                     <span className="quote__body">{m.replyTo.body ?? "Mensaje borrado"}</span>
                   </button>
                 )}
-                <p className="gmsg__body">{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>
+                {m.poll ? (
+                  <PollCard question={m.body ?? ""} poll={m.poll} canVote={m.status === "published"} onVote={(option) => vote(m, option)} />
+                ) : (
+                  <p className="gmsg__body">{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>
+                )}
                 <ReactionBar reactions={m.reactions ?? []} myId={me?.user.id} onToggle={(k) => react(m, k)} />
               </div>
               <button className="iconbtn gmsg__more" aria-label="Opciones del mensaje" aria-expanded={menuFor === m.id} aria-controls={menuFor === m.id ? `message-options-${m.id}` : undefined} onClick={() => setMenuFor(menuFor === m.id ? null : m.id)}>
@@ -555,7 +595,11 @@ export function GroupChat() {
           const ms = new Date(m.scheduledAt).getTime() - now;
           return (
             <div key={m.id} className="queued">
-              <p className="queued__body">{m.body}</p>
+              {m.poll ? (
+                <PollCard question={m.body ?? ""} poll={m.poll} canVote={false} onVote={() => {}} />
+              ) : (
+                <p className="queued__body">{m.body}</p>
+              )}
               <div className="queued__footer">
                 <span className="queued__time"><ClockIcon /> Sale en {fmtCountdown(ms)}</span>
                 <div className="queued__actions">
@@ -608,6 +652,9 @@ export function GroupChat() {
           <div className="composer__action">
             <SavedPhrasesButton open={phrasesOpen} onToggle={() => setPhrasesOpen((v) => !v)} />
           </div>
+          <div className="composer__action">
+            <CreatePollButton disabled={Boolean(editing)} onClick={() => { setPhrasesOpen(false); setPollOpen(true); }} />
+          </div>
           <textarea
             ref={inputRef}
             className="composer__input"
@@ -631,6 +678,10 @@ export function GroupChat() {
           </div>
         </div>
       </form>
+
+      {pollOpen && (
+        <CreatePollDialog groupName={info.name} onCreate={createPoll} onClose={() => setPollOpen(false)} />
+      )}
 
       {reporting && (
         <ReportDialog
