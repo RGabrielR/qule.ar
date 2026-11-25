@@ -1,6 +1,7 @@
 import type { HasPlace } from "./features/place/hasPlace";
 import { createAuthClient } from "better-auth/react";
 import { io, type Socket } from "socket.io-client";
+import { SOCKET_RETRY_ERRORS } from "@mortero/shared/realtime";
 
 export const authClient = createAuthClient({ baseURL: window.location.origin, basePath: "/api/auth" });
 
@@ -31,12 +32,28 @@ export const upload = <T,>(path: string, file: File, extra: Record<string, strin
 };
 
 let socket: Socket | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+/** Espera antes de reintentar: crece de a poco (2 s, 4 s, 8 s…) hasta un minuto como mucho. */
+const retryDelay = (n: number) => Math.min(60_000, 2_000 * 2 ** n) * (0.75 + Math.random() / 2);
+
 export function getSocket(): Socket {
+  if (socket) return socket;
   // Solo WebSocket: el API corre en varios procesos y así cada conexión queda entera en uno (ver apps/api/src/cluster.ts)
-  if (!socket) socket = io({ path: "/socket.io", withCredentials: true, transports: ["websocket"] });
-  return socket;
+  const s = io({ path: "/socket.io", withCredentials: true, transports: ["websocket"] });
+  // Si el servidor rechaza la conexión por un cupo pasajero (muchos intentos o muchas pestañas abiertas),
+  // Socket.IO no reintenta solo: sin esto, la pestaña quedaría sin chat en vivo hasta recargar.
+  let retries = 0;
+  s.on("connect", () => { retries = 0; });
+  s.on("connect_error", (err) => {
+    if (s.active || !SOCKET_RETRY_ERRORS.includes(err.message)) return;
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(() => { if (socket === s && !s.connected) s.connect(); }, retryDelay(retries++));
+  });
+  socket = s;
+  return s;
 }
 export function closeSocket() {
+  clearTimeout(retryTimer);
   socket?.disconnect();
   socket = null;
 }
