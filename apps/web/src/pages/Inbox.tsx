@@ -63,9 +63,15 @@ export function Inbox() {
               : kind === "photo" || c.last.photo ? "📷 Foto"
               : c.last.body;
             return (
-              <li key={c.id}>
+              <li key={c.id} className="inbox__row">
+                {c.other ? (
+                  <Link to={`/perfil/${c.other.id}`} className="inbox__avatar" aria-label={`Ver perfil de ${c.other.name}`}>
+                    <Avatar src={c.other.photo ?? null} name={c.other.name} size={52} />
+                  </Link>
+                ) : (
+                  <span className="inbox__avatar"><Avatar src={null} name="?" size={52} /></span>
+                )}
                 <Link to={`/mensajes/${c.id}`} className={`inbox__item ${c.unread ? "inbox__item--unread" : ""}`}>
-                  <Avatar src={c.other?.photo ?? null} name={c.other?.name ?? "?"} size={52} />
                   <div className="inbox__text">
                     <div className="inbox__top">
                       <b className="chat-contact-name"><ChatPresenceDot state={c.other?.presence} /><span>{c.other?.name ?? "Cuenta borrada"}</span></b>
