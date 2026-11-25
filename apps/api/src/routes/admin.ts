@@ -12,11 +12,11 @@ import { disconnectUser, emitToGroup, emitToUser } from "../realtime.js";
 import { deleteImage } from "../storage.js";
 import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
 import { removeGroup } from "./groups.js";
-import { openReportsBy, REPORT_SPAM_IGNORED, reportSpamAlerts } from "../reportSpam.js";
+import { isMutedReporter, mutedReporterList, mutedReporters, openReportsBy, REPORT_SPAM_IGNORED, reportCounts, REPORTS_MUTED, REPORTS_UNMUTED, reportSpamAlerts } from "../reportSpam.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
 
-const { report, profile, session, groupMessage, directMessage, conversation, pushSubscription, user, group, appeal, staffPermission, modAction } = schema;
+const { report, profile, session, groupMessage, directMessage, conversation, pushSubscription, user, group, appeal, staffPermission, modAction, reportMute } = schema;
 
 export const adminRoutes = new Hono<AppEnv>();
 
@@ -117,8 +117,11 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
   // El panel junta los reportes con el mismo tema, así varios reportes de lo mismo se ven en una sola tarjeta.
   const subjectOf = (r: typeof rows[number]) => r.groupId ? `g:${r.groupId}` : r.targetUserId ? `u:${r.targetUserId}` : `r:${r.id}`;
   // Cuántas personas distintas reportaron cada tema (sin decir quiénes: eso solo lo ve la administración general)
+  // Las cuentas cuyos reportes no cuentan (ver reportSpam.ts) no suman: sus reportes se ven, marcados
+  const muted = await mutedReporters();
   const reportersBySubject = new Map<string, Set<string>>();
   for (const r of rows) {
+    if (r.reporterId && muted.has(r.reporterId)) continue;
     const key = subjectOf(r);
     const set = reportersBySubject.get(key) ?? new Set<string>();
     set.add(r.reporterId ?? `auto:${r.id}`);
@@ -148,7 +151,8 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
     out.push({
       id: r.id,
       subject: subjectOf(r),
-      subjectReporters: reportersBySubject.get(subjectOf(r))?.size ?? 1,
+      subjectReporters: reportersBySubject.get(subjectOf(r))?.size ?? 0,
+      reporterMuted: Boolean(r.reporterId && muted.has(r.reporterId)),
       reason: r.reason,
       details: r.details,
       status: r.status,
@@ -206,25 +210,49 @@ async function closeReports(ids: string[], adminId: string, status: "dismissed" 
 
 adminRoutes.get("/admin/report-spam", requireAccess("owner", "sanctions"), async (c) => {
   const owner = (await accessFor(c.get("user"))).includes("owner");
-  const alerts = await reportSpamAlerts();
-  const people = owner ? await authorsFor(alerts.map((a) => a.reporterId)) : new Map();
-  return c.json(alerts.map((a) => ({
-    ...a,
-    reporter: owner ? people.get(a.reporterId) ?? null : null,
-  })));
+  const [alerts, muted] = await Promise.all([reportSpamAlerts(), mutedReporterList()]);
+  const people = owner ? await authorsFor([...alerts, ...muted].map((a) => a.reporterId)) : new Map();
+  return c.json({
+    alerts: alerts.map((a) => ({ ...a, reporter: owner ? people.get(a.reporterId) ?? null : null })),
+    muted: muted.map((m) => ({ ...m, reporter: owner ? people.get(m.reporterId) ?? null : null })),
+  });
 });
 
 adminRoutes.post("/admin/report-spam/:id/dismiss", requireAccess("owner", "sanctions"), async (c) => {
   const admin = c.get("user");
   const reporterId = c.req.param("id");
   const ids = await openReportsBy(reporterId);
-  await closeReports(ids, admin.id, "dismissed", "Descartado en bloque: spam de reportes");
-  await logAction(admin.id, "Descartó en bloque los reportes de una cuenta (spam de reportes)", reporterId, `${ids.length} reportes`);
+  await closeReports(ids, admin.id, "dismissed", "Descartado en bloque: reportes de mala fe");
+  await logAction(admin.id, "Descartó en bloque los reportes de una cuenta (reportes de mala fe)", reporterId, `${ids.length} reportes`);
   return c.json({ ok: true, dismissed: ids.length });
 });
 
 adminRoutes.post("/admin/report-spam/:id/ignore", requireAccess("owner", "sanctions"), async (c) => {
   await logAction(c.get("user").id, REPORT_SPAM_IGNORED, c.req.param("id"));
+  return c.json({ ok: true });
+});
+
+/**
+ * Que los reportes de una cuenta dejen de contar: siguen entrando, pero no ocultan, no avisan, no suman y no alcanzan
+ * para una suspensión preventiva. Es una decisión de moderación, nunca automática. A la persona no se le avisa.
+ */
+adminRoutes.post("/admin/report-spam/:id/mute", requireAccess("owner", "sanctions"), async (c) => {
+  const admin = c.get("user");
+  const target = c.req.param("id");
+  const { reason } = z.object({ reason: z.string().trim().max(300).optional() }).parse(await c.req.json().catch(() => ({})));
+  if (target === admin.id) throw new HTTPException(400, { message: "No podés hacer esto con tu propia cuenta" });
+  const [t] = await db.select({ id: user.id }).from(user).where(eq(user.id, target));
+  if (!t) throw new HTTPException(404, { message: "Esa cuenta no existe" });
+  if (await isMutedReporter(target)) return c.json({ ok: true });
+  await db.insert(reportMute).values({ userId: target, mutedBy: admin.id, reason: reason || null }).onConflictDoNothing();
+  await logAction(admin.id, REPORTS_MUTED, target, reason || null);
+  return c.json({ ok: true });
+});
+
+adminRoutes.post("/admin/report-spam/:id/unmute", requireAccess("owner", "sanctions"), async (c) => {
+  const target = c.req.param("id");
+  const gone = await db.delete(reportMute).where(eq(reportMute.userId, target)).returning({ id: reportMute.userId });
+  if (gone.length) await logAction(c.get("user").id, REPORTS_UNMUTED, target);
   return c.json({ ok: true });
 });
 
@@ -305,6 +333,10 @@ adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports
     const [minor] = await db.select({ id: report.id }).from(report)
       .where(and(eq(report.targetUserId, target), eq(report.status, "open"), eq(report.reason, "menor de edad"))).limit(1);
     if (!minor) throw new HTTPException(403, { message: "Con el permiso Reportes solo podés suspender ante un reporte abierto por menor de edad" });
+    // Tiene que haber al menos uno que cuente: los de cuentas cuyos reportes no cuentan (reportSpam.ts) no alcanzan
+    const [counts] = await db.select({ id: report.id }).from(report)
+      .where(and(eq(report.targetUserId, target), eq(report.status, "open"), eq(report.reason, "menor de edad"), reportCounts)).limit(1);
+    if (!counts) throw new HTTPException(403, { message: "Estos reportes vienen de cuentas cuyos reportes no cuentan. Lo decide alguien con el permiso Suspensiones." });
   }
   // Que una cuenta de moderación (o una robada) no pueda dejar afuera del panel a quien administra.
   const [t] = await db.select({ id: user.id, email: user.email, emailVerified: user.emailVerified }).from(user).where(eq(user.id, target));

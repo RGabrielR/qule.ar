@@ -17,7 +17,7 @@ import { pushTo } from "../push.js";
 import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
 import { limit } from "../ratelimit.js";
-import { recentReportTargets, REPORT_SPAM_TARGETS } from "../reportSpam.js";
+import { isMutedReporter, recentReportTargets, REPORT_SPAM_TARGETS } from "../reportSpam.js";
 import { notifyStaff } from "../staff.js";
 
 const { profile, photo, block, report, conversation, directMessage } = schema;
@@ -529,6 +529,7 @@ export { REPORT_REASONS } from "../moderation.js";
 socialRoutes.post("/reports", async (c) => {
   const me = c.get("user");
   await limit(me.id, "report");
+  await limit(me.id, "reportDay");
   const r = z
     .object({
       userId: z.string().optional(),
@@ -597,10 +598,13 @@ socialRoutes.post("/reports", async (c) => {
 
 /**
  * Después de guardar un reporte: lo urgente (menores, contenido íntimo sin consentimiento, amenazas) le avisa a
- * moderación al instante, salvo que quien reporta esté en alerta de spam de reportes (ver reportSpam.ts). En ese caso
+ * moderación al instante, salvo que quien reporta esté en alerta de spam de reportes o sus reportes no cuenten (ver
+ * reportSpam.ts). En ese caso
  * el reporte queda igual en la cola, y moderación recibe un solo aviso de la alerta cuando salta.
  */
 async function afterReport(reporterId: string, reason: string) {
+  // Una cuenta cuyos reportes no cuentan (decisión de moderación) no manda avisos. Su reporte queda en la cola igual.
+  if (await isMutedReporter(reporterId).catch(() => false)) return;
   const targets = await recentReportTargets(reporterId).catch(() => 0);
   if (targets >= REPORT_SPAM_TARGETS) {
     if (targets === REPORT_SPAM_TARGETS) {

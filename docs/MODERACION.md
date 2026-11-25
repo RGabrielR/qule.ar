@@ -53,6 +53,24 @@ La app revisa los nombres y las descripciones de los **perfiles y los grupos** c
 
 Hoy busca: "-18", "+14" (y cualquier "+" seguido de un número menor de 18; "+18" no cuenta), "15 años" o "16a", "sub 18", "menores", "menor de edad", "teen", "secundaria" y "liceo". La lista está en `MINOR_SIGNALS` (`apps/api/src/moderation.ts`). Si aparece una señal nueva, se suma ahí.
 
+## Reportes de mala fe
+
+Hay quien reporta mucho y sin fundamento: para tapar los reportes de verdad, para llenar de avisos a moderación o para intentar que oculten o suspendan a alguien. Arriba de los reportes abiertos, quien tiene el permiso Suspensiones (o la administración general) ve **Quién reporta**: cuentas que reportan de una forma para mirar, con sus números de los últimos 90 días (cuántos reportes, cuántos descartados, cuántos con una medida y cuántos sin revisar) y por qué aparecen:
+
+- reportó a **5 o más personas o grupos distintos en una hora**;
+- de sus reportes ya revisados (al menos 5), **se descartó el 80 % o más**;
+- mandó **15 o más reportes en 90 días y ninguno terminó en una medida**;
+- **junto con otras cuentas reportó a la misma persona o grupo en un día** (3 o más cuentas), y varias son **nuevas** (menos de 7 días) o **se crearon casi a la misma hora**. Solo aparecen esas cuentas: quien reportó lo mismo desde una cuenta vieja, no.
+
+Ninguna señal decide sola. Puede ser alguien que encontró varios problemas de verdad: mirá sus reportes antes de decidir. Las opciones son:
+
+- **Que sus reportes no cuenten.** Siguen entrando y se ven en la lista (marcados "no cuenta"), pero no ocultan perfiles ni grupos, no mandan avisos, no suman personas en las tarjetas y **no alcanzan para una suspensión preventiva**. Se puede deshacer ("Que vuelvan a contar").
+- **Descartar sus reportes abiertos** de una vez.
+- **Suspender** a quien reporta, con el diálogo de siempre.
+- **Ignorar** la tarjeta: vuelve solo si la cuenta manda reportes nuevos y sigue habiendo alguna señal.
+
+A quien reporta no se le dice nada, ni a quien reporta de buena fe ni a quien quedó marcado. Además hay un tope de 15 reportes por hora y 40 por día por persona. Todo queda en el registro de moderación. El nombre de quien reporta lo ve solo la administración general; el resto del equipo ve "Una cuenta" con los números y puede actuar igual.
+
 ## Qué hacer en cada caso
 
 ### Menor de edad
@@ -107,7 +125,7 @@ Quien administra en general (las cuentas de `ADMIN_USER_IDS` o `ADMIN_EMAILS` en
 | Suspensiones | Suspender y reactivar cuentas |
 | Revisiones | Responder los pedidos de revisión de suspensiones (mantener o levantar) |
 
-**Suspensión preventiva por menor de edad.** Con un reporte abierto por "menor de edad" y indicios suficientes, quien tiene solo el permiso Reportes puede suspender la cuenta en el momento, sin esperar a alguien con Suspensiones. Le llega un aviso a quienes tienen Suspensiones (a la administración general, siempre) y la cuenta aparece en Suspendidas como "Preventiva, falta revisarla": otra persona la **mantiene** o **reactiva la cuenta**. Quien la hizo no la puede confirmar. Igual que cualquier suspensión, la persona puede pedir una revisión.
+**Suspensión preventiva por menor de edad.** Con un reporte abierto por "menor de edad" y indicios suficientes, quien tiene solo el permiso Reportes puede suspender la cuenta en el momento, sin esperar a alguien con Suspensiones. Le llega un aviso a quienes tienen Suspensiones (a la administración general, siempre) y la cuenta aparece en Suspendidas como "Preventiva, falta revisarla": otra persona la **mantiene** o **reactiva la cuenta**. Quien la hizo no la puede confirmar. Los reportes de cuentas cuyos reportes no cuentan (ver "Reportes de mala fe") no alcanzan: tiene que haber al menos uno de otra cuenta. Igual que cualquier suspensión, la persona puede pedir una revisión.
 
 Solo la administración general puede dar de baja o reactivar grupos, ver quién mandó cada reporte, dar y sacar permisos, suspender a alguien del equipo y ver el **Registro**. A la administración general no la puede suspender nadie desde la app. Nadie del equipo ve mails, IPs ni datos de salud. Los permisos se chequean en el servidor, no solo escondiendo botones.
 
