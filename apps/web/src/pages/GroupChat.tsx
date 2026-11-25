@@ -14,6 +14,7 @@ import { GroupActions } from "../features/groups/GroupActions";
 import { slowModeText } from "../features/groups/groupRules";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
+import { useKeyboardAfterSend } from "../features/chat/useKeyboardAfterSend";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { useSectionBack } from "../useSectionBack";
 
@@ -47,6 +48,7 @@ export function GroupChat() {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const keyboard = useKeyboardAfterSend(inputRef);
 
   function startReply(m: GroupMessage) {
     setMenuFor(null);
@@ -352,7 +354,7 @@ export function GroupChat() {
     const body = text.trim();
     if (!body) return;
     // Mandar con el botón le saca el foco al campo y cierra el teclado. Se lo devolvemos.
-    inputRef.current?.focus({ preventScroll: true });
+    keyboard.restore();
     setNotice(null);
     // Se vacía al toque; si falla, se devuelve el texto
     setText("");
@@ -625,7 +627,7 @@ export function GroupChat() {
             }}
           />
           <div className="composer__action">
-            <button className="sendbtn" aria-label="Mandar" disabled={!text.trim()} onMouseDown={(e) => e.preventDefault()}>
+            <button className="sendbtn" aria-label="Mandar" disabled={!text.trim()} onPointerDown={keyboard.onPointerDown} onMouseDown={(e) => e.preventDefault()}>
               <SendIcon />
             </button>
           </div>
