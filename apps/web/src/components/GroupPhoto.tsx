@@ -46,7 +46,7 @@ export function PhotoPicker({ name, file, onPick }: { name: string; file: File |
   );
 }
 
-/** En la info del grupo: el dueño pone, cambia o saca la foto. */
+/** En la edición del grupo: el dueño pone, cambia o saca la foto. */
 export function GroupPhotoSetting({ groupId, photo, onChange }: { groupId: string; photo: string | null; onChange: (photo: string | null) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

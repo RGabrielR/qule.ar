@@ -60,7 +60,7 @@ function candidatesUrl(groupId: string, q: string, f: CandidateFilters, offset: 
 }
 
 /**
- * Desde la info de un grupo: la lista larga de gente para invitar, de la más cercana a la más lejana,
+ * Desde Invitaciones: la lista larga de gente para invitar, de la más cercana a la más lejana,
  * con búsqueda por nombre y filtros (distancia, en línea, ya chateamos, favoritos, con foto, edad).
  */
 export function InvitePeopleSheet({ groupId, groupName, onClose, onChange }: {

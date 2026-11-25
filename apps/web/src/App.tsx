@@ -20,6 +20,8 @@ import { useChatViewport } from "./features/messages/useChatViewport";
 import { GroupChat } from "./pages/GroupChat";
 import { Groups } from "./pages/Groups";
 import { GroupInfo } from "./pages/GroupInfo";
+import { GroupEdit } from "./pages/GroupEdit";
+import { GroupInvitations } from "./pages/GroupInvitations";
 import { GroupRequests } from "./pages/GroupRequests";
 import { Inbox } from "./pages/Inbox";
 import { Conversation } from "./pages/Conversation";
@@ -78,6 +80,8 @@ export function App() {
           <Route path="/grupos" element={<Groups />} />
           <Route path="/grupos/:id" element={<GroupChat />} />
           <Route path="/grupos/:id/info" element={<GroupInfo />} />
+          <Route path="/grupos/:id/editar" element={<GroupEdit />} />
+          <Route path="/grupos/:id/invitaciones" element={<GroupInvitations />} />
           <Route path="/grupos/:id/solicitudes" element={<GroupRequests />} />
           <Route path="/mensajes" element={<Inbox />} />
           <Route path="/mensajes/:id" element={<Conversation />} />

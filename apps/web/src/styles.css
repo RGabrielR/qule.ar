@@ -380,7 +380,7 @@ a.gcard:hover { background: var(--surface); }
 .gcard__details { display: block; }
 .gcard__details:hover b { text-decoration: underline; }
 .group-description { overflow-wrap: anywhere; white-space: pre-wrap; }
-.group-actions, .group-info__requests { flex: none; }
+.group-actions { flex: none; }
 .group-actions__menu { top: 100%; right: 16px; width: max-content; }
 .group-actions__dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--accent); }
 .group-actions__menu .group-actions__requests { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -413,6 +413,7 @@ a.gcard:hover { background: var(--surface); }
 .member { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .member__actions { position: relative; flex: none; }
 .sheet--list { max-height: 88vh; }
+.group-invitations__add { color: var(--text); }
 .invite-list { overflow-y: auto; min-height: 0; flex: 1; }
 .invite-list .member > :last-child { flex: none; }
 .gcard__icon--sm { width: 36px; height: 36px; font-size: var(--text-md); border-radius: var(--radius-lg); }
@@ -674,6 +675,7 @@ button.quote:hover { background: var(--surface-3); }
   background: var(--surface-2); border: 1px solid var(--line);
   box-shadow: var(--shadow-pop);
 }
+.shell:has(.invite-sheet) > .notify-banner { visibility: hidden; }
 .notify-banner__text { flex: 1; display: grid; gap: 2px; min-width: 0; }
 .notify-banner__actions { flex: none; display: grid; gap: 4px; justify-items: center; }
 /* Dentro de la página (por ejemplo, en Yo), sin flotar sobre el contenido */
