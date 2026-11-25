@@ -10,6 +10,8 @@ import { usePullToRefresh } from "../features/navigation/pullToRefresh";
 import { PlusIcon } from "../components/Icons";
 import { MyInvites } from "../components/Invite";
 import { JoinButton } from "../components/JoinButton";
+import { useGroupOrder } from "../features/groups/useGroupOrder";
+import { useMe } from "../App";
 import { DialogFocus } from "../components/DialogFocus";
 
 /** Tiene que coincidir con EXPLORE_PAGE en apps/api/src/routes/groups.ts */
@@ -20,6 +22,9 @@ export function Groups() {
   const [params, setParams] = useSearchParams();
   const tab = params.get("ver") === "todos" ? "all" : "mine";
   const { groups: mine, invites, refreshGroups } = useTabData();
+  const { me } = useMe();
+  const { ordered, move, reset } = useGroupOrder(me?.user.id ?? "", mine);
+  const [ordering, setOrdering] = useState(false);
   const [all, setAll] = useState<GroupListing[] | null>(null);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -100,8 +105,16 @@ export function Groups() {
       {tab === "mine" ? (
         <>
         <MyInvites invites={invites ?? []} onChange={() => refreshGroups("refresh")} />
+        {(ordered?.length ?? 0) > 1 && (
+          <div className="row searchbar">
+            <button type="button" className="btn btn--small" aria-pressed={ordering} onClick={() => setOrdering(!ordering)}>
+              {ordering ? "Listo" : "Reordenar mis grupos"}
+            </button>
+            {ordering && <button type="button" className="btn btn--small" onClick={reset}>Restablecer orden</button>}
+          </div>
+        )}
         <ul className="glist">
-          {mine?.map((g) => (
+          {ordered?.map((g, index) => (
             <li key={g.id}>
               <Link to={`/grupos/${g.id}`} className="gcard">
                 <GroupAvatar name={g.name} photo={g.photo} general={g.isGeneral} />
@@ -115,6 +128,12 @@ export function Groups() {
                 </div>
                 {g.pendingCount > 0 && <span className="badge badge--inline" title="Solicitudes pendientes">{g.pendingCount}</span>}
               </Link>
+              {ordering && (
+                <div className="row searchbar">
+                  <button type="button" className="btn btn--small" aria-label={`Subir ${g.name}`} disabled={index === 0} onClick={() => move(index, -1)}>Subir</button>
+                  <button type="button" className="btn btn--small" aria-label={`Bajar ${g.name}`} disabled={index === ordered.length - 1} onClick={() => move(index, 1)}>Bajar</button>
+                </div>
+              )}
             </li>
           ))}
           {mine && mine.length <= 1 && (
