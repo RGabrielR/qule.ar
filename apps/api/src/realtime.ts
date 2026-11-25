@@ -99,6 +99,11 @@ export function emitToUser(userId: string, event: string, payload: unknown) {
   io?.to(userRoom(userId)).emit(event, payload);
 }
 
+/** Manda un evento a todo el grupo, sin mirar bloqueos (por ejemplo, para borrar mensajes que ya nadie debe ver). */
+export function emitToGroupRoom(groupId: string, event: string, payload: unknown) {
+  io?.to(groupRoom(groupId)).emit(event, payload);
+}
+
 /** Manda un evento a un grupo, salteando a quienes tienen un bloqueo con el autor. */
 export async function emitToGroup(groupId: string, authorId: string, event: string, payload: unknown) {
   if (!io) return;
