@@ -2,6 +2,58 @@ import { expect, test } from "@playwright/test";
 import sharp from "sharp";
 import { createAccount, openProfile, signIn } from "./fixtures";
 
+test.describe("fechas en chats privados", () => {
+  test.use({ timezoneId: "America/Argentina/Buenos_Aires", viewport: { width: 375, height: 812 } });
+
+  test("agrupa por día local y actualiza Hoy a medianoche", async ({ page, baseURL }) => {
+    const sender = await createAccount(baseURL!, "Ana Fechas");
+    const recipient = await createAccount(baseURL!, "Sol Fechas");
+    await signIn(page, sender);
+    await openProfile(page, recipient);
+    await page.getByRole("button", { name: "Mandar mensaje" }).click();
+    await page.getByRole("textbox", { name: "Mensaje", exact: true }).waitFor();
+    const path = new URL(page.url()).pathname.replace("/mensajes/", "/api/conversations/");
+    const dates = new Map<string, string>();
+    for (const [body, createdAt] of [
+      ["Mensaje del domingo", "2026-11-22T23:00:00.000Z"],
+      ["Otro mensaje del domingo", "2026-11-23T02:30:00.000Z"],
+      ["Respuesta del miércoles", "2026-11-25T20:10:00.000Z"],
+    ]) {
+      const response = await page.request.post(`${path}/messages`, { data: { body }, headers: { Origin: baseURL! } });
+      await expect(response).toBeOK();
+      dates.set((await response.json()).id, createdAt);
+    }
+    await page.route(`**${path}/messages`, async (route) => {
+      const response = await route.fetch();
+      const history = await response.json();
+      for (const message of history.messages) message.createdAt = dates.get(message.id);
+      await route.fulfill({ response, json: history });
+    });
+    await page.clock.install({ time: new Date("2026-11-26T02:50:00Z") });
+    await page.reload();
+
+    const log = page.getByRole("log", { name: "Mensajes" });
+    const chips = log.locator(".chat__date");
+    await expect(chips).toHaveText(["22 de noviembre de 2026", "Hoy"]);
+    await expect(log.locator(".chat__date, .bubble p")).toHaveText([
+      "22 de noviembre de 2026", "Mensaje del domingo", "Otro mensaje del domingo", "Hoy", "Respuesta del miércoles",
+    ]);
+    await expect(log.locator(".bubble time")).toHaveText(Array.from(dates, () => /\d{2}:\d{2}/));
+
+    for (const theme of ["oscuro", "penumbra"]) {
+      await page.locator("html").evaluate((root, theme) => { root.dataset.theme = theme; }, theme);
+      const chip = await chips.last().boundingBox();
+      const list = await log.boundingBox();
+      expect(chip).not.toBeNull();
+      expect(list).not.toBeNull();
+      expect(chip!.x + chip!.width / 2).toBeCloseTo(list!.x + list!.width / 2, 0);
+    }
+
+    await page.clock.fastForward(11 * 60 * 1000);
+    await expect(chips).toHaveText(["22 de noviembre de 2026", "25 de noviembre de 2026"]);
+  });
+});
+
 function gate() {
   let release!: () => void;
   const wait = new Promise<void>((resolve) => { release = resolve; });
