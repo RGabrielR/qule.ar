@@ -145,13 +145,18 @@ const groupInput = z.object({
   description: z.string().trim().max(300, "Máximo 300 caracteres").nullish(),
 });
 
+/** Un número entero entre min y max, con un error que dice qué campo está mal. */
+const ruleNumber = (label: string, min: number, max: number) =>
+  z.number({ error: `${label}: tiene que ser un número` }).int(`${label}: tiene que ser un número entero`)
+    .min(min, `${label}: entre ${min} y ${max}`).max(max, `${label}: entre ${min} y ${max}`);
+
 const rulesInput = z.object({
-  intervalSeconds: z.number().int().min(5).max(3600),
-  burst: z.number().int().min(1).max(10),
-  rotationWindow: z.number().int().min(5).max(100),
-  rotationMax: z.number().int().min(1).max(50),
-  newAccountHours: z.number().int().min(0).max(24 * 30),
-  maxQueued: z.number().int().min(1).max(10),
+  intervalSeconds: ruleNumber("Segundos por mensaje", 5, 3600),
+  burst: ruleNumber("Ráfaga", 1, 10),
+  rotationWindow: ruleNumber("Rotación: mirar los últimos", 5, 100),
+  rotationMax: ruleNumber("Rotación: máximo tuyos", 1, 50),
+  newAccountHours: ruleNumber("Horas de cuenta nueva", 0, 24 * 30),
+  maxQueued: ruleNumber("Máximo en cola", 1, 10),
 });
 
 function parse<T>(schema: z.ZodType<T>, input: unknown): T {

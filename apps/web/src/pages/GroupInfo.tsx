@@ -303,21 +303,32 @@ export function GroupInfo() {
 function GroupSettings({ info, onSaved }: { info: Info; onSaved: () => void }) {
   const [name, setName] = useState(info.name);
   const [description, setDescription] = useState(info.description ?? "");
-  const [rules, setRules] = useState<SpamRules>(info.rules);
+  // Lo que está escrito en cada campo, como texto: así se puede borrar y volver a escribir sin que aparezca "0" o "05"
+  const [draft, setDraft] = useState(() => rulesToDraft(info.rules));
   const [state, setState] = useState<"idle" | "saving" | "ok">("idle");
   const [error, setError] = useState("");
+  const checked = checkRules(draft);
+  // El resumen usa lo último válido de cada campo
+  const [rules, setRules] = useState<SpamRules>(info.rules);
 
   const setRule = (k: keyof SpamRules, v: string) => {
-    setRules({ ...rules, [k]: Number(v) });
+    const text = v.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    setDraft({ ...draft, [k]: text });
+    const n = parseRule(k, text);
+    if (n !== null) setRules({ ...rules, [k]: n });
     setState("idle");
   };
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (!checked.ok) {
+      setError("Revisá los números marcados.");
+      return;
+    }
     setState("saving");
     setError("");
     try {
-      await api(`/groups/${info.id}`, { method: "PATCH", json: { name, description: description || null, rules } });
+      await api(`/groups/${info.id}`, { method: "PATCH", json: { name, description: description || null, rules: checked.rules } });
       setState("ok");
       onSaved();
     } catch (err) {
@@ -344,30 +355,20 @@ function GroupSettings({ info, onSaved }: { info: Info; onSaved: () => void }) {
         Lo que mande de más queda en cola. Si tiene {rules.rotationMax} o más de los últimos {rules.rotationWindow} mensajes, espera el doble.
       </p>
       <div className="grid2">
-        <label className="field">
-          <span>Segundos por mensaje</span>
-          <input className="input" type="number" min={5} max={3600} value={rules.intervalSeconds} onChange={(e) => setRule("intervalSeconds", e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Ráfaga (mensajes seguidos)</span>
-          <input className="input" type="number" min={1} max={10} value={rules.burst} onChange={(e) => setRule("burst", e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Rotación: mirar los últimos</span>
-          <input className="input" type="number" min={5} max={100} value={rules.rotationWindow} onChange={(e) => setRule("rotationWindow", e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Rotación: máximo tuyos</span>
-          <input className="input" type="number" min={1} max={50} value={rules.rotationMax} onChange={(e) => setRule("rotationMax", e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Horas de cuenta nueva</span>
-          <input className="input" type="number" min={0} max={720} value={rules.newAccountHours} onChange={(e) => setRule("newAccountHours", e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Máximo en cola</span>
-          <input className="input" type="number" min={1} max={10} value={rules.maxQueued} onChange={(e) => setRule("maxQueued", e.target.value)} />
-        </label>
+        {RULE_FIELDS.map((f) => {
+          const bad = checked.bad.includes(f.key);
+          return (
+            <label className="field" key={f.key}>
+              <span>{f.label}</span>
+              <input
+                className="input" type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off"
+                value={draft[f.key]} aria-invalid={bad} aria-describedby={`regla-${f.key}`}
+                onChange={(e) => setRule(f.key, e.target.value)}
+              />
+              <small id={`regla-${f.key}`} className={bad ? "error small" : "muted small"}>Entre {f.min} y {f.max}</small>
+            </label>
+          );
+        })}
       </div>
       {error && <p className="error" role="alert">{error}</p>}
       <button className="btn btn--primary" disabled={state === "saving"}>
@@ -375,6 +376,35 @@ function GroupSettings({ info, onSaved }: { info: Info; onSaved: () => void }) {
       </button>
     </form>
   );
+}
+
+const RULE_FIELDS: { key: keyof SpamRules; label: string; min: number; max: number }[] = [
+  { key: "intervalSeconds", label: "Segundos por mensaje", min: 5, max: 3600 },
+  { key: "burst", label: "Ráfaga (mensajes seguidos)", min: 1, max: 10 },
+  { key: "rotationWindow", label: "Rotación: mirar los últimos", min: 5, max: 100 },
+  { key: "rotationMax", label: "Rotación: máximo tuyos", min: 1, max: 50 },
+  { key: "newAccountHours", label: "Horas de cuenta nueva", min: 0, max: 720 },
+  { key: "maxQueued", label: "Máximo en cola", min: 1, max: 10 },
+];
+
+type RulesDraft = Record<keyof SpamRules, string>;
+
+function rulesToDraft(rules: SpamRules): RulesDraft {
+  return Object.fromEntries(RULE_FIELDS.map((f) => [f.key, String(rules[f.key])])) as RulesDraft;
+}
+
+/** El número de un campo si está dentro de su rango; si no, null. */
+function parseRule(key: keyof SpamRules, text: string): number | null {
+  const f = RULE_FIELDS.find((r) => r.key === key)!;
+  if (!/^\d+$/.test(text)) return null;
+  const n = Number(text);
+  return n >= f.min && n <= f.max ? n : null;
+}
+
+function checkRules(draft: RulesDraft): { ok: true; rules: SpamRules; bad: (keyof SpamRules)[] } | { ok: false; bad: (keyof SpamRules)[] } {
+  const bad = RULE_FIELDS.filter((f) => parseRule(f.key, draft[f.key]) === null).map((f) => f.key);
+  if (bad.length) return { ok: false, bad };
+  return { ok: true, bad: [], rules: Object.fromEntries(RULE_FIELDS.map((f) => [f.key, Number(draft[f.key])])) as SpamRules };
 }
 
 function fmtSecs(s: number) {
