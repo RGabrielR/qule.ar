@@ -12,6 +12,7 @@ import { disconnectUser, emitToGroup, emitToUser } from "../realtime.js";
 import { deleteImage } from "../storage.js";
 import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
 import { removeGroup } from "./groups.js";
+import { keepEvidence, purgeSuspendedContent } from "../suspension.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
 
@@ -265,7 +266,7 @@ async function pendingPreventive(ids: string[]): Promise<Set<string>> {
   return new Set(ids.filter((id) => last.get(id) === PREVENTIVE));
 }
 
-/** Suspender una cuenta: se cierran sus sesiones y deja de aparecer. Cierra sus reportes abiertos. */
+/** Suspender una cuenta: se cierran sus sesiones, deja de aparecer y se borra lo que publicó. Cierra sus reportes abiertos. */
 adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports"), async (c) => {
   const admin = c.get("user");
   const target = c.req.param("id");
@@ -290,10 +291,15 @@ adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports
   if (!p) throw new HTTPException(404, { message: "Esa cuenta no existe" });
   await db.delete(session).where(eq(session.userId, target));
   disconnectUser(target);
+  // Primero la prueba: los reportes guardan los archivos que necesitan antes de que se borren (ver suspension.ts)
+  await keepEvidence(target);
   const open = await db.select({ id: report.id }).from(report)
     .where(and(eq(report.targetUserId, target), eq(report.status, "open")));
   await closeReports(open.map((r) => r.id), admin.id, "actioned", `Cuenta suspendida: ${reason}`);
-  await logAction(admin.id, preventive ? PREVENTIVE : SUSPENDED, target, reason);
+  // Después se borra lo público: mensajes en grupos, fotos, álbumes, videos y fotos por privado (ver suspension.ts)
+  const purged = await purgeSuspendedContent(target);
+  await logAction(admin.id, preventive ? PREVENTIVE : SUSPENDED, target,
+    `${reason} · Se borraron ${purged.groupMessages} mensajes en grupos y ${purged.files} archivos`);
   if (preventive) {
     await notifyStaff(
       "sanctions",

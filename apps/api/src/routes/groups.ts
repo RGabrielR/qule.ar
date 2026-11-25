@@ -1144,9 +1144,19 @@ groupRoutes.delete("/groups/:id/messages/:mid", async (c) => {
       throw new HTTPException(403, { message: "No podés borrar ese mensaje" });
     }
   }
+  const cancelOnly = c.req.query("onlyQueued") === "1";
+  if (cancelOnly && !mine) throw new HTTPException(403);
+  if (cancelOnly && row.status === "published") throw new HTTPException(409, { message: "El mensaje ya se publicó." });
   if (row.status === "queued" && mine) {
     // Borrado de verdad: no queda el texto (si alguien lo había reportado, la copia está en el reporte)
-    await db.update(groupMessage).set({ status: "cancelled", body: "" }).where(eq(groupMessage.id, row.id));
+    const [cancelled] = await db.update(groupMessage).set({ status: "cancelled", body: "" })
+      .where(and(eq(groupMessage.id, row.id), eq(groupMessage.status, "queued")))
+      .returning({ id: groupMessage.id });
+    if (!cancelled) {
+      const [current] = await db.select({ status: groupMessage.status }).from(groupMessage).where(eq(groupMessage.id, row.id));
+      if (current?.status === "published") throw new HTTPException(409, { message: "El mensaje ya se publicó." });
+      return c.json({ ok: true });
+    }
     emitToUser(u.id, "group:cancelled", { id: row.id, groupId: row.groupId });
   } else if (row.status === "published") {
     await db.update(groupMessage).set({ status: "deleted", body: "" }).where(eq(groupMessage.id, row.id));

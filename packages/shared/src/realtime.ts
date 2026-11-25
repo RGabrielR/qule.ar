@@ -8,6 +8,20 @@ export const DM_EVENTS = {
   access: "dm:access",
 } as const;
 
+/**
+ * Por qué el servidor rechaza una conexión en vivo. Los pasajeros (el cupo de intentos por minuto y el de
+ * conexiones abiertas por cuenta) se reintentan solos desde la app; sin sesión o sin perfil, no tiene sentido.
+ */
+export const SOCKET_ERRORS = {
+  noSession: "sin sesión",
+  noProfile: "perfil no disponible",
+  tooManyAttempts: "Demasiados intentos de conexión",
+  tooManySockets: "No pudimos abrir más conexiones para esta cuenta",
+  closed: "conexión cerrada",
+} as const;
+
+export const SOCKET_RETRY_ERRORS: readonly string[] = [SOCKET_ERRORS.tooManyAttempts, SOCKET_ERRORS.tooManySockets, SOCKET_ERRORS.closed];
+
 export const INBOX_LIMIT = 100;
 export const READ_RECEIPT_LIMIT = 100;
 

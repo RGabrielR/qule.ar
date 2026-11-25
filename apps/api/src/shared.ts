@@ -14,7 +14,8 @@ export const clustered = cluster.isWorker;
 export type SharedMsg =
   | { qule: "hit"; id: number; key: string; max: number; windowMs: number; force?: boolean }
   | { qule: "hit:r"; id: number; ok: boolean }
-  | { qule: "online"; userId: string; delta: 1 | -1 }
+  | { qule: "socket:reserve"; userId: string; id: number }
+  | { qule: "socket:release"; id: number }
   | { qule: "online:set"; userId: string; on: boolean }
   | { qule: "online:snapshot"; ids?: string[] }
   | { qule: "bcast"; ch: string; data: unknown }
@@ -70,19 +71,39 @@ export function hit(key: string, max: number, windowMs: number, force = false): 
 const onlineIds = new Set<string>();
 /** Conexiones abiertas en este proceso (con un solo proceso, es la lista completa). */
 const localOnline = new Map<string, number>();
+export const MAX_ACCOUNT_SOCKETS = 6;
 
 export const isOnline = (userId: string) => (clustered ? onlineIds.has(userId) : localOnline.has(userId));
 
-export function socketOpened(userId: string) {
-  localOnline.set(userId, (localOnline.get(userId) ?? 0) + 1);
-  if (clustered) send({ qule: "online", userId, delta: 1 });
-}
+export function reserveSocket(userId: string): Promise<(() => void) | null> {
+  if (!clustered) {
+    const count = localOnline.get(userId) ?? 0;
+    if (count >= MAX_ACCOUNT_SOCKETS) return Promise.resolve(null);
+    localOnline.set(userId, count + 1);
+    let released = false;
+    return Promise.resolve(() => {
+      if (released) return;
+      released = true;
+      const remaining = (localOnline.get(userId) ?? 1) - 1;
+      if (remaining) localOnline.set(userId, remaining);
+      else localOnline.delete(userId);
+    });
+  }
 
-export function socketClosed(userId: string) {
-  const n = (localOnline.get(userId) ?? 1) - 1;
-  if (n <= 0) localOnline.delete(userId);
-  else localOnline.set(userId, n);
-  if (clustered) send({ qule: "online", userId, delta: -1 });
+  return new Promise((resolve) => {
+    const id = nextId++;
+    const release = () => send({ qule: "socket:release", id });
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      release();
+      resolve(null);
+    }, 2000);
+    pending.set(id, (ok) => {
+      clearTimeout(timer);
+      resolve(ok ? release : null);
+    });
+    send({ qule: "socket:reserve", userId, id });
+  });
 }
 
 // ---------- Avisos a todos los procesos ----------
