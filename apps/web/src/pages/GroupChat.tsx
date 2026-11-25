@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router";
-import { api, ApiError, getSocket, type GroupInfo, type GroupMessage, type ReactionEvent } from "../api";
+import { api, ApiError, getSocket, upload, type GroupInfo, type GroupMessage, type ReactionEvent } from "../api";
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { MessageText } from "../features/chat/MessageText";
 import { GroupAvatar } from "../components/GroupAvatar";
-import { BackIcon, ChevronDownIcon, ClockIcon, SendIcon } from "../components/Icons";
+import { BackIcon, ChevronDownIcon, ClockIcon, ImageIcon, SendIcon } from "../components/Icons";
 import { JoinButton } from "../components/JoinButton";
 import { ReportDialog } from "../components/ReportDialog";
 import { GroupActions } from "../features/groups/GroupActions";
@@ -17,6 +17,8 @@ import { useDraft } from "../features/chat/useDraft";
 import { useKeyboardAfterSend } from "../features/chat/useKeyboardAfterSend";
 import { useMessageActions } from "../features/chat/useMessageActions";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
+import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
+import { preparePhotoForUpload } from "../features/photos/preparePhoto";
 import { useSectionBack } from "../useSectionBack";
 
 const fmtTime = (iso: string) =>
@@ -141,6 +143,9 @@ export function GroupChat() {
       alert("No se pudo abrir la charla. Probá de nuevo.");
     }
   }
+  const groupPhotoInput = useRef<HTMLInputElement>(null);
+  const [sendingPhoto, setSendingPhoto] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [reporting, setReporting] = useState<GroupMessage | null>(null);
   const [reportingGroupId, setReportingGroupId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -204,6 +209,7 @@ export function GroupChat() {
     setFindingQuote(false);
     setQuoteWindow(null);
     setMessages([]);
+    setViewingPhoto(null);
     setQueued([]);
 
     /** Pide el historial y la cola. */
@@ -274,6 +280,16 @@ export function GroupChat() {
     s.on("group:queued", onQueued);
     s.on("group:cancelled", onCancelled);
     s.on("group:deleted", onDeleted);
+    const onPhotoVisibility = (p: { id: string; groupId: string; hidden: boolean }) => {
+      if (p.groupId !== id) return;
+      livePublished((list) => list.map((m) => m.id === p.id ? { ...m, photo: p.hidden ? "hidden" : "available" } : m), true);
+      if (p.hidden) setViewingPhoto((current) => current === p.id ? null : current);
+    };
+    const onPhotoPilot = (p: { groupId: string; paused: boolean }) => {
+      if (p.groupId === id) setInfo((current) => current?.id === id ? { ...current, photoUploadsPaused: p.paused } : current);
+    };
+    s.on("group:photo-visibility", onPhotoVisibility);
+    s.on("group:photo-pilot", onPhotoPilot);
     const onReaction = (p: ReactionEvent) => {
       if (p.scope !== "group" || p.groupId !== id) return;
       livePublished((list) => list.map((x) => (x.id === p.messageId ? { ...x, reactions: p.reactions } : x)), true);
@@ -289,6 +305,8 @@ export function GroupChat() {
       s.off("group:queued", onQueued);
       s.off("group:cancelled", onCancelled);
       s.off("group:deleted", onDeleted);
+      s.off("group:photo-visibility", onPhotoVisibility);
+      s.off("group:photo-pilot", onPhotoPilot);
       s.off("reaction", onReaction);
     };
   }, [id, isMember]);
@@ -386,6 +404,35 @@ export function GroupChat() {
       if (wasEditing) setEditing(wasEditing);
       if (wasReplying) setReplyTo(wasReplying);
       setNotice({ kind: "error", text: (err as Error).message });
+    }
+  }
+
+  async function sendPhoto(file: File | undefined) {
+    if (!file || sendingPhoto || !info?.photoPilot || info.photoUploadsPaused) return;
+    setSendingPhoto(true);
+    setNotice(null);
+    try {
+      const { message } = await upload<{ message: GroupMessage }>(`/groups/${id}/messages/photo`, await preparePhotoForUpload(file));
+      jumpToEnd();
+      if (message.status === "queued") {
+        setQueued((list) => list.some((m) => m.id === message.id) ? list : [...list, message]);
+        setNotice({ kind: "info", text: "Tu foto quedó en cola. Sale cuando te toque." });
+      } else {
+        setMessages((list) => list.some((m) => m.id === message.id) ? list : [...list, message]);
+      }
+    } catch (error) {
+      setNotice({ kind: "error", text: (error as Error).message });
+    } finally {
+      setSendingPhoto(false);
+    }
+  }
+
+  async function setPhotoPause(paused: boolean) {
+    try {
+      await api(`/groups/${id}/photo-pilot`, { method: "PUT", json: { paused } });
+      setInfo((current) => current?.id === id ? { ...current, photoUploadsPaused: paused } : current);
+    } catch (error) {
+      setNotice({ kind: "error", text: (error as Error).message });
     }
   }
 
@@ -497,6 +544,7 @@ export function GroupChat() {
           key={id}
           group={info}
           onMutedChange={(muted) => setInfo((current) => current?.id === id ? { ...current, muted } : current)}
+          onPhotoPause={info.photoPilot && isMod ? setPhotoPause : undefined}
           onLinkCopied={() => setNotice({ kind: "info", text: "Enlace copiado." })}
           onError={(message) => setNotice({ kind: "error", text: message })}
         />
@@ -540,7 +588,14 @@ export function GroupChat() {
                     <span className="quote__body">{m.replyTo.body ?? "Mensaje borrado"}</span>
                   </button>
                 )}
-                <p className="gmsg__body">{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>
+                {m.body && <p className="gmsg__body">{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>}
+                {info.photoPilot && m.photo === "available" && (
+                  <div className="row">
+                    <button type="button" className="btn btn--small" onClick={() => setViewingPhoto(m.id)}>Ver foto</button>
+                    {!mine && <button type="button" className="btn btn--small btn--ghost" onClick={() => setReporting(m)}>Reportar foto</button>}
+                  </div>
+                )}
+                {m.photo === "hidden" && <p className="muted small">Foto oculta. Moderación la va a revisar.</p>}
                 <ReactionBar reactions={m.reactions ?? []} myId={me?.user.id} onToggle={(k) => react(m, k)} />
               </div>
               {menuFor === m.id && (
@@ -571,11 +626,11 @@ export function GroupChat() {
           const ms = new Date(m.scheduledAt).getTime() - now;
           return (
             <div key={m.id} className="queued">
-              <p className="queued__body">{m.body}</p>
+              <p className="queued__body">{m.photo ? "Foto en cola" : m.body}</p>
               <div className="queued__footer">
                 <span className="queued__time"><ClockIcon /> Sale en {fmtCountdown(ms)}</span>
                 <div className="queued__actions">
-                  <button className="linkbtn" onClick={() => { setReplyTo(null); setEditing(m.id); setText(m.body ?? ""); }}>Editar</button>
+                  {!m.photo && <button className="linkbtn" onClick={() => { setReplyTo(null); setEditing(m.id); setText(m.body ?? ""); }}>Editar</button>}
                   <button className="linkbtn linkbtn--danger" onClick={() => cancel(m)}>Cancelar</button>
                 </div>
               </div>
@@ -621,6 +676,16 @@ export function GroupChat() {
           <SavedPhrasesMenu text={text} onClose={() => setPhrasesOpen(false)} onPick={(p) => { setText(p); setPhrasesOpen(false); inputRef.current?.focus({ preventScroll: true }); }} />
         )}
         <div className="composer__row">
+          {info.photoPilot && !info.photoUploadsPaused && (
+            <div className="composer__action">
+              <input ref={groupPhotoInput} type="file" accept="image/*,.heic,.heif" hidden onChange={(e) => {
+                const file = e.currentTarget.files?.[0];
+                e.currentTarget.value = "";
+                void sendPhoto(file);
+              }} />
+              <button type="button" className="iconbtn" aria-label="Mandar foto" disabled={sendingPhoto} onClick={() => groupPhotoInput.current?.click()}><ImageIcon /></button>
+            </div>
+          )}
           <div className="composer__action">
             <SavedPhrasesButton open={phrasesOpen} onToggle={() => setPhrasesOpen((v) => !v)} />
           </div>
@@ -648,6 +713,9 @@ export function GroupChat() {
         </div>
       </form>
 
+      {info.photoPilot && viewingPhoto && visibleMessages.some((m) => m.id === viewingPhoto && m.photo === "available") && (
+        <ChatPhotoViewer src={`/api/groups/${id}/messages/${viewingPhoto}/photo`} onClose={() => setViewingPhoto(null)} watermark />
+      )}
       {reporting && (
         <ReportDialog
           userId={reporting.author.id}

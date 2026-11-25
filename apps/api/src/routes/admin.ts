@@ -8,7 +8,7 @@ import { db, schema } from "../db/index.js";
 import { env } from "../env.js";
 import { authorsFor, newId, requireProfile, requireUser, type AppEnv } from "../lib.js";
 import { pushEnabled, pushTo, vapidPublicKey } from "../push.js";
-import { disconnectUser, emitToGroup, emitToUser } from "../realtime.js";
+import { disconnectUser, emitToGroup, emitToGroupRoom, emitToUser } from "../realtime.js";
 import { deleteImage } from "../storage.js";
 import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
 import { removeGroup } from "./groups.js";
@@ -115,7 +115,7 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
   const groupMembers = new Map(groupCounts.map((x) => [x.id, x.n]));
   // Sobre qué es cada reporte: un grupo, una persona o (si la cuenta se borró) solo ese reporte.
   // El panel junta los reportes con el mismo tema, así varios reportes de lo mismo se ven en una sola tarjeta.
-  const subjectOf = (r: typeof rows[number]) => r.groupId ? `g:${r.groupId}` : r.targetUserId ? `u:${r.targetUserId}` : `r:${r.id}`;
+  const subjectOf = (r: typeof rows[number]) => r.messageKind === "group" && r.messageId && r.messageBody === "Foto del grupo (piloto)" ? `foto:${r.messageId}` : r.groupId ? `g:${r.groupId}` : r.targetUserId ? `u:${r.targetUserId}` : `r:${r.id}`;
   // Cuántas personas distintas reportaron cada tema (sin decir quiénes: eso solo lo ve la administración general)
   const reportersBySubject = new Map<string, Set<string>>();
   for (const r of rows) {
@@ -133,11 +133,11 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
   const out = [];
   for (const r of rows) {
     // El mensaje reportado: si ya se borró, se muestra la copia que guardó el reporte
-    let message: { body: string | null; photo: boolean; deleted: boolean } | null = null;
+    let message: { body: string | null; photo: boolean; deleted: boolean; hidden?: boolean } | null = null;
     if (r.messageId && r.messageKind === "group") {
       const m = groupMsgs.get(r.messageId);
       const deleted = !m || m.status === "deleted";
-      message = { body: deleted || !m ? r.messageBody : m.body, photo: false, deleted };
+      message = { body: deleted || !m ? r.messageBody : m.body, photo: Boolean(m?.photoKey) || r.evidenceKeys.length > 0, deleted, ...(m?.photoKey && m.photoHiddenAt ? { hidden: true } : {}) };
     } else if (r.messageId && r.messageKind === "dm") {
       const m = directMsgs.get(r.messageId);
       message = m
@@ -182,7 +182,7 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
       targetSuspendedAt: suspended.get(tid) ?? null,
       targetReportCount: totalBy.get(tid) ?? 0,
       evidenceFiles: r.evidenceKeys.length,
-      urgent: isUrgent(r.reason),
+      urgent: isUrgent(r.reason) || Boolean(message?.hidden && r.status === "open"),
       targetAutoHidden: hidden.has(tid),
     });
   }
@@ -222,7 +222,13 @@ adminRoutes.post("/admin/reports/:id/delete-message", requireAccess("reports"), 
   if (!r?.messageId) throw new HTTPException(400, { message: "Este reporte no tiene mensaje" });
   if (r.messageKind === "group") {
     const [m] = await db.update(groupMessage).set({ status: "deleted", body: "" }).where(eq(groupMessage.id, r.messageId)).returning();
-    if (m) await emitToGroup(m.groupId, m.userId, "group:deleted", { id: m.id, groupId: m.groupId });
+    if (m) {
+      if (m.photoKey) {
+        await db.update(groupMessage).set({ photoKey: null }).where(eq(groupMessage.id, m.id));
+        await deleteImageUnlessEvidence(m.photoKey);
+      }
+      await emitToGroup(m.groupId, m.userId, "group:deleted", { id: m.id, groupId: m.groupId });
+    }
   } else {
     const [m] = await db.delete(directMessage).where(eq(directMessage.id, r.messageId)).returning();
     if (m) {
@@ -244,6 +250,27 @@ adminRoutes.post("/admin/reports/:id/delete-message", requireAccess("reports"), 
     .where(and(eq(report.messageId, r.messageId), eq(report.status, "open")));
   await closeReports([r.id, ...same.map((x) => x.id)], c.get("user").id, "actioned", "Mensaje borrado");
   await logAction(c.get("user").id, "Borró un mensaje reportado", r.id);
+  return c.json({ ok: true });
+});
+
+/** Restaurar una foto oculta tras revisar sus reportes como improcedentes. */
+adminRoutes.post("/admin/reports/:id/restore-group-photo", requireAccess("reports"), async (c) => {
+  const [r] = await db.select().from(report).where(eq(report.id, c.req.param("id")));
+  if (!r?.messageId || r.messageKind !== "group") return c.notFound();
+  const admin = c.get("user").id;
+  const result = await db.transaction(async (tx) => {
+    const [m] = await tx.select().from(groupMessage).where(eq(groupMessage.id, r.messageId!)).for("update");
+    if (!m?.photoKey || !m.photoHiddenAt || m.status !== "published") return null;
+    const closed = await tx.update(report).set({ status: "dismissed", resolvedBy: admin, resolvedAt: new Date(), resolution: "Foto restaurada" })
+      .where(and(eq(report.messageId, m.id), eq(report.messageKind, "group"), eq(report.status, "open")))
+      .returning({ id: report.id });
+    await tx.update(groupMessage).set({ photoHiddenAt: null }).where(eq(groupMessage.id, m.id));
+    return { m, closed };
+  });
+  if (!result) return c.notFound();
+  await releaseEvidence(result.closed.map(({ id }) => id));
+  await logAction(admin, "Restauró una foto de grupo", result.m.id);
+  emitToGroupRoom(result.m.groupId, "group:photo-visibility", { id: result.m.id, groupId: result.m.groupId, hidden: false });
   return c.json({ ok: true });
 });
 

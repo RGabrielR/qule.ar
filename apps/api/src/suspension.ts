@@ -3,6 +3,7 @@ import { DM_EVENTS } from "@mortero/shared/realtime";
 import { db, schema } from "./db/index.js";
 import { reactionsFor, serializeDm } from "./lib.js";
 import { deleteImageUnlessEvidence, URGENT_REASONS } from "./moderation.js";
+import { releaseGroupPhotos } from "./groupPhotos.js";
 import { emitToGroupRoom, emitToUser } from "./realtime.js";
 
 const { report, photo, album, groupMessage, directMessage, conversation, reaction } = schema;
@@ -29,7 +30,9 @@ export async function keepEvidence(userId: string) {
     .where(eq(photo.userId, userId));
   const sent = await db.select({ key: directMessage.photoKey }).from(directMessage)
     .where(and(eq(directMessage.senderId, userId), isNotNull(directMessage.photoKey)));
-  const all = [...pics.flatMap((p) => (p.posterKey ? [p.key, p.posterKey] : [p.key])), ...sent.map((m) => m.key!)];
+  const groupPhotos = await db.select({ key: groupMessage.photoKey }).from(groupMessage)
+    .where(and(eq(groupMessage.userId, userId), isNotNull(groupMessage.photoKey)));
+  const all = [...groupPhotos.map(({ key }) => key!), ...pics.flatMap((p) => (p.posterKey ? [p.key, p.posterKey] : [p.key])), ...sent.map((m) => m.key!)];
   const kept = and(eq(report.targetUserId, userId), inArray(report.status, ["open", "actioned"]));
   await addEvidence(and(kept, inArray(report.reason, [...URGENT_REASONS])), all);
   await addEvidence(and(kept, isNull(report.messageId), isNull(report.groupId)), pics.filter((p) => !p.isPrivate).map((p) => p.key));
@@ -49,6 +52,7 @@ export async function purgeSuspendedContent(userId: string) {
     .set({ status: sql`case when ${groupMessage.status} = 'queued' then 'cancelled' else 'deleted' end`, body: "" })
     .where(and(eq(groupMessage.userId, userId), inArray(groupMessage.status, ["published", "queued"])))
     .returning({ id: groupMessage.id, groupId: groupMessage.groupId, status: groupMessage.status });
+  await releaseGroupPhotos(userId);
   const deleted = msgs.filter((m) => m.status === "deleted");
   if (deleted.length) {
     await db.delete(reaction).where(inArray(reaction.messageId, deleted.map((m) => m.id)));

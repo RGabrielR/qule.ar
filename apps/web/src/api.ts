@@ -169,6 +169,7 @@ export type GroupMessage = {
   body: string | null;
   status: "queued" | "published" | "cancelled" | "deleted";
   scheduledAt: string;
+  photo?: "available" | "hidden" | null;
   // En los grupos solo se muestra nombre y foto, sin la edad
   author: Pick<Author, "id" | "name" | "photo">;
   replyTo: { id: string; authorName: string; body: string | null } | null;
@@ -231,6 +232,8 @@ export type GroupListing = {
 };
 
 export type GroupInfo = GroupListing & {
+  photoPilot?: boolean;
+  photoUploadsPaused?: boolean;
   isGeneral: boolean;
   pendingMessage: string | null;
   muted: boolean;

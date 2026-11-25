@@ -26,7 +26,7 @@ export type Report = {
   createdAt: string;
   messageId: string | null;
   messageKind: "group" | "dm" | null;
-  message: { body: string | null; photo: boolean; deleted: boolean } | null;
+  message: { body: string | null; photo: boolean; deleted: boolean; hidden?: boolean } | null;
   reporter: Author | null;
   /** Quién reportó solo lo ve la administración general */
   reporterHidden: boolean;

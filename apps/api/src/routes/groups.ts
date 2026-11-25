@@ -10,11 +10,12 @@ import { distanceLabel, visibleKm } from "../geo.js";
 import { autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, forbiddenGroupText, groupIsEvidence, reportMinorGroupAttempt } from "../moderation.js";
 import { BULK_MAX, bulkInput, pendingConds, requestFilters, requestPage } from "../joinRequests.js";
 import { limit } from "../ratelimit.js";
-import { MAX_UPLOAD_BYTES, saveImage } from "../storage.js";
-import { emitToGroup, emitToUser, isOnline, serializeGroupMessages, syncGroupRoom } from "../realtime.js";
+import { deleteImage, MAX_UPLOAD_BYTES, readImage, saveImage } from "../storage.js";
+import { emitToGroup, emitToGroupRoom, emitToUser, isOnline, serializeGroupMessages, syncGroupRoom } from "../realtime.js";
 import { broadcast, onBroadcast } from "../shared.js";
 import { pushTo } from "../push.js";
 import { notifyGroupMessage } from "../groupNotify.js";
+import { canOpenGroupPhoto, groupPhotoPilot } from "../groupPhotos.js";
 import { forgetFile } from "../fileCache.js";
 
 const { group, groupMember, groupMessage, groupJoinRequest, groupInvite, profile, user } = schema;
@@ -205,7 +206,13 @@ export async function removeGroup(groupId: string, reason: string) {
 async function closeGroup(groupId: string, reason: string) {
   if (await groupIsEvidence(groupId)) return removeGroup(groupId, reason);
   await kickAll(groupId);
-  await db.delete(group).where(eq(group.id, groupId));
+  const files = await db.transaction(async (tx) => {
+    await tx.select({ id: group.id }).from(group).where(eq(group.id, groupId)).for("update");
+    const files = await tx.select({ key: groupMessage.photoKey }).from(groupMessage).where(eq(groupMessage.groupId, groupId));
+    await tx.delete(group).where(eq(group.id, groupId));
+    return files;
+  });
+  for (const { key } of files) if (key) await deleteImageUnlessEvidence(key);
 }
 
 // ---------- Listados ----------
@@ -309,6 +316,8 @@ groupRoutes.get("/groups/:id", async (c) => {
     pendingMessage: state?.pendingMessage ?? null,
     cooldownUntil: state?.cooldownUntil ?? null,
     pendingCount: pending,
+    photoPilot: Boolean(member && groupPhotoPilot(g)),
+    photoUploadsPaused: g.photoUploadsPaused,
     muted: member?.muted ?? false,
   });
 });
@@ -1114,6 +1123,73 @@ groupRoutes.post("/groups/:id/messages", async (c) => {
   return c.json({ message: msg, reasons: slot.reasons, intervalSeconds: slot.intervalSeconds });
 });
 
+groupRoutes.put("/groups/:id/photo-pilot", async (c) => {
+  const { group: g } = await requireMod(c.req.param("id"), c.get("user").id);
+  if (!groupPhotoPilot(g)) return c.notFound();
+  const { paused } = parse(z.object({ paused: z.boolean() }), await c.req.json());
+  await db.update(group).set({ photoUploadsPaused: paused }).where(eq(group.id, g.id));
+  emitToGroupRoom(g.id, "group:photo-pilot", { groupId: g.id, paused });
+  return c.json({ paused });
+});
+
+groupRoutes.post("/groups/:id/messages/photo", async (c) => {
+  const u = c.get("user");
+  const { group: g, member } = await membership(c.req.param("id"), u.id);
+  if (!member || !groupPhotoPilot(g)) return c.notFound();
+  if (g.photoUploadsPaused) throw new HTTPException(409, { message: "Las fotos de este grupo están en pausa" });
+  await limit(u.id, "upload");
+  const file = (await c.req.parseBody()).file;
+  if (!(file instanceof File) || file.type.startsWith("video/")) {
+    throw new HTTPException(400, { message: "Elegí una foto" });
+  }
+  if (file.size > MAX_UPLOAD_BYTES) throw new HTTPException(413, { message: "La foto pesa demasiado" });
+  const slot = await nextSlot({ groupId: g.id, userId: u.id, userCreatedAt: new Date(u.createdAt), rules: g.spamRules });
+  if (!slot.ok) throw new HTTPException(429, { message: slot.error });
+  let photoKey: string;
+  try {
+    photoKey = await saveImage(await file.arrayBuffer());
+  } catch {
+    throw new HTTPException(400, { message: "No pudimos leer esa imagen" });
+  }
+  const now = new Date();
+  const publishNow = slot.at.getTime() <= now.getTime();
+  const row = await db.transaction(async (tx) => {
+    const [current] = await tx.select().from(group).where(eq(group.id, g.id)).for("share");
+    const [currentMember] = await tx.select().from(groupMember)
+      .where(and(eq(groupMember.groupId, g.id), eq(groupMember.userId, u.id))).for("share");
+    const [sender] = await tx.select({ suspendedAt: profile.suspendedAt }).from(profile).where(eq(profile.userId, u.id)).for("share");
+    if (!current || current.removedAt || current.photoUploadsPaused || !currentMember || !sender || sender.suspendedAt) {
+      throw new HTTPException(409, { message: "Por ahora no podés mandar fotos en este grupo" });
+    }
+    const [message] = await tx.insert(groupMessage).values({
+      id: newId(), groupId: g.id, userId: u.id, body: "", photoKey,
+      status: publishNow ? "published" : "queued", scheduledAt: publishNow ? now : slot.at,
+    }).returning();
+    return message;
+  }).catch(async (error) => {
+    await deleteImage(photoKey);
+    throw error;
+  });
+  const [message] = await serializeGroupMessages([row]);
+  if (publishNow) await emitToGroup(g.id, u.id, "group:message", message);
+  else emitToUser(u.id, "group:queued", message);
+  return c.json({ message });
+});
+
+groupRoutes.get("/groups/:id/messages/:mid/photo", async (c) => {
+  c.header("Cache-Control", "private, no-store");
+  const groupId = c.req.param("id");
+  if (!groupPhotoPilot({ id: groupId, isGeneral: false })) return c.notFound();
+  const messageId = c.req.param("mid");
+  const viewer = c.get("user").id;
+  const key = await canOpenGroupPhoto(groupId, messageId, viewer);
+  if (!key) return c.notFound();
+  const image = await readImage(key);
+  // El estado puede cambiar mientras se obtiene el archivo del almacenamiento.
+  if (!image || await canOpenGroupPhoto(groupId, messageId, viewer) !== key) return c.notFound();
+  return c.body(new Uint8Array(image), 200, { "Content-Type": "image/webp" });
+});
+
 /** Editar un mensaje propio mientras está en cola. */
 groupRoutes.patch("/groups/:id/messages/:mid", async (c) => {
   const u = c.get("user");
@@ -1123,6 +1199,8 @@ groupRoutes.patch("/groups/:id/messages/:mid", async (c) => {
     .set({ body })
     .where(and(
       eq(groupMessage.id, c.req.param("mid")),
+      eq(groupMessage.groupId, c.req.param("id")),
+      isNull(groupMessage.photoKey),
       eq(groupMessage.userId, u.id),
       eq(groupMessage.status, "queued"),
     ))
@@ -1154,7 +1232,7 @@ groupRoutes.delete("/groups/:id/messages/:mid", async (c) => {
   if (cancelOnly && row.status === "published") throw new HTTPException(409, { message: "El mensaje ya se publicó." });
   if (row.status === "queued" && mine) {
     // Borrado de verdad: no queda el texto (si alguien lo había reportado, la copia está en el reporte)
-    const [cancelled] = await db.update(groupMessage).set({ status: "cancelled", body: "" })
+    const [cancelled] = await db.update(groupMessage).set({ status: "cancelled", body: "", photoKey: null })
       .where(and(eq(groupMessage.id, row.id), eq(groupMessage.status, "queued")))
       .returning({ id: groupMessage.id });
     if (!cancelled) {
@@ -1162,9 +1240,11 @@ groupRoutes.delete("/groups/:id/messages/:mid", async (c) => {
       if (current?.status === "published") throw new HTTPException(409, { message: "El mensaje ya se publicó." });
       return c.json({ ok: true });
     }
+    if (row.photoKey) await deleteImageUnlessEvidence(row.photoKey);
     emitToUser(u.id, "group:cancelled", { id: row.id, groupId: row.groupId });
   } else if (row.status === "published") {
-    await db.update(groupMessage).set({ status: "deleted", body: "" }).where(eq(groupMessage.id, row.id));
+    await db.update(groupMessage).set({ status: "deleted", body: "", photoKey: null }).where(eq(groupMessage.id, row.id));
+    if (row.photoKey) await deleteImageUnlessEvidence(row.photoKey);
     await db.delete(schema.reaction).where(eq(schema.reaction.messageId, row.id));
     await emitToGroup(row.groupId, row.userId, "group:deleted", { id: row.id, groupId: row.groupId });
   }

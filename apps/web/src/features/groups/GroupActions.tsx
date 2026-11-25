@@ -5,10 +5,11 @@ import { groupPath } from "./groupLink";
 import { GroupActionMenu } from "./GroupActionMenu";
 import { setGroupMuted } from "./groupNotifications";
 
-export function GroupActions({ group, onMutedChange, onLinkCopied, onError }: {
+export function GroupActions({ group, onMutedChange, onLinkCopied, onPhotoPause, onError }: {
   group: GroupInfo;
   onMutedChange: (muted: boolean) => void;
   onLinkCopied: () => void;
+  onPhotoPause?: (paused: boolean) => Promise<void>;
   onError: (message: string) => void;
 }) {
   const [saving, setSaving] = useState(false);
@@ -56,6 +57,11 @@ export function GroupActions({ group, onMutedChange, onLinkCopied, onError }: {
           )}
           <Link to={infoPath} state={{ fromGroupChat: true }} onClick={close}>Ver detalles</Link>
           <button type="button" onClick={() => { close(); void share(); }}>Compartir grupo</button>
+          {onPhotoPause && (
+            <button type="button" onClick={() => { close(); void onPhotoPause(!group.photoUploadsPaused); }}>
+              {group.photoUploadsPaused ? "Reactivar envío de fotos" : "Pausar envío de fotos"}
+            </button>
+          )}
           <button type="button" aria-disabled={saving} onClick={toggleNotifications}>
             {group.muted ? "Reactivar notificaciones" : "Silenciar notificaciones"}
           </button>
