@@ -16,7 +16,7 @@ import { myRecentToque } from "./toques.js";
 import { pushDm } from "../push.js";
 import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
-import { GROUP_PHOTO_REPORTERS } from "../groupPhotos.js";
+import { reportGroupPhoto } from "../groupPhotos.js";
 import { limit } from "../ratelimit.js";
 import { chatPeopleMatching, parseNearbyFilters } from "./nearby.js";
 import { ALWAYS_COUNTS_REASON, isMutedReporter, REPORT_SPAM_TARGETS, reportSpamStatus } from "../reportSpam.js";
@@ -685,26 +685,8 @@ socialRoutes.post("/reports", async (c) => {
         if (me.id === userId || m.status !== "published" || (await isBlocked(me.id, userId))) {
           throw new HTTPException(400, { message: "Esa foto no está disponible para reportar" });
         }
-        const { groupMessage, group, groupMember } = schema;
-        const [target] = await db.select({ name: profile.displayName }).from(profile).where(eq(profile.userId, userId));
-        const outcome = await db.transaction(async (tx) => {
-          const [current] = await tx.select().from(groupMessage).where(eq(groupMessage.id, m.id)).for("update");
-          if (!current?.photoKey || current.status !== "published") return null;
-          const [active] = await tx.select({ id: group.id }).from(group)
-            .innerJoin(groupMember, and(eq(groupMember.groupId, group.id), eq(groupMember.userId, me.id)))
-            .where(and(eq(group.id, m.groupId), isNull(group.removedAt)));
-          if (!active) return null;
-          const open = and(eq(report.messageId, m.id), eq(report.messageKind, "group"), eq(report.status, "open"));
-          const existing = await tx.select({ reporterId: report.reporterId }).from(report).where(open);
-          if (existing.some((x) => x.reporterId === me.id)) return { hidden: false, fresh: false };
-          await tx.insert(report).values({
-            id: newId(), reporterId: me.id, targetUserId: userId, ...rest, targetName: target?.name ?? null,
-            messageBody: "Foto del grupo (piloto)", evidenceKeys: [current.photoKey],
-          });
-          const hide = !current.photoHiddenAt &&
-            new Set(existing.flatMap(({ reporterId }) => reporterId ? [reporterId] : [])).size + 1 >= GROUP_PHOTO_REPORTERS;
-          if (hide) await tx.update(groupMessage).set({ photoHiddenAt: new Date() }).where(eq(groupMessage.id, m.id));
-          return { hidden: hide, fresh: true };
+        const outcome = await reportGroupPhoto({
+          messageId: m.id, groupId: m.groupId, reporterId: me.id, targetUserId: userId, reason: rest.reason, details: rest.details,
         });
         if (!outcome) throw new HTTPException(400, { message: "Esa foto ya no está disponible" });
         if (outcome.hidden) {
@@ -714,7 +696,8 @@ socialRoutes.post("/reports", async (c) => {
           void notifyStaff("sanctions", notice).catch(console.error);
           void notifyStaff("reports", notice).catch(console.error);
         }
-        if (outcome.fresh && isUrgent(rest.reason)) void notifyModeratorsUrgent(rest.reason).catch(console.error);
+        // Pasa por la alerta de spam de reportes igual que el resto (ver afterReport)
+        if (outcome.fresh) await afterReport(me.id, rest.reason);
         return c.json({ ok: true });
       }
       // Si es una encuesta, la copia lleva la pregunta y las opciones

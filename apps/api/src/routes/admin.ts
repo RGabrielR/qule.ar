@@ -19,6 +19,7 @@ import { keepEvidence, purgeSuspendedContent } from "../suspension.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, ownerIds, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
 import { dropPolls } from "../polls.js";
+import { GROUP_PHOTO_REPORT_BODY } from "../groupPhotos.js";
 
 const { report, profile, session, groupMessage, directMessage, conversation, pushSubscription, user, group, appeal, staffPermission, modAction, reportMute } = schema;
 
@@ -125,7 +126,7 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
   const groupMembers = new Map(groupCounts.map((x) => [x.id, x.n]));
   // Sobre qué es cada reporte: un grupo, una persona o (si la cuenta se borró) solo ese reporte.
   // El panel junta los reportes con el mismo tema, así varios reportes de lo mismo se ven en una sola tarjeta.
-  const subjectOf = (r: typeof rows[number]) => r.messageKind === "group" && r.messageId && r.messageBody === "Foto del grupo (piloto)" ? `foto:${r.messageId}` : r.groupId ? `g:${r.groupId}` : r.targetUserId ? `u:${r.targetUserId}` : `r:${r.id}`;
+  const subjectOf = (r: typeof rows[number]) => r.messageKind === "group" && r.messageId && r.messageBody === GROUP_PHOTO_REPORT_BODY ? `foto:${r.messageId}` : r.groupId ? `g:${r.groupId}` : r.targetUserId ? `u:${r.targetUserId}` : `r:${r.id}`;
   // Cuántas personas distintas reportaron cada tema (sin decir quiénes: eso solo lo ve la administración general)
   // Las cuentas cuyos reportes no cuentan (ver reportSpam.ts) no suman: sus reportes se ven, marcados
   const muted = await mutedReporters();
@@ -350,23 +351,36 @@ adminRoutes.post("/admin/reports/:id/delete-message", requireAccess("reports"), 
   return c.json({ ok: true });
 });
 
-/** Restaurar una foto oculta tras revisar sus reportes como improcedentes. */
+/**
+ * Restaurar una foto oculta tras revisar sus reportes como improcedentes. Cierra todos los reportes abiertos de la foto.
+ * Si alguno es urgente (menor de edad, contenido íntimo sin consentimiento, amenazas), hace falta el permiso Suspensiones,
+ * como en la suspensión preventiva: lo urgente lo revisa alguien con Suspensiones. El registro guarda qué reportes se cerraron.
+ */
 adminRoutes.post("/admin/reports/:id/restore-group-photo", requireAccess("reports"), async (c) => {
   const [r] = await db.select().from(report).where(eq(report.id, c.req.param("id")));
   if (!r?.messageId || r.messageKind !== "group") return c.notFound();
-  const admin = c.get("user").id;
+  const actor = c.get("user");
+  const sanctions = (await accessFor(actor)).includes("sanctions");
   const result = await db.transaction(async (tx) => {
     const [m] = await tx.select().from(groupMessage).where(eq(groupMessage.id, r.messageId!)).for("update");
     if (!m?.photoKey || !m.photoHiddenAt || m.status !== "published") return null;
-    const closed = await tx.update(report).set({ status: "dismissed", resolvedBy: admin, resolvedAt: new Date(), resolution: "Foto restaurada" })
-      .where(and(eq(report.messageId, m.id), eq(report.messageKind, "group"), eq(report.status, "open")))
-      .returning({ id: report.id });
+    const open = and(eq(report.messageId, m.id), eq(report.messageKind, "group"), eq(report.status, "open"));
+    const pending = await tx.select({ id: report.id, reason: report.reason }).from(report).where(open).for("update");
+    if (!sanctions && pending.some((x) => isUrgent(x.reason))) {
+      throw new HTTPException(403, { message: "Esta foto tiene un reporte urgente: la puede restaurar alguien con el permiso Suspensiones" });
+    }
+    const closed = await tx.update(report).set({ status: "dismissed", resolvedBy: actor.id, resolvedAt: new Date(), resolution: "Foto restaurada" })
+      .where(and(open, inArray(report.id, pending.map((x) => x.id))))
+      .returning({ id: report.id, reason: report.reason });
     await tx.update(groupMessage).set({ photoHiddenAt: null }).where(eq(groupMessage.id, m.id));
     return { m, closed };
   });
   if (!result) return c.notFound();
   await releaseEvidence(result.closed.map(({ id }) => id));
-  await logAction(admin, "Restauró una foto de grupo", result.m.id);
+  const detail = result.closed.length
+    ? "Reportes cerrados: " + result.closed.map((x) => `${x.id} (${x.reason})`).join(", ")
+    : "Sin reportes abiertos";
+  await logAction(actor.id, "Restauró una foto de grupo", result.m.id, detail);
   emitToGroupRoom(result.m.groupId, "group:photo-visibility", { id: result.m.id, groupId: result.m.groupId, hidden: false });
   return c.json({ ok: true });
 });

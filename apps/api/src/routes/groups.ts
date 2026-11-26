@@ -1157,30 +1157,40 @@ groupRoutes.post("/groups/:id/messages/photo", async (c) => {
   const { group: g, member } = await membership(c.req.param("id"), u.id);
   if (!member || !groupPhotoPilot(g)) return c.notFound();
   if (g.photoUploadsPaused) throw new HTTPException(409, { message: "Las fotos de este grupo están en pausa" });
+  // Igual que con los links, las cuentas nuevas no mandan fotos. En el piloto el mínimo es el valor por defecto,
+  // aunque el grupo lo haya bajado: una cuenta creada para subir algo y desaparecer es el caso más riesgoso.
+  const newAccountHours = Math.max(g.spamRules.newAccountHours, DEFAULT_SPAM_RULES.newAccountHours);
+  if (Date.now() - new Date(u.createdAt).getTime() < newAccountHours * 3_600_000) {
+    throw new HTTPException(403, { message: `Las cuentas nuevas no pueden mandar fotos en grupos durante las primeras ${newAccountHours} h` });
+  }
   await limit(u.id, "upload");
   const file = (await c.req.parseBody()).file;
   if (!(file instanceof File) || file.type.startsWith("video/")) {
     throw new HTTPException(400, { message: "Elegí una foto" });
   }
   if (file.size > MAX_UPLOAD_BYTES) throw new HTTPException(413, { message: "La foto pesa demasiado" });
-  const slot = await nextSlot({ groupId: g.id, userId: u.id, userCreatedAt: new Date(u.createdAt), rules: g.spamRules });
-  if (!slot.ok) throw new HTTPException(429, { message: slot.error });
+  // Primero un control sin bloqueo, para no procesar la imagen si ya se sabe que no entra en la cola
+  const early = await nextSlot({ groupId: g.id, userId: u.id, userCreatedAt: new Date(u.createdAt), rules: g.spamRules });
+  if (!early.ok) throw new HTTPException(429, { message: early.error });
   let photoKey: string;
   try {
     photoKey = await saveImage(await file.arrayBuffer());
   } catch {
     throw new HTTPException(400, { message: "No pudimos leer esa imagen" });
   }
-  const now = new Date();
-  const publishNow = slot.at.getTime() <= now.getTime();
   const row = await db.transaction(async (tx) => {
-    const [current] = await tx.select().from(group).where(eq(group.id, g.id)).for("share");
+    // Mismo bloqueo que los mensajes de texto: así una ráfaga de fotos no pasa el tope de la cola
+    const [current] = await tx.select().from(group).where(eq(group.id, g.id)).for("update");
     const [currentMember] = await tx.select().from(groupMember)
       .where(and(eq(groupMember.groupId, g.id), eq(groupMember.userId, u.id))).for("share");
     const [sender] = await tx.select({ suspendedAt: profile.suspendedAt }).from(profile).where(eq(profile.userId, u.id)).for("share");
     if (!current || current.removedAt || current.photoUploadsPaused || !currentMember || !sender || sender.suspendedAt) {
       throw new HTTPException(409, { message: "Por ahora no podés mandar fotos en este grupo" });
     }
+    const slot = await nextSlot({ groupId: g.id, userId: u.id, userCreatedAt: new Date(u.createdAt), rules: current.spamRules }, tx);
+    if (!slot.ok) throw new HTTPException(429, { message: slot.error });
+    const now = new Date();
+    const publishNow = slot.at.getTime() <= now.getTime();
     const [message] = await tx.insert(groupMessage).values({
       id: newId(), groupId: g.id, userId: u.id, body: "", photoKey,
       status: publishNow ? "published" : "queued", scheduledAt: publishNow ? now : slot.at,
@@ -1191,7 +1201,7 @@ groupRoutes.post("/groups/:id/messages/photo", async (c) => {
     throw error;
   });
   const [message] = await serializeGroupMessages([row]);
-  if (publishNow) await emitToGroup(g.id, u.id, "group:message", message);
+  if (row.status === "published") await emitToGroup(g.id, u.id, "group:message", message);
   else emitToUser(u.id, "group:queued", message);
   return c.json({ message });
 });
