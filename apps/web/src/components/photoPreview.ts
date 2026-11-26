@@ -1,13 +1,13 @@
 import type { CSSProperties, SyntheticEvent } from "react";
 
 /**
- * "Blur-up" para las grillas de fotos: la primera vez que una foto carga se guarda una versión de 8×8 píxeles
- * (unos cientos de bytes). Cuando la grilla se vuelve a mostrar, cada ficha pinta al instante esa versión
- * borrosa con los colores de la foto y la foto nítida aparece encima con un fundido, sin cuadros vacíos.
+ * "Blur-up" para las grillas de fotos: la primera vez que una foto carga se guarda una versión de 16×16 píxeles
+ * (menos de 1 KB). Cuando la grilla se vuelve a mostrar, cada ficha pinta al instante esa versión desenfocada
+ * (`.tile::before`) y la foto nítida aparece encima con un fundido, como si se enfocara.
  */
 const previews = new Map<string, string>();
 const LIMIT = 400;
-const SIZE = 8;
+const SIZE = 16;
 
 function remember(src: string, img: HTMLImageElement) {
   if (previews.has(src) || !img.naturalWidth) return;
@@ -25,10 +25,10 @@ function remember(src: string, img: HTMLImageElement) {
   }
 }
 
-/** Fondo de la ficha con la vista previa borrosa, si ya se vio esa foto. */
+/** La vista previa de la ficha (`--preview`, la usa `.tile::before`), si ya se vio esa foto. */
 export function previewStyle(src: string | null | undefined): CSSProperties | undefined {
   const preview = src ? previews.get(src) : undefined;
-  return preview ? { backgroundImage: `url("${preview}")` } : undefined;
+  return preview ? ({ "--preview": `url("${preview}")` } as CSSProperties) : undefined;
 }
 
 /**

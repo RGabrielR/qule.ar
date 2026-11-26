@@ -21,7 +21,7 @@ export default {
         "font-weight": ["400", "500", "600", "700", "800", "inherit"],
         "font": ["inherit", /^var\(--text-[a-z0-9-]+\)\/[\d.]+ var\(--(font|display)\)$/],
         "box-shadow": ["none", token("shadow")],
-        "filter": ["none", /^drop-shadow\(var\(--shadow-[a-z0-9-]+\)\)$/],
+        "filter": ["none", /^drop-shadow\(var\(--shadow-[a-z0-9-]+\)\)$/, /^blur\(var\(--blur-[a-z0-9-]+\)\)$/],
         "z-index": [token("z"), "auto", "0"],
       },
       {
