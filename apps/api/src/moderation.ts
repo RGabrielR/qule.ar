@@ -150,8 +150,6 @@ const MINOR_SIGNALS: RegExp[] = [
   /\+\s?1[0-7]\b/, // "+14", "+16" (el "+18" de adultos no cuenta)
   /\b1[0-7]\s?(?:anos|anitos)\b|\b1[0-7]a\b/, // "15 años", "16a" (pero no "de 15 a 18", que es un horario)
   /\bsub\s?-?\s?1[0-8]\b/, // "sub 18", "sub-16"
-  /\bmenores\b|\bmenor de edad\b|\bmenorcit[oa]s?\b/,
-  /\bteens?\b|\bsecundari[oa]s?\b|\bliceo\b/,
 ];
 
 /** Devuelve el fragmento que dispara la alerta, o null. Ignora mayúsculas y tildes. */

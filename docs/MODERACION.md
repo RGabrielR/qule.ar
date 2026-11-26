@@ -42,7 +42,7 @@ En Argentina, una plataforma no responde por lo que publican otras personas **mi
 
 Un grupo **no se puede crear ni editar** si el nombre o la descripción apuntan a:
 
-- **menores** ("+14", "-18", "15 años", "sub 18", "menores", "teen"…). Además, el intento le llega a moderación como alerta urgente sobre quien lo intentó;
+- **menores** ("+14", "-18", "15 años", "sub 18"…). Además, el intento le llega a moderación como alerta urgente sobre quien lo intentó;
 - **vender o comprar** cosas o servicios ("vendo", "venta", "precio", "$ 500", "stock", "delivery"…);
 - **masajes, acompañantes o servicios sexuales**.
 
@@ -58,7 +58,7 @@ Los grupos que **ya existían** con esos nombres se revisan al arrancar la app y
 
 La app revisa los nombres y las descripciones de los **perfiles y los grupos** cuando se crean o se editan. Si encuentra señales de que puede haber menores, crea un reporte urgente por "menor de edad", marcado como "Alerta automática de la app", y avisa a moderación. **No borra ni oculta nada sola:** lo decide una persona.
 
-Hoy busca: "-18", "+14" (y cualquier "+" seguido de un número menor de 18; "+18" no cuenta), "15 años" o "16a", "sub 18", "menores", "menor de edad", "teen", "secundaria" y "liceo". La lista está en `MINOR_SIGNALS` (`apps/api/src/moderation.ts`). Si aparece una señal nueva, se suma ahí.
+El filtro busca señales con edades concretas, como "-18", "+14", "15 años", "16a" o "sub 18". Frases como "menores a 40", "no menores de edad" y "perfil secundario" no generan alertas por sí solas. Si ves algo preocupante, reportalo desde la app. La lista está en `MINOR_SIGNALS` (`apps/api/src/moderation.ts`).
 
 ## Qué hacer en cada caso
 
