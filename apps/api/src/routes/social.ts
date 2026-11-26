@@ -6,17 +6,22 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { db, schema } from "../db/index.js";
 import {
-  ageFrom, authorsFor, canOpenLinks, imageUrl, isBlocked, mediaOut, newId, reactionsFor, requireProfile, requireUser, serializeDm, type AppEnv, type ReactionSummary,
+  ageFrom, authorsFor, canOpenLinks, messageKey, imageUrl, isBlocked, mediaOut, newId, reactionsFor, requireProfile, requireUser, serializeDm, type AppEnv, type ReactionSummary,
 } from "../lib.js";
 import { emitToUser, isOnline } from "../realtime.js";
 import { distanceLabel, visibleKm } from "../geo.js";
-import { deleteImage, MAX_UPLOAD_BYTES, saveImage } from "../storage.js";
+import { deleteImage, InvalidImageError, MAX_UPLOAD_BYTES, saveImage } from "../storage.js";
 import { albumAccess, markAlbumNoticesRevoked, recordView } from "./premium.js";
 import { myRecentToque } from "./toques.js";
 import { pushTo } from "../push.js";
 import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
 import { limit } from "../ratelimit.js";
+import { chatPeopleMatching, parseNearbyFilters } from "./nearby.js";
+import { REPORT_SPAM_TARGETS, reportSpamStatus } from "../reportSpam.js";
+import { notifyStaff } from "../staff.js";
+import { warnIfReachingAutoSuspend } from "../autoSuspend.js";
+import { pollReportText } from "../polls.js";
 
 const { profile, photo, block, report, conversation, directMessage } = schema;
 
@@ -109,6 +114,10 @@ async function myConversation(convId: string, userId: string) {
     throw new HTTPException(404, { message: "Conversación no encontrada" });
   }
   return { conv, otherId: conv.userA === userId ? conv.userB : conv.userA };
+}
+
+function senderKey(message: typeof directMessage.$inferSelect, viewerId: string) {
+  return viewerId === message.senderId ? { idempotencyKey: message.idempotencyKey } : {};
 }
 
 type DmReply = { id: string; authorName: string | null; body: string | null };
@@ -248,6 +257,16 @@ socialRoutes.get("/conversations", async (c) => {
   }));
 });
 
+/**
+ * Filtros de Mensajes: de las personas con las que tenés chat, cuáles cumplen los filtros de perfil.
+ * Son los mismos de Gente; "en línea" y "no leídos" se miran en la app.
+ */
+socialRoutes.get("/conversations/matching", async (c) => {
+  const me = c.get("user");
+  await limit(me.id, "nearby");
+  return c.json({ ids: await chatPeopleMatching(me.id, parseNearbyFilters(c.req.query())) });
+});
+
 /** Abre (o crea) la conversación con alguien. */
 socialRoutes.post("/conversations", async (c) => {
   const me = c.get("user");
@@ -324,8 +343,9 @@ socialRoutes.get("/conversations/:id/messages", async (c) => {
     reactionsFor(loaded.map((m) => m.id)),
     albumNoticeStates(me.id, loaded.map((message) => ({ message, otherId }))),
   ]);
+  const loadedById = new Map(loaded.map(m => [m.id, m]));
   const messages = (await serializeDms(loaded.reverse(), reactions))
-    .map((m) => ({ ...m, ...states.get(m.id), canOpenLinks: linksOk.get(m.id) ?? false }));
+    .map((m) => ({ ...m, ...states.get(m.id), ...senderKey(loadedById.get(m.id)!, me.id), canOpenLinks: linksOk.get(m.id) ?? false }));
   return c.json({ messages, hasMore: rows.length === 50 });
 });
 
@@ -334,11 +354,25 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
   const { conv, otherId } = await myConversation(c.req.param("id"), me.id);
   if (await isBlocked(me.id, otherId)) throw new HTTPException(404, { message: "Perfil no disponible" });
 
+  const idempotencyKey = messageKey(c.req.header("Idempotency-Key"));
+  async function previous(reader: Pick<typeof db, "select">) {
+    if (!idempotencyKey) return;
+    const [existing] = await reader.select().from(directMessage).where(and(eq(directMessage.senderId, me.id), eq(directMessage.idempotencyKey, idempotencyKey)));
+    if (existing && existing.conversationId !== conv.id) throw new HTTPException(409);
+    return existing;
+  }
+
+  const existing = await previous(db);
+  if (existing) {
+    const [message] = await serializeDms([existing]);
+    return c.json({ ...message, ...senderKey(existing, me.id), canOpenLinks: canOpenLinks(existing.createdAt, me.createdAt) });
+  }
+  const multipart = (c.req.header("content-type") ?? "").includes("multipart/form-data");
   let body: string | null = null;
   let photoKey: string | null = null;
   let expiring = false;
   let replyToId: string | null = null;
-  if ((c.req.header("content-type") ?? "").includes("multipart/form-data")) {
+  if (multipart) {
     await limit(me.id, "dmPhoto");
     const form = await c.req.parseBody();
     expiring = form.expiring === "1";
@@ -348,8 +382,9 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
     replyToId = await replyToIdFor(typeof form.replyToId === "string" ? form.replyToId.trim() : undefined, conv.id);
     try {
       photoKey = await saveImage(await file.arrayBuffer());
-    } catch {
-      throw new HTTPException(400, { message: "No pudimos leer esa imagen" });
+    } catch (error) {
+      if (error instanceof InvalidImageError) throw new HTTPException(400, { message: error.message });
+      throw error;
     }
   } else {
     await limit(me.id, "dm");
@@ -362,18 +397,41 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
     replyToId = await replyToIdFor(r.data.replyToId, conv.id);
   }
 
-  const now = new Date();
-  const [row] = await db
-    .insert(directMessage)
-    .values({ id: newId(), conversationId: conv.id, senderId: me.id, kind: photoKey ? "photo" : "text", body, photoKey, expiring, replyToId, createdAt: now })
-    .returning();
-  await db.update(conversation)
-    .set({ lastMessageAt: sql`greatest(${conversation.lastMessageAt}, ${now.toISOString()})` })
-    .where(eq(conversation.id, conv.id));
+  // El índice único decide qué pedido guarda el mensaje si llegan dos reintentos juntos.
+  const { row, fresh } = await db.transaction(async (tx) => {
+    const now = new Date();
+    const [inserted] = await tx.insert(directMessage).values({
+      id: newId(),
+      idempotencyKey,
+      conversationId: conv.id,
+      senderId: me.id,
+      kind: photoKey ? "photo" : "text",
+      body, photoKey, expiring, replyToId, createdAt: now,
+    }).onConflictDoNothing({ target: [directMessage.senderId, directMessage.idempotencyKey] }).returning();
+    if (!inserted) {
+      const saved = await previous(tx);
+      if (!saved) throw new HTTPException(409);
+      return { row: saved, fresh: false };
+    }
+    await tx.update(conversation).set({
+      lastMessageAt: sql`greatest(${conversation.lastMessageAt}, ${now.toISOString()}::timestamptz)`,
+    }).where(eq(conversation.id, conv.id));
+    return { row: inserted, fresh: true };
+  }).catch(async (error) => {
+    // Si se perdió la respuesta al commit, la foto puede estar en uso.
+    if (photoKey) {
+      const [linked] = await db.select({ id: directMessage.id }).from(directMessage).where(eq(directMessage.photoKey, photoKey));
+      if (!linked) await deleteImage(photoKey);
+    }
+    throw error;
+  });
+  if (!fresh && photoKey) await deleteImage(photoKey);
   const [serialized] = await serializeDms([row]);
-  const msg = { ...serialized, canOpenLinks: canOpenLinks(row.createdAt, me.createdAt) };
+  const publicMessage = { ...serialized, canOpenLinks: canOpenLinks(row.createdAt, me.createdAt) };
+  const msg = { ...publicMessage, ...senderKey(row, me.id) };
+  if (!fresh) return c.json(msg);
   emitToUser(me.id, DM_EVENTS.message, msg);
-  emitToUser(otherId, DM_EVENTS.message, msg);
+  emitToUser(otherId, DM_EVENTS.message, publicMessage);
   // Notificación discreta (sin nombre ni contenido). Se manda siempre: si la app está abierta y a la vista,
   // el service worker no la muestra. Antes se salteaba si "estaba en línea", y en el celu con la app
   // minimizada la conexión queda abierta un rato y el aviso nunca llegaba.
@@ -555,7 +613,7 @@ socialRoutes.post("/reports", async (c) => {
       reason: rest.reason, details: rest.details,
       targetName: g.name, messageBody: [g.name, g.description].filter(Boolean).join(" · "),
     });
-    if (isUrgent(rest.reason)) notifyModeratorsUrgent(rest.reason).catch((e) => console.error("notifyModeratorsUrgent", e));
+    await afterReport(me.id, rest.reason);
     return c.json({ ok: true });
   }
   if (!maybeUser) throw new HTTPException(400, { message: "Falta a quién reportás" });
@@ -581,7 +639,8 @@ socialRoutes.post("/reports", async (c) => {
             .where(and(eq(schema.groupMember.groupId, m.groupId), eq(schema.groupMember.userId, me.id)))
         : [];
       ok = Boolean(m && mem && m.userId === userId);
-      if (ok) messageBody = m.body;
+      // Si es una encuesta, la copia lleva la pregunta y las opciones
+      if (ok) messageBody = await pollReportText(m.id, m.body);
     }
     if (!ok) throw new HTTPException(400, { message: "Ese mensaje no corresponde a este reporte" });
   } else if (isUrgent(rest.reason)) {
@@ -594,7 +653,31 @@ socialRoutes.post("/reports", async (c) => {
     id: newId(), reporterId: me.id, targetUserId: userId, ...rest,
     targetName: target?.name ?? null, messageBody, evidenceKeys,
   });
-  // Lo urgente (menores, contenido íntimo sin consentimiento, amenazas) le avisa a moderación al instante
-  if (isUrgent(rest.reason)) notifyModeratorsUrgent(rest.reason).catch((e) => console.error("notifyModeratorsUrgent", e));
+  await afterReport(me.id, rest.reason);
+  // Si con este reporte ya son varias personas por lo mismo, moderación tiene un día para revisarlo (ver autoSuspend.ts)
+  warnIfReachingAutoSuspend(userId, rest.reason, me.id).catch((e) => console.error("warnIfReachingAutoSuspend", e));
   return c.json({ ok: true });
 });
+
+/**
+ * Después de guardar un reporte: lo urgente (menores, contenido íntimo sin consentimiento, amenazas) le avisa a
+ * moderación al instante, salvo que quien reporta esté en alerta de spam de reportes (ver reportSpam.ts). En ese caso
+ * el reporte queda igual en la cola, y moderación recibe un solo aviso de la alerta cuando salta. Si moderación ignora
+ * la alerta, sus reportes urgentes vuelven a avisar.
+ */
+async function afterReport(reporterId: string, reason: string) {
+  // Si alguien ignoró la alerta (eran reportes de verdad), lo urgente vuelve a avisar al instante
+  const { targets, flagged } = await reportSpamStatus(reporterId).catch(() => ({ targets: 0, flagged: false }));
+  if (flagged) {
+    if (targets === REPORT_SPAM_TARGETS) {
+      notifyStaff("sanctions", {
+        title: "Posible spam de reportes",
+        body: "Una cuenta reportó a muchas personas en poco tiempo. Revisalo en Moderación.",
+        url: "/admin",
+        tag: "spam-reportes",
+      }).catch((e) => console.error("notifyStaff", e));
+    }
+    return;
+  }
+  if (isUrgent(reason)) notifyModeratorsUrgent(reason).catch((e) => console.error("notifyModeratorsUrgent", e));
+}

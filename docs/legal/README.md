@@ -27,10 +27,10 @@ Esta es una versión beta, escrita con lo que sabemos hoy. Pendiente:
 - [ ] **Responsable de la base de datos:** quién figura (nombre y DNI/CUIT, o una organización) y un domicilio. La ley lo exige. Lo define Gabriel; no completar con nada provisorio.
 - [ ] **Mail de contacto** para pedidos sobre datos personales. Hoy el contacto es GitHub Discusiones, que es público. Lo define Gabriel.
 - [x] **Servidor:** VPS de Contabo en Europa (confirmado por Gabriel). El disco no está cifrado y así lo dice la política.
-- [ ] **País exacto del servidor:** probablemente Alemania; Gabriel lo confirma en el panel de Contabo.
+- [ ] **País exacto del servidor:** probablemente Alemania (el registro público de la IP dice Contabo GmbH, DE); Gabriel lo confirma en el panel de Contabo.
 - [ ] **Inscribir la base de datos en la AAIP:** es obligatorio y gratuito. Después, sumar el número de registro a la política.
 - [ ] **Mensajes borrados en grupos:** hoy el texto queda en la base (`status = 'deleted'`). Decidir si se borra de verdad o si se guarda un tiempo para moderar, y actualizar el punto 6 de la política.
-- [ ] **Backups:** hoy quedan en el mismo servidor (14 días). Gabriel arma una copia cifrada afuera; cuando esté, actualizar el punto 7 de la política.
-- [ ] **Proveedor de mails:** nombrarlo cuando esté definido.
+- [x] **Backups:** cifrados con restic fuera del servidor, en Cloudflare R2, 14 días. La política ya lo dice.
+- [x] **Proveedor de mails:** Amazon SES, región `us-east-2` (Estados Unidos). Nombrado en la política.
 - [x] **Jurisdicción:** tribunales ordinarios de la Ciudad Autónoma de Buenos Aires, sin quitarle a quien usa la app el derecho a ir a los de su domicilio (consumidor, CCyC art. 1109).
 - [ ] **Revisión legal:** que lo lea alguien que sepa de derecho, por ejemplo una organización LGBTIQ+ con área legal.

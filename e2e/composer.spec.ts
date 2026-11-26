@@ -20,7 +20,7 @@ for (const theme of ["oscuro", "penumbra"]) {
     await expect(created).toBeOK();
     const { id } = await created.json();
 
-    for (const [url, expectedWidths] of [[privateChat, [40, 40, 44]], [`/grupos/${id}`, [40, 44]]] as const) {
+    for (const [url, expectedWidths] of [[privateChat, [40, 40, 44]], [`/grupos/${id}`, [40, 40, 44]]] as const) {
       await page.goto(url);
       const row = page.locator(".composer__row");
       const input = row.getByRole("textbox");

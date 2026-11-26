@@ -1,5 +1,6 @@
 import { ChatPresenceDot } from "../features/messages/chatPresence";
 import { compareDmOrder, DM_EVENTS, type DmReadReceipt } from "@mortero/shared/realtime";
+import { privateOutbox, newMessageKey, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, getSocket, upload, type ChatContact, type Dm, type ReactionEvent } from "../api";
@@ -29,16 +30,22 @@ function replyPreview(m: Dm) {
 
 export function Conversation() {
   const { id = "" } = useParams();
+  return <ConversationThread key={id} id={id} />;
+}
+
+function ConversationThread({ id }: { id: string }) {
   const { me } = useMe();
+  const scope = JSON.stringify([me?.user.id, id]);
+  const pending = usePending(privateOutbox, scope);
   const nav = useNavigate();
   const goBack = useSectionBack("/mensajes");
   const [other, setOther] = useState<ChatContact | null>(null);
-  const [messages, setMessages] = useState<Dm[]>([]);
+  const [confirmed, setMessages] = useState<Dm[]>([]);
+  const { messages, pendingByMessage, remember } = useTimeline(confirmed, pending, me?.user.id);
   const [seen, setSeen] = useState<{ conversationId: string; readAtById: Map<string, string>; through?: Pick<Dm, "createdAt" | "id"> }>();
   const [text, setText] = useDraft(`dm:${me?.user.id ?? ""}:${id}`);
   const [phrasesOpen, setPhrasesOpen] = useState(false);
   const [error, setError] = useState("");
-  const [sending, setSending] = useState(false);
   const [typing, setTyping] = useState(false);
   const [photoMenu, setPhotoMenu] = useState<false | "options" | "album">(false);
   const [msgMenu, setMsgMenu] = useState<string | null>(null);
@@ -71,6 +78,9 @@ export function Conversation() {
       .catch(() => nav("/mensajes", { replace: true }));
     api<{ messages: Dm[]; hasMore: boolean }>(`/conversations/${id}/messages`).then((d) => {
       if (!alive) return;
+      for (const m of d.messages) {
+        if (m.senderId === myId) privateOutbox.acknowledge(scope, m);
+      }
       const history = beforeHistory?.reduce((list, update) => update(list), d.messages) ?? d.messages;
       const loaded = [...history].sort(compareDmOrder);
       beforeHistory = null;
@@ -83,6 +93,7 @@ export function Conversation() {
     const s = getSocket();
     const onMsg = (m: Dm) => {
       if (m.conversationId !== id) return;
+      if (m.senderId === myId) privateOutbox.acknowledge(scope, m);
       setTyping(false);
       applyMessageUpdate((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
       if (m.senderId !== myId && !m.readAt) receipts.schedule(m.id);
@@ -128,6 +139,7 @@ export function Conversation() {
       if (p.scope !== "dm" || p.conversationId !== id) return;
       applyMessageUpdate((list) => list.map((m) => (m.id === p.messageId ? { ...m, reactions: p.reactions } : m)));
     };
+    const stopWatching = privateOutbox.watchConfirmations(scope, onMsg);
     s.on("reaction", onReaction);
     s.on(DM_EVENTS.message, onMsg);
     s.on(DM_EVENTS.updated, onUpdated);
@@ -136,6 +148,7 @@ export function Conversation() {
     s.on(DM_EVENTS.opened, onOpened);
     s.on(DM_EVENTS.typing, onTyping);
     return () => {
+      stopWatching();
       alive = false;
       receipts.close();
       s.off("reaction", onReaction);
@@ -147,7 +160,7 @@ export function Conversation() {
       s.off(DM_EVENTS.typing, onTyping);
       clearTimeout(typingTimer.current);
     };
-  }, [id, myId, nav]);
+  }, [id, myId, nav, scope]);
 
   /** Poner, cambiar o sacar mi reacción a un mensaje (si toco la que ya tenía, se saca). */
   async function react(m: Dm, kind: string) {
@@ -201,50 +214,47 @@ export function Conversation() {
     setTimeout(() => el.classList.remove("bubble--flash"), 1400);
   }
 
-  async function send(e?: React.FormEvent) {
+  function send(e?: React.FormEvent) {
     e?.preventDefault();
     const body = text.trim();
     if (!body) return;
-    const wasReplying = replyTo;
     // Mandar con el botón le saca el foco al campo y cierra el teclado. Se lo devolvemos.
     inputRef.current?.focus({ preventScroll: true });
     setError("");
     setText("");
+    enqueue(body);
+  }
+
+  function enqueue(body: string | null, file?: File) {
+    if (!myId) return;
+    const quote = replyTo;
     setReplyTo(null);
-    try {
-      const m = await api<Dm>(`/conversations/${id}/messages`, { method: "POST", json: { body, replyToId: wasReplying?.id } });
-      stickToBottom.current = true;
-      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
-    } catch (err) {
-      setText((t) => t || body);
-      if (wasReplying) setReplyTo(wasReplying);
-      setError((err as Error).message);
-    }
+    stickToBottom.current = true;
+    const idempotencyKey = newMessageKey();
+    remember(idempotencyKey);
+    const headers = { "Idempotency-Key": idempotencyKey };
+    const expiring = Boolean(file && expiringNext.current);
+    const photo = file && !expiring ? URL.createObjectURL(file) : null;
+    const path = `/conversations/${id}/messages`;
+    const extra: Record<string, string> = expiring ? { expiring: "1" } : {};
+    if (quote) extra.replyToId = quote.id;
+    privateOutbox.add({
+      scope,
+      message: {
+        id: idempotencyKey, idempotencyKey, conversationId: id, senderId: myId, body, photo,
+        replyTo: quote ? { id: quote.id, authorName: quote.senderId === myId ? me?.profile?.displayName ?? me?.user.name ?? null : other?.name ?? null, body: quote.body ?? (quote.photo ? "Foto" : null) } : null,
+        kind: file ? "photo" : "text", expiring, opened: false, readAt: null, createdAt: new Date().toISOString(), reactions: [],
+      },
+      submit: () => file ? upload<Dm>(path, file, extra, headers)
+        : api<Dm>(path, { method: "POST", headers, json: { body, replyToId: quote?.id } }),
+      release: photo ? () => URL.revokeObjectURL(photo) : undefined,
+    });
   }
 
   function pickPhoto(expiring: boolean) {
     expiringNext.current = expiring;
     setPhotoMenu(false);
     fileRef.current?.click();
-  }
-
-  async function sendPhoto(file: File) {
-    const wasReplying = replyTo;
-    setSending(true);
-    setError("");
-    setReplyTo(null);
-    const extra: Record<string, string> = expiringNext.current ? { expiring: "1" } : {};
-    if (wasReplying) extra.replyToId = wasReplying.id;
-    try {
-      const m = await upload<Dm>(`/conversations/${id}/messages`, file, extra);
-      stickToBottom.current = true;
-      setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
-    } catch (err) {
-      if (wasReplying) setReplyTo(wasReplying);
-      setError((err as Error).message);
-    } finally {
-      setSending(false);
-    }
   }
 
   async function openExpiring(m: Dm) {
@@ -274,7 +284,7 @@ export function Conversation() {
   }
 
   const loadedMessageIds = new Set(messages.map((m) => m.id));
-  const lastMine = [...messages].reverse().find((m) => m.senderId === myId);
+  const lastMine = [...messages].reverse().find((m) => m.senderId === myId && !pendingByMessage.has(m));
   const openPhotoMessage = messages.find((m) => m.id === photoMessageId && m.conversationId === id);
   const openPhoto = openPhotoMessage?.photo;
 
@@ -301,6 +311,7 @@ export function Conversation() {
 
       <div className="chat__list chat__list--dm" role="log" aria-label="Mensajes" ref={listRef} onScroll={onListScroll}>
         {messages.map((m) => {
+          const entry = pendingByMessage.get(m);
           const mine = m.senderId === myId;
           const kind = albumNoticeKind(m, albumNoticeTime);
           const albumNotice = kind === "album" || kind === "album_revoked" || kind === "album_expired";
@@ -308,7 +319,7 @@ export function Conversation() {
           const expiry = albumExpiryLabel(m, albumNoticeTime);
           const quoted = m.replyTo;
           return (
-            <div id={`dm-${m.id}`} key={m.id} className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""}`}>
+            <div id={`dm-${m.id}`} key={m.idempotencyKey ?? m.id} className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""}`}>
               {quoted && (quoted.authorName && loadedMessageIds.has(quoted.id) ? (
                 <button
                   type="button"
@@ -327,7 +338,7 @@ export function Conversation() {
               ))}
               {kind === "album" || kind === "album_expired" ? (
                 kind === "album" && !mine ? (
-                  <Link to={`/perfil/${m.senderId}${m.albumId ? `?album=${encodeURIComponent(m.albumId)}` : ""}`} className="album-msg">
+                  <Link to={`/perfil/${m.senderId}${m.albumId ? `?album=${encodeURIComponent(m.albumId)}` : ""}`} state={{ fromChat: true }} className="album-msg">
                     {albumText} · <u>Ver</u>
                   </Link>
                 ) : <p>{albumText}</p>
@@ -349,7 +360,7 @@ export function Conversation() {
                 )
               ) : (
                 <>
-                  {m.photo && (
+                  {entry?.failure && !entry.failure.retryable && m.kind === "photo" ? <p>Foto</p> : m.photo && (
                     <button type="button" className={`bubble__photo-button${mine ? "" : " private-media"}`} aria-label="Abrir foto" onClick={() => setPhotoMessageId(m.id)}>
                       <img className="bubble__photo" src={m.photo} alt="" loading="lazy" onLoad={followLatestMessage} />
                       {!mine && <Watermark />}
@@ -362,8 +373,9 @@ export function Conversation() {
                 {expiry && `${expiry} · `}
                 <time dateTime={m.createdAt}>{new Date(m.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</time>
               </div>
-              <ReactionBar reactions={m.reactions ?? []} myId={myId} mine={mine} onToggle={(k) => react(m, k)} />
-              {(
+              {entry && <SendFailure failure={entry.failure} retry={() => privateOutbox.retry(entry)} dismiss={() => privateOutbox.dismiss(entry)} />}
+              {!entry && <ReactionBar reactions={m.reactions ?? []} myId={myId} mine={mine} onToggle={(k) => react(m, k)} />}
+              {!entry && (
                 <>
                   <button
                     className="iconbtn bubble__more"
@@ -427,7 +439,7 @@ export function Conversation() {
         )}
         <div className="composer__row">
           <div className="composer__action">
-            <button type="button" className="iconbtn" aria-label="Mandar foto" aria-expanded={Boolean(photoMenu)} disabled={sending} onClick={() => { setPhotoMenu((v) => (v ? false : "options")); setPhrasesOpen(false); }}>
+            <button type="button" className="iconbtn" aria-label="Mandar foto" aria-expanded={Boolean(photoMenu)} onClick={() => { setPhotoMenu((v) => (v ? false : "options")); setPhrasesOpen(false); }}>
               <ImageIcon />
             </button>
           </div>
@@ -441,7 +453,7 @@ export function Conversation() {
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) sendPhoto(f);
+              if (f) enqueue(null, f);
               e.target.value = "";
             }}
           />

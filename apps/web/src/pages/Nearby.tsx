@@ -18,7 +18,7 @@ export type Filters = {
   online: boolean; withPhoto: boolean; favorites: boolean;
 };
 
-const EMPTY: Filters = { bodyType: [], position: [], tribes: [], lookingFor: [], relationship: [], hasPlace: [], online: false, withPhoto: false, favorites: false };
+export const EMPTY: Filters = { bodyType: [], position: [], tribes: [], lookingFor: [], relationship: [], hasPlace: [], online: false, withPhoto: false, favorites: false };
 const STORE_KEY = "mortero:filtros";
 
 function loadFilters(): Filters {
@@ -38,7 +38,7 @@ function saveFilters(f: Filters) {
   }
 }
 
-function toQuery(f: Filters, offset: number) {
+export function toQuery(f: Filters, offset: number) {
   const q = new URLSearchParams();
   for (const k of ["ageMin", "ageMax", "heightMin", "heightMax", "weightMin", "weightMax"] as const) {
     if (f[k] != null) q.set(k, String(f[k]));
@@ -426,7 +426,7 @@ function Chips({ label, options, value, onChange }: { label: string; options: st
   );
 }
 
-function FilterSheet({ initial, onApply, onClose }: { initial: Filters; onApply: (f: Filters) => void; onClose: () => void }) {
+export function FilterSheet({ initial, onApply, onClose }: { initial: Filters; onApply: (f: Filters) => void; onClose: () => void }) {
   const [f, setF] = useState<Filters>(initial);
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setF({ ...f, [k]: v });
 

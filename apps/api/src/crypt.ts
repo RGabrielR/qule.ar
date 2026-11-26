@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { customType } from "drizzle-orm/pg-core";
+import { readOrCreateDevFile } from "./devFile.js";
 import { env } from "./env.js";
 
 /**
@@ -24,13 +24,7 @@ function key(): Buffer {
   if (!b64) {
     if (process.env.NODE_ENV === "production") throw new Error("Falta DATA_KEY (ver docs/DEPLOY.md)");
     // Desarrollo: se crea sola, como las claves VAPID
-    const file = path.join(env.DATA_DIR, "data-key");
-    if (existsSync(file)) b64 = readFileSync(file, "utf8").trim();
-    else {
-      mkdirSync(env.DATA_DIR, { recursive: true });
-      b64 = randomBytes(32).toString("base64");
-      writeFileSync(file, b64, { mode: 0o600 });
-    }
+    b64 = readOrCreateDevFile(path.join(env.DATA_DIR, "data-key"), () => randomBytes(32).toString("base64")).trim();
   }
   const k = Buffer.from(b64, "base64");
   if (k.length !== 32) throw new Error("DATA_KEY tiene que ser de 32 bytes en base64 (openssl rand -base64 32)");

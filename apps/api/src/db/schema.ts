@@ -295,6 +295,7 @@ export const groupInvite = pgTable("group_invite", {
 
 export const groupMessage = pgTable("group_message", {
   id: text("id").primaryKey(),
+  idempotencyKey: text("idempotency_key"),
   groupId: text("group_id").notNull().references(() => group.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
@@ -304,11 +305,31 @@ export const groupMessage = pgTable("group_message", {
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  uniqueIndex("gm_sender_idempotency_idx").on(t.userId, t.idempotencyKey),
   index("gm_group_sched_idx").on(t.groupId, t.status, t.scheduledAt),
   index("gm_user_idx").on(t.groupId, t.userId, t.scheduledAt),
   // Al borrar una cuenta se borran sus mensajes: sin esto había que recorrer la tabla entera
   index("gm_author_idx").on(t.userId),
 ]);
+
+/**
+ * Encuesta: un mensaje de grupo cuya pregunta es el texto (body) del mensaje, con entre 2 y 5 opciones.
+ * Sigue las reglas del mensaje: sale por la cola del antispam, se reporta y se borra igual. Si el mensaje se
+ * borra, la encuesta y sus votos se borran con él. Ver apps/api/src/polls.ts.
+ */
+export const groupPoll = pgTable("group_poll", {
+  messageId: text("message_id").primaryKey().references(() => groupMessage.id, { onDelete: "cascade" }),
+  options: jsonb("options").$type<string[]>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Un voto por persona y encuesta; se puede cambiar. Nunca se muestra quién votó qué: solo los totales. */
+export const groupPollVote = pgTable("group_poll_vote", {
+  messageId: text("message_id").notNull().references(() => groupPoll.messageId, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  option: integer("option").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.messageId, t.userId] }), index("gpv_user_idx").on(t.userId)]);
 
 // ---------- Mensajes privados ----------
 
@@ -322,6 +343,7 @@ export const conversation = pgTable("conversation", {
 
 export const directMessage = pgTable("direct_message", {
   id: text("id").primaryKey(),
+  idempotencyKey: text("idempotency_key"),
   conversationId: text("conversation_id").notNull().references(() => conversation.id, { onDelete: "cascade" }),
   senderId: text("sender_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   kind: text("kind").notNull().default("text"), // text | photo | album | album_revoked | album_expired
@@ -339,6 +361,7 @@ export const directMessage = pgTable("direct_message", {
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  uniqueIndex("dm_sender_idempotency_idx").on(t.senderId, t.idempotencyKey),
   index("dm_conv_idx").on(t.conversationId, t.createdAt),
   // /files/:key busca si el archivo es foto de un mensaje privado
   index("dm_photo_key_idx").on(t.photoKey),

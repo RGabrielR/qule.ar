@@ -173,3 +173,12 @@ export async function reactionsFor(messageIds: string[]): Promise<Map<string, Re
   }
   return out;
 }
+
+
+/** Los clientes anteriores mandan mensajes sin clave de reintento. */
+export function messageKey(value: string | undefined) {
+  if (value === undefined) return null;
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value))
+    throw new HTTPException(400, { message: "Identificador de mensaje inválido" });
+  return value;
+}
