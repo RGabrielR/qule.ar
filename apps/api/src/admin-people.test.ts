@@ -36,10 +36,10 @@ test("la pestaña Personas es solo para la administración general", async (t) =
   app.route("/api", adminRoutes);
 
   type Account = { id: string; cookie: string };
-  const request = (url: string, account?: Account) => {
-    const headers = new Headers({ origin });
+  const request = (url: string, account?: Account, init?: RequestInit) => {
+    const headers = new Headers({ origin, ...(init?.body ? { "content-type": "application/json" } : {}) });
     if (account) headers.set("cookie", account.cookie);
-    return app.request(new URL(url, origin), { headers });
+    return app.request(new URL(url, origin), { ...init, headers });
   };
   async function account(name: string): Promise<Account> {
     const res = await app.request(new URL("/api/auth/sign-up/email", origin), {
@@ -65,34 +65,41 @@ test("la pestaña Personas es solo para la administración general", async (t) =
   await db.update(schema.profile).set({ suspendedAt: new Date(), suspendReason: "Spam" }).where(eq(schema.profile.userId, tito.id));
 
   type Person = { id: string; name: string; owner: boolean; permissions: string[]; suspendedAt: string | null; suspendReason: string | null; email?: string };
-  const people = async (who: Account, query: string) => {
-    const res = await request(`/api/admin/people${query}`, who);
+  const search = (who: Account, body: Record<string, string> = {}) => request("/api/admin/people", who, {
+    method: "POST", body: JSON.stringify(body),
+  });
+  const people = async (who: Account, body: Record<string, string>) => {
+    const res = await search(who, body);
     assert.equal(res.status, 200);
     return (await res.json() as { people: Person[] }).people;
   };
 
   // Moderación con permisos chicos no entra; la administración general sí (los dos)
-  assert.equal((await request("/api/admin/people", juan)).status, 403);
-  assert.equal((await request("/api/admin/people", tito)).status, 403);
-  assert.equal((await request("/api/admin/people", axel)).status, 200);
+  assert.equal((await search(juan)).status, 403);
+  assert.equal((await search(tito)).status, 403);
+  const ok = await search(axel);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get("cache-control"), "no-store");
 
   // Buscar por nombre, sin que salga el mail
-  const found = await people(gabi, "?q=tit");
+  const found = await people(gabi, { q: "tit" });
   assert.deepEqual(found.map((p) => p.name).sort(), ["Tito", "Titina"].sort());
   assert.ok(found.every((p) => !("email" in p)), "no muestra mails");
   // Por mail exacto o por ID
-  assert.deepEqual((await people(gabi, "?q=JUAN@example.test")).map((p) => p.name), ["Juan"]);
-  assert.deepEqual((await people(gabi, `?q=${axel.id}`)).map((p) => p.name), ["Axel"]);
+  assert.deepEqual((await people(gabi, { q: "JUAN@example.test" })).map((p) => p.name), ["Juan"]);
+  assert.deepEqual((await people(gabi, { q: axel.id })).map((p) => p.name), ["Axel"]);
+  // Por el código de ocho caracteres de la marca visible de una captura
+  assert.ok((await people(gabi, { q: axel.id.slice(0, 8) })).some((p) => p.name === "Axel"));
   // Un % no es un comodín
-  assert.deepEqual(await people(gabi, "?q=%25"), []);
+  assert.deepEqual(await people(gabi, { q: "%" }), []);
 
   // Equipo: la administración general y quien tiene permisos
-  const staff = await people(gabi, "?filter=staff");
+  const staff = await people(gabi, { filter: "staff" });
   assert.deepEqual(staff.map((p) => p.name).sort(), ["Axel", "Gabi", "Juan"]);
   assert.equal(staff.find((p) => p.name === "Axel")?.owner, true);
   assert.deepEqual(staff.find((p) => p.name === "Juan")?.permissions.sort(), ["reports", "sanctions"]);
 
   // Suspendidas, con el motivo
-  const suspended = await people(gabi, "?filter=suspended");
+  const suspended = await people(gabi, { filter: "suspended" });
   assert.deepEqual(suspended.map((p) => [p.name, p.suspendReason]), [["Tito", "Spam"]]);
 });

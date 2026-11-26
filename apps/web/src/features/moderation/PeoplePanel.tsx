@@ -43,8 +43,8 @@ export function PeoplePanel({ onSuspend }: { onSuspend: (p: Person, done: () => 
   useEffect(() => {
     const ctrl = new AbortController();
     const t = setTimeout(() => {
-      const params = new URLSearchParams({ filter, ...(q.trim() && { q: q.trim() }) });
-      api<{ people: Person[]; more: boolean }>(`/admin/people?${params}`, { signal: ctrl.signal })
+      // Por POST, para que un mail buscado no quede en la URL ni en los registros del servidor
+      api<{ people: Person[]; more: boolean }>("/admin/people", { method: "POST", json: { filter, q: q.trim() }, signal: ctrl.signal })
         .then((r) => { setResult(r); setError(""); })
         .catch((e) => { if (!ctrl.signal.aborted) setError((e as Error).message); });
     }, q ? 300 : 0);
@@ -64,11 +64,11 @@ export function PeoplePanel({ onSuspend }: { onSuspend: (p: Person, done: () => 
   return (
     <div className="stack admin__team">
       <p className="muted small">
-        Solo lo ve la administración general. Buscá por nombre, ID de la cuenta o mail exacto. El mail no se muestra.
+        Solo lo ve la administración general. Buscá por nombre, ID de la cuenta, código de una captura o mail exacto. El mail no se muestra.
       </p>
       <label className="field">
         <span>Buscar</span>
-        <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} autoCapitalize="off" autoCorrect="off" placeholder="Nombre, ID o mail" />
+        <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} autoCapitalize="off" autoCorrect="off" placeholder="Nombre, ID, código o mail" />
       </label>
       <div className="chips" role="group" aria-label="Mostrar">
         {FILTERS.map((f) => (

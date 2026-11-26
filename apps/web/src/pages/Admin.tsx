@@ -6,6 +6,7 @@ import { Avatar } from "../components/Avatar";
 import { BackIcon } from "../components/Icons";
 import { DialogFocus } from "../components/DialogFocus";
 import { PERMISSION_LABELS } from "../staff";
+import { AccountSearch } from "../features/moderation/AccountSearch";
 import { PeoplePanel } from "../features/moderation/PeoplePanel";
 import { ModerationNotices } from "../features/moderation/ModerationNotices";
 import { ReportSpamAlerts } from "../features/moderation/ReportSpamAlerts";
@@ -77,6 +78,7 @@ export function Admin() {
   const [suspended, setSuspended] = useState<Suspended[] | null>(null);
   const [removed, setRemoved] = useState<RemovedGroup[] | null>(null);
   const [suspending, setSuspending] = useState<SuspendTarget | null>(null);
+  const [searchVersion, setSearchVersion] = useState(0);
   const [removing, setRemoving] = useState<Report | null>(null);
   const [error, setError] = useState("");
   // Hasta que termina la primera carga no se muestra el panel; si el servidor dice que no hay permiso, se sale.
@@ -180,6 +182,16 @@ export function Admin() {
           })}
           onRemoveGroup={setRemoving}
         />
+      )}
+
+      {tab === "suspended" && has("sanctions") && (
+        <section className="rcard" aria-label="Buscar cuenta por ID">
+          <h2 className="small">Buscar cuenta por ID</h2>
+          <p className="muted small">El código de una captura sirve para buscar la cuenta. Revisá el contexto antes de suspender.</p>
+          <AccountSearch key={searchVersion} onSelect={(a) => setSuspending({
+            url: `/admin/users/${encodeURIComponent(a.id)}/suspend`, name: a.name, reason: "", preventive: false, done: () => setSearchVersion((v) => v + 1),
+          })} />
+        </section>
       )}
 
       {tab === "suspended" && suspended && (
@@ -315,7 +327,7 @@ export function Admin() {
         <PeoplePanel onSuspend={(p, done) => setSuspending({ url: `/admin/users/${p.id}/suspend`, name: p.name, reason: "", preventive: false, done })} />
       )}
 
-      {tab === "team" && team && <Team team={team} onChange={load} />}
+      {tab === "team" && team && <Team team={team} onChange={load} onPeople={() => setTab("people")} />}
 
       {tab === "log" && log && (
         log.length === 0 ? (
@@ -389,6 +401,11 @@ function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onC
         <p className="muted small">Se cierran sus sesiones, deja de aparecer en la app y se cierran sus reportes abiertos. También se borran sus mensajes en grupos y todo lo que subió: fotos, álbumes, videos y fotos que mandó por privado. Lo que sea prueba de un reporte queda guardado. La cuenta se puede reactivar después, pero lo borrado no vuelve.</p>
         {preventive && (
           <p className="small">Es una <b>suspensión preventiva</b>: hacela si hay indicios de que es menor de edad. Después alguien con el permiso Suspensiones la revisa y decide si se mantiene.</p>
+        )}
+        {!preventive && (
+          <button type="button" className="btn btn--small" disabled={busy} onClick={() => setReason("Filtración de fotos de álbum")}>
+            Usar motivo «Filtración de fotos de álbum»
+          </button>
         )}
         <label className="field">
           <span>Motivo (la persona lo va a ver)</span>
@@ -488,9 +505,7 @@ function ResolveAppealDialog({ appeal, decision, onClose, onDone }: {
 }
 
 /** Equipo de moderación: dar, cambiar y sacar permisos chicos. Solo la administración general. */
-function Team({ team, onChange }: { team: TeamMember[]; onChange: () => void }) {
-  const [account, setAccount] = useState("");
-  const [perms, setPerms] = useState<string[]>([]);
+function Team({ team, onChange, onPeople }: { team: TeamMember[]; onChange: () => void; onPeople: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function save(acc: string, list: string[]) {
@@ -498,8 +513,6 @@ function Team({ team, onChange }: { team: TeamMember[]; onChange: () => void }) 
     setError("");
     try {
       await api("/admin/team", { method: "POST", json: { account: acc, permissions: list } });
-      setAccount("");
-      setPerms([]);
       onChange();
     } catch (e) {
       setError((e as Error).message);
@@ -538,22 +551,13 @@ function Team({ team, onChange }: { team: TeamMember[]; onChange: () => void }) 
           ))}
         </ul>
       )}
+      {error && <p className="error" role="alert">{error}</p>}
       <div className="rcard">
         <h2 className="small"><b>Sumar a alguien</b></h2>
-        <label className="field">
-          <span>ID de la cuenta o mail</span>
-          <input className="input" value={account} onChange={(e) => setAccount(e.target.value)} autoCapitalize="off" autoCorrect="off" />
-        </label>
-        {PERMISSION_LABELS.map((p) => (
-          <label key={p.id} className="field--inline small">
-            <input type="checkbox" checked={perms.includes(p.id)} onChange={() => setPerms(toggle(perms, p.id))} />
-            <span><b>{p.label}</b> <span className="muted">· {p.hint}</span></span>
-          </label>
-        ))}
-        {error && <p className="error" role="alert">{error}</p>}
-        <button className="btn btn--primary" disabled={busy || account.trim().length < 3 || perms.length === 0} onClick={() => save(account.trim(), perms)}>
-          Dar permisos
-        </button>
+        <p className="muted small">Buscala en Personas por nombre, ID o mail y tocá Permisos.</p>
+        <div className="rcard__actions">
+          <button className="btn btn--small btn--primary" onClick={onPeople}>Ir a Personas</button>
+        </div>
       </div>
     </div>
   );

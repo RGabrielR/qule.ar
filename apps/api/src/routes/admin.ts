@@ -535,6 +535,22 @@ adminRoutes.get("/admin/groups/removed", requireAccess("owner"), async (c) => {
   })));
 });
 
+// Se usa POST para que los mails y códigos queden fuera de la URL (y de los registros del servidor).
+const accountName = sql<string>`coalesce(${profile.displayName}, ${user.name})`;
+/** El código de ocho caracteres de la marca visible: el comienzo del ID de la cuenta. */
+const SHORT_CODE = /^[a-zA-Z0-9_-]{8}$/;
+
+adminRoutes.post("/admin/accounts/search", requireAccess("sanctions"), async (c) => {
+  const query = z.object({ query: z.string().trim().regex(/^[a-zA-Z0-9_-]{8,64}$/) }).parse(await c.req.json()).query;
+  const fields = { id: user.id, name: accountName, suspendedAt: profile.suspendedAt };
+  // Una cadena de ocho caracteres puede ser también el ID completo de otra cuenta.
+  const matches = await db.select(fields).from(user).innerJoin(profile, eq(profile.userId, user.id))
+    .where(query.length === 8 ? sql`left(${user.id}, 8) = ${query}` : eq(user.id, query)).limit(2);
+  const account = matches.length === 1 ? matches[0] : null;
+  c.header("Cache-Control", "no-store");
+  return c.json({ account, ambiguous: matches.length > 1 });
+});
+
 // ---------- Equipo y registro (solo administración general) ----------
 
 /** Quiénes tienen permisos chicos. */
@@ -580,15 +596,15 @@ adminRoutes.post("/admin/team", requireAccess("owner"), async (c) => {
 });
 
 /**
- * Personas: buscar cuentas por nombre (o por ID o mail exacto) y ver de un vistazo si tienen administración general,
+ * Personas: buscar cuentas por nombre (o por ID, código de la marca visible o mail exacto) y ver de un vistazo si tienen administración general,
  * permisos, una suspensión o si están ocultas por reportes urgentes. Solo para la administración general.
  * Sin búsqueda, cada filtro muestra su lista: equipo, suspendidas, ocultas o las cuentas más nuevas.
  */
-adminRoutes.get("/admin/people", requireAccess("owner"), async (c) => {
+adminRoutes.post("/admin/people", requireAccess("owner"), async (c) => {
   const { q, filter } = z.object({
     q: z.string().trim().max(100).default(""),
     filter: z.enum(["all", "staff", "suspended", "hidden"]).default("all"),
-  }).parse(c.req.query());
+  }).parse(await c.req.json().catch(() => ({})));
   const LIMIT = 40;
   const [owners, staffRows, hidden] = await Promise.all([
     ownerIds(),
@@ -601,7 +617,10 @@ adminRoutes.get("/admin/people", requireAccess("owner"), async (c) => {
   const conds = [];
   if (q) {
     const like = `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
-    conds.push(or(sql`${profile.displayName} ilike ${like}`, eq(user.id, q), sql`lower(${user.email}) = ${q.toLowerCase()}`)!);
+    conds.push(or(
+      sql`${profile.displayName} ilike ${like}`, eq(user.id, q), sql`lower(${user.email}) = ${q.toLowerCase()}`,
+      ...(SHORT_CODE.test(q) ? [sql`left(${user.id}, 8) = ${q}`] : []),
+    )!);
   }
   if (filter === "staff") conds.push(inArray(user.id, [...new Set([...owners, ...perms.keys()])].concat("")));
   if (filter === "suspended") conds.push(isNotNull(profile.suspendedAt));
@@ -621,6 +640,7 @@ adminRoutes.get("/admin/people", requireAccess("owner"), async (c) => {
       : Promise.resolve([]),
   ]);
   const openBy = new Map(open.map((r) => [r.id, r.n]));
+  c.header("Cache-Control", "no-store");
   return c.json({
     people: page.flatMap((r) => {
       const a = people.get(r.id);

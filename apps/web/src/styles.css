@@ -837,3 +837,5 @@ button.quote:hover { background: var(--surface-3); }
 .poll-form__options li { display: flex; align-items: center; gap: 4px; }
 .poll-form__add { align-self: flex-start; min-height: 36px; }
 @media (prefers-reduced-motion: reduce) { .poll__bar { transition: none; } }
+
+.admin-account-detail { overflow-wrap: anywhere; }
