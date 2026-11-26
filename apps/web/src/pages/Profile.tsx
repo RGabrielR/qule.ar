@@ -97,7 +97,7 @@ function ProfileView({ id }: { id: string }) {
   if (missing) {
     return (
       <div className={`page${swipeClass}`} {...swipeProps}>
-        <header className="topbar">
+        <header className="topbar topbar--thread">
           <button className="iconbtn" onClick={() => nav(-1)} aria-label="Volver"><BackIcon /></button>
           {swipe.active && <ProfileSwitcher swipe={swipe} className="topbar__actions" />}
         </header>

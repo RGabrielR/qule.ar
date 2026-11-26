@@ -627,7 +627,7 @@ function GroupChatThread({ id }: { id: string }) {
 
   return (
     <div className="chat">
-      <header className="topbar topbar--linked">
+      <header className="topbar topbar--thread topbar--linked">
         <button type="button" className="iconbtn" onClick={goBack} aria-label="Volver a Grupos"><BackIcon /></button>
         <GroupAvatar name={info.name} photo={info.photo} general={info.isGeneral} size="sm" />
         <div className="topbar__grow">
