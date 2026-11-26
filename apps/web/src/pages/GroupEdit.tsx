@@ -6,11 +6,13 @@ import { GroupPhotoSetting } from "../components/GroupPhoto";
 import { BackIcon } from "../components/Icons";
 import { GroupSettings } from "../features/groups/GroupSettings";
 import { useTabData } from "../features/navigation/tabData";
+import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 
 export function GroupEdit() {
   const { id = "" } = useParams();
   const { state } = useLocation();
   const navigate = useNavigate();
+  const enter = usePageTransition();
   const { refreshGroups } = useTabData();
   const groupPath = `/grupos/${id}`;
   const details = `${groupPath}/info`;
@@ -76,9 +78,10 @@ export function GroupEdit() {
 
   const current = group?.id === id ? group : null;
   return (
-    <div className="page">
+    <div className={`page ${enter}`}>
       <header className="topbar topbar--thread">
         <button type="button" className="iconbtn" onClick={() => {
+          markBack();
           if (state?.fromGroupDetails) navigate(-1);
           else navigate(details, { replace: true });
         }} aria-label="Volver"><BackIcon /></button>

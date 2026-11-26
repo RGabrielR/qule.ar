@@ -8,8 +8,13 @@ import { CheckIcon, FilterIcon, PinIcon, RefreshIcon, StarIcon } from "../compon
 import { LOCATION_EVENT, shareLocation } from "../location";
 import { BODY_TYPES, LOOKING_FOR, POSITIONS, RELATIONSHIP, TRIBES } from "../options";
 import { DialogFocus } from "../components/DialogFocus";
+import { useSheetExit } from "../components/useSheetExit";
 import { getGridList, saveGridList, toGridPerson } from "../features/profileSwipe/gridList";
 import { HasPlaceChips, type HasPlace } from "../features/place/hasPlace";
+import { useTabTransition } from "../features/navigation/pageTransition";
+import { gridPhoto, previewStyle } from "../components/photoPreview";
+import { Skeleton, SkeletonGrid } from "../components/Skeleton";
+import { useArrival } from "../components/useArrival";
 
 export type Filters = {
   ageMin?: number; ageMax?: number;
@@ -75,6 +80,24 @@ type NearbyPosition = { userId: string; query: string; top: number; count: numbe
 const positions = new Map<string, NearbyPosition>();
 const POSITION_LIMIT = 20;
 
+// Lo último que mostró la grilla. Al volver a la pestaña aparece al instante, sin esqueleto ni la entrada completa,
+// y se revalida por detrás: solo las personas nuevas entran animadas (como Instagram y las apps nativas).
+type GridCache = { userId: string; query: string; people: NearbyPerson[]; nextOffset: number | null };
+let gridCache: GridCache | null = null;
+// Las fotos de esa grilla quedan referenciadas, así el navegador las mantiene decodificadas en memoria y al volver
+// se dibujan en el primer cuadro (sobre todo en iPhone, que si no las vuelve a leer del disco).
+const keptPhotos = new Map<string, HTMLImageElement>();
+function keepPhotos(people: NearbyPerson[]) {
+  const urls = new Set(people.flatMap((p) => (p.photo ? [p.photo] : [])));
+  for (const url of keptPhotos.keys()) if (!urls.has(url)) keptPhotos.delete(url);
+  for (const url of urls) {
+    if (keptPhotos.has(url)) continue;
+    const img = new Image();
+    img.src = url;
+    keptPhotos.set(url, img);
+  }
+}
+
 export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
   const { me, reload } = useMe();
   const location = useLocation();
@@ -86,14 +109,20 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
   const entry = filtersEntry ?? location.key;
   const userId = me?.user.id;
   const [filters, setFilters] = useState<Filters>(loadFilters);
-  const [people, setPeople] = useState<NearbyPerson[]>([]);
-  const [nextOffset, setNextOffset] = useState<number | null>(null);
-  const [status, setStatus] = useState<Status>("loading");
+  const [cached] = useState(() => (gridCache && gridCache.userId === userId && gridCache.query === toQuery(filters) ? gridCache : null));
+  const [people, setPeople] = useState<NearbyPerson[]>(() => cached?.people ?? []);
+  // Con qué filtros se pidió la grilla que se ve: si cambian, la grilla nueva entra entera
+  const [peopleQuery, setPeopleQuery] = useState<string | undefined>(cached?.query);
+  // Sube cada vez que se tira para actualizar: la grilla renovada vuelve a entrar entera
+  const [refreshes, setRefreshes] = useState(0);
+  const [nextOffset, setNextOffset] = useState<number | null>(cached?.nextOffset ?? null);
+  const [status, setStatus] = useState<Status>(cached ? "ready" : "loading");
   const [loc, setLoc] = useState<LocState>("ok");
   const [updating, setUpdating] = useState<"idle" | "busy" | "done">("idle");
   const [refreshDistance, setRefreshDistance] = useState(0);
   const [refreshError, setRefreshError] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
+  const enter = useTabTransition();
   const pageRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<AbortController | null>(null);
   const pull = useRef<{ x: number; y: number; distance: number } | null>(null);
@@ -108,6 +137,11 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
     return { ...saved, count: Math.max(saved.count, swiped) };
   });
   const pendingRestore = useRef(returnPosition);
+  // Las fotos entran escalonadas en cada tanda ("Ver más", actualizar). Al volver de un perfil a la misma
+  // posición, no: la grilla tiene que verse como estaba.
+  const arrival = useArrival(status === "ready" ? people.map((p) => p.id) : null, {
+    quietFirst: returnPosition != null, batch: `${peopleQuery}#${refreshes}`, columns: 3,
+  });
   const visible = useRef<{ people: NearbyPerson[]; ready: boolean }>({ people: [], ready: false });
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
@@ -116,6 +150,8 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
   useLayoutEffect(() => {
     if (status !== "ready" || !userId) return;
     saveGridList(entry, { userId, query: toQuery(filtersRef.current), people: people.map(toGridPerson), nextOffset });
+    gridCache = { userId, query: toQuery(filtersRef.current), people, nextOffset };
+    keepPhotos(people);
   }, [entry, userId, people, nextOffset, status]);
 
   useLayoutEffect(() => {
@@ -177,6 +213,8 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
       if (signal.aborted) return;
       setLoc((prev) => (hasLocation ? "ok" : prev === "ok" ? "none" : prev));
       setPeople(loaded);
+      setPeopleQuery(toQuery(f));
+      if (releasedDistance > 0) setRefreshes((n) => n + 1);
       setNextOffset(cursor);
       setStatus("ready");
     } catch {
@@ -298,9 +336,10 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
   const readyToRefresh = pullDistance === REFRESH_DISTANCE;
 
   return (
-    <div ref={pageRef} className="page nearby-page" onTouchStart={startPull} onTouchEnd={endPull} onTouchCancel={cancelPull}>
+    <div ref={pageRef} className={`page nearby-page ${enter}`} onTouchStart={startPull} onTouchEnd={endPull} onTouchCancel={cancelPull}>
       <header className="topbar">
         <h1 className="topbar__title">Gente</h1>
+        {status === "loading" && <Skeleton className="skeleton--btn-sm" />}
         {status === "ready" && (
           <div className="topbar__actions">
             {loc === "ok" && me?.profile?.hasLocation && (
@@ -360,6 +399,8 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
       </div>
       <p className="sr-only" role="status">{refreshing ? "Actualizando…" : readyToRefresh ? "Soltá para actualizar" : ""}</p>
 
+      {status === "loading" && <SkeletonGrid />}
+
       {status === "ready" && people.length === 0 && (
         <div className="empty">
           <p className="empty__title">{active ? "Nadie con esos filtros" : "Todavía no hay nadie más"}</p>
@@ -375,9 +416,9 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
         <>
           <ul className="grid">
             {people.map((p) => (
-              <li key={p.id}>
-                <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
-                  {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
+              <li key={p.id} {...arrival(p.id)}>
+                <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" style={previewStyle(p.photo)} aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
+                  {p.photo ? <img alt="" loading="lazy" {...gridPhoto(p.photo)} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
                   {p.favorite && <span className="tile__fav" aria-label="Favorito"><StarIcon filled size={14} /></span>}
                   <span className="tile__info">
                     <span className="tile__name">
@@ -446,11 +487,12 @@ function Chips({ label, options, value, onChange }: { label: string; options: st
 export function FilterSheet({ initial, onApply, onClose }: { initial: Filters; onApply: (f: Filters) => void; onClose: () => void }) {
   const [f, setF] = useState<Filters>(initial);
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setF({ ...f, [k]: v });
+  const { close, backdrop } = useSheetExit(onClose);
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
+    <div className="sheet-backdrop" {...backdrop}>
       <div className="sheet sheet--tall" role="dialog" aria-modal aria-labelledby="filters-title" onClick={(e) => e.stopPropagation()}>
-        <DialogFocus onClose={onClose} />
+        <DialogFocus onClose={close} />
         <div className="sheet__head">
           <h2 id="filters-title">Filtros</h2>
           <button className="linkbtn" onClick={() => setF(EMPTY)}>Limpiar</button>
@@ -480,8 +522,8 @@ export function FilterSheet({ initial, onApply, onClose }: { initial: Filters; o
           <p className="muted small">Los filtros de altura, peso y demás dejan afuera a quien no completó ese dato.</p>
         </div>
         <div className="row sheet__foot">
-          <button className="btn" onClick={onClose}>Cancelar</button>
-          <button className="btn btn--primary" onClick={() => onApply(f)}>Aplicar</button>
+          <button className="btn" onClick={() => close()}>Cancelar</button>
+          <button className="btn btn--primary" onClick={() => close(() => onApply(f))}>Aplicar</button>
         </div>
       </div>
     </div>

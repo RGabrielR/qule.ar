@@ -10,6 +10,7 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { BackIcon, DotsIcon, ImageIcon, LockIcon, SendIcon, TimerIcon } from "../components/Icons";
 import { useSectionBack } from "../useSectionBack";
+import { usePageTransition } from "../features/navigation/pageTransition";
 import { useMessageActions } from "../features/chat/useMessageActions";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
@@ -21,6 +22,7 @@ import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../featur
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
 import { Watermark } from "../features/photos/Watermark";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
+import { useNewArrivals } from "../features/messages/useNewArrivals";
 import { useConversationActions } from "../features/messages/ConversationActions";
 import { ConversationHeaderMenu } from "../features/messages/ConversationHeaderMenu";
 import { chatDateFormat, chatDay, useChatToday } from "../features/messages/chatDates";
@@ -49,6 +51,7 @@ function ConversationThread({ id }: { id: string }) {
   const pending = usePending(privateOutbox, scope);
   const nav = useNavigate();
   const goBack = useSectionBack("/mensajes");
+  const enter = usePageTransition();
   const [details, setDetails] = useState<{ id: string; other?: ChatContact; muted: boolean }>();
   const other = details?.id === id ? details.other : undefined;
   const muted = details?.id === id && details.muted;
@@ -80,6 +83,9 @@ function ConversationThread({ id }: { id: string }) {
   const myId = me?.user.id;
   const albumNoticeTime = useAlbumNoticeTime(messages);
   const today = useChatToday();
+  // Los mensajes que llegan después de abrir el chat entran animados (el historial no)
+  const [historyReady, setHistoryReady] = useState(false);
+  const { arrivals, settle } = useNewArrivals(messages.map((m) => m.idempotencyKey ?? m.id), historyReady, id);
 
   useEffect(() => {
     setPhotoMessageId(null);
@@ -105,6 +111,7 @@ function ConversationThread({ id }: { id: string }) {
       beforeHistory = null;
       setMessages(loaded);
       setHasMore(d.hasMore);
+      setHistoryReady(true);
       // Al abrir el chat, marcá también los mensajes anteriores a la página de historial.
       const oldestLoaded = d.messages[0];
       if (oldestLoaded && d.hasMore) receipts.includeOlderMessages(oldestLoaded.id);
@@ -347,7 +354,7 @@ function ConversationThread({ id }: { id: string }) {
     ((seen.readAtById.get(lastMine.id) ?? "") >= lastMine.createdAt || (seen.through && compareDmOrder(lastMine, seen.through) <= 0))));
 
   return (
-    <div className="chat">
+    <div className={`chat ${enter}`}>
       <header className="topbar topbar--thread topbar--linked">
         <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
         {other && (
@@ -391,8 +398,15 @@ function ConversationThread({ id }: { id: string }) {
           const quoted = m.replyTo;
           // Mantener apretado (o clic derecho) abre las acciones. Los avisos de álbum y lo que todavía se está mandando no.
           const gesture = !albumNotice && !entry;
+          const key = m.idempotencyKey ?? m.id;
+          const arrived = arrivals.has(key);
           const bubble = (
-            <div id={`dm-${m.id}`} className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""} ${gesture ? "message-gesture" : ""}`} {...(gesture && messageActions(m.id))}>
+            <div
+              id={`dm-${m.id}`}
+              className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""} ${gesture ? "message-gesture" : ""} ${arrived ? "bubble--new" : ""}`}
+              {...(gesture && messageActions(m.id))}
+              onAnimationEnd={arrived ? (e) => e.target === e.currentTarget && settle(key) : undefined}
+            >
               {quoted && (quoted.authorName && loadedMessageIds.has(quoted.id) ? (
                 <button
                   type="button"
@@ -474,7 +488,7 @@ function ConversationThread({ id }: { id: string }) {
             </div>
           );
           return (
-            <Fragment key={m.idempotencyKey ?? m.id}>
+            <Fragment key={key}>
               {startsDay && <time className="chat__date" dateTime={day}>{day === today ? "Hoy" : chatDateFormat.format(sentAt)}</time>}
               {bubble}
             </Fragment>

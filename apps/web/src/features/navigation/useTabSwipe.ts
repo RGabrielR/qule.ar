@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type TouchEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { markTabSwipe } from "./pageTransition";
 
 export const TAB_PATHS = ["/cerca", "/grupos", "/mensajes", "/yo"] as const;
 const EDGE_GUTTER = 24;
@@ -87,6 +88,8 @@ export function useTabSwipe() {
     if (!next || !main.current) return cancel();
     start.current = null;
     nextOffset.current = step * (main.current.clientWidth - Math.abs(offset.current));
+    // La pestaña nueva ya entra deslizándose: sin el fundido de cambiar de pestaña
+    markTabSwipe();
     void navigate(next);
   }
 

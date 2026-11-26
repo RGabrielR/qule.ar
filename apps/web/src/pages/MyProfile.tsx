@@ -12,6 +12,7 @@ import { preparePhotoForCrop } from "../features/photos/preparePhoto";
 import { HasPlaceSelect } from "../features/place/hasPlace";
 import { AlbumHeader, MoveTo, NewAlbum } from "../features/photos/AlbumHeader";
 import { useEditorKeyboard } from "../features/profile/useEditorKeyboard";
+import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 import { BODY_TYPES, HIV_STATUS, LOOKING_FOR, POSITIONS, PRONOUNS, RELATIONSHIP, TRIBES } from "../options";
 
 type Form = Omit<Profile, "birthdate" | "age">;
@@ -107,6 +108,7 @@ export function EditProfile() {
 
 function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; photos: Photos; albums: MyAlbum[]; reload: () => Promise<void> }) {
   const navigate = useNavigate();
+  const enter = usePageTransition();
   const keyboardOpen = useEditorKeyboard();
   const [params] = useSearchParams();
   const isNew = params.get("nuevo") === "1";
@@ -150,6 +152,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
 
   function leave() {
     if (JSON.stringify(form) !== JSON.stringify(initialForm) && !confirm("¿Descartar los cambios de Sobre vos?")) return;
+    markBack();
     navigate("/yo", { replace: true });
   }
 
@@ -160,6 +163,8 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
     try {
       await api("/me/profile", { method: "PUT", json: form });
       await reload();
+      // Guardar también vuelve a Mi perfil: entra desde la izquierda
+      markBack();
       navigate("/yo", { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No pudimos guardar los cambios. Probá de nuevo.");
@@ -350,7 +355,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
   const photoNotice = photoError && <div className="toast toast--upload-error" role="alert">{photoError}</div>;
 
   return (
-    <div className="page profile-editor" data-keyboard-open={keyboardOpen || undefined}>
+    <div className={`page profile-editor ${enter}`} data-keyboard-open={keyboardOpen || undefined}>
       <header className="topbar topbar--thread">
         <button type="button" className="iconbtn" aria-label="Volver a Mi perfil" onClick={leave} disabled={mediaLocked}><BackIcon /></button>
         <h1 className="topbar__title">Editar perfil</h1>

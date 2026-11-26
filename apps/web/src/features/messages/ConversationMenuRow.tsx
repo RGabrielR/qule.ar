@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
 import type { ConversationSummary } from "../../api";
 import type { ConversationAction } from "./ConversationActions";
@@ -7,8 +7,11 @@ import { ConversationMenu } from "./ConversationMenu";
 const HOLD_MS = 500;
 const MOVE_TOLERANCE = 10;
 
-export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAction }: {
+export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAction, className = "", style }: {
   chat: ConversationSummary;
+  /** Para la entrada escalonada de la fila (`useArrival`). */
+  className?: string;
+  style?: CSSProperties;
   /** La foto va afuera del enlace al chat: abre el perfil. */
   avatar?: ReactNode;
   children: ReactNode;
@@ -30,7 +33,7 @@ export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAc
   useEffect(() => () => cancelPress(), []);
 
   return (
-    <li className="inbox__row">
+    <li className={`inbox__row ${className}`} style={style}>
       {avatar}
       <Link
         ref={link}

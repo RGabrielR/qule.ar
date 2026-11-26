@@ -16,13 +16,24 @@ export function getTheme(): ThemeName {
   return DEFAULT_THEME;
 }
 
-export function setTheme(name: ThemeName) {
+/**
+ * `update`: lo que la pantalla tiene que cambiar junto con el tema (por ejemplo, qué opción queda marcada),
+ * para que entre en la misma transición. Tiene que actualizar el DOM en el momento (flushSync).
+ */
+export function setTheme(name: ThemeName, update?: () => void) {
   try {
     localStorage.setItem(KEY, name);
   } catch {
     // Igual se aplica, aunque no se recuerde
   }
-  applyTheme(name);
+  const apply = () => {
+    applyTheme(name);
+    update?.();
+  };
+  // La pantalla con el tema anterior se funde con la nueva en vez de saltar (ver ::view-transition en styles.css).
+  // Sin soporte del navegador, cambia directo como siempre.
+  if (document.startViewTransition) document.startViewTransition(apply);
+  else apply();
 }
 
 function applyTheme(name: ThemeName) {

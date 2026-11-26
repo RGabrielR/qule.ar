@@ -104,6 +104,24 @@ Tamaños (`font-size: var(--…)`):
 - **Capas** (`z-index: var(--z-…)`), de abajo hacia arriba: `raised` · `sticky` · `menu` · `sheet` · `toast` · `viewer` · `lightbox`.
 - La grilla de gente es de fotos cuadradas, sin espacio entre ellas, con el nombre y el estado encima.
 
+## Movimiento
+
+Las animaciones hacen que la app se sienta fluida, como una app instalada y no como una web. Las curvas y duraciones están en `motion` (`packages/brand`): `--ease-out`, `--ease-in-out`, `--ease-sheet`, `--dur-press`, `--dur-fast`, `--dur-base`, `--dur-page`, `--dur-sheet`, `--stagger` y `--dur-pulse` (el pulso de los esqueletos). No se escriben curvas ni duraciones sueltas.
+
+- **Cambio de pantalla:** la nueva entra desde la derecha (`.page--forward`); al volver con el botón de la app, desde la izquierda (`.page--back`). Lo arma `usePageTransition()` en `features/navigation/pageTransition.ts`. El gesto de volver del sistema no se anima: Safari ya hace el suyo.
+- **Contenido que llega:** sube y aparece (`rise-in`), escalonado por `--stagger` dentro de cada tanda (`useArrival` en `components/useArrival.ts`); en las grillas de fotos, en diagonal y sin subir (`tile-in`). Lo que ya estaba guardado al abrir la pantalla no se anima, y cada fila se anima una sola vez. Las fotos aparecen con un fundido al terminar de cargar (`photoAppear`), sin fundido si ya estaban en caché. En las grillas, al volver, cada ficha muestra primero una versión desenfocada de su foto (`--blur-preview`, `components/photoPreview.ts`) y la nítida se enfoca encima.
+- **No repetir lo ya visto:** la entrada completa de una lista va la primera vez y cuando se fuerza (tirar para actualizar, otros filtros). Al volver a una pantalla, lo guardado aparece al instante y se revalida por detrás; solo lo nuevo entra animado.
+- **Esperas:** esqueletos con la forma de lo que va a llegar, en vez de "Cargando…" (`components/Skeleton.tsx`). Aparecen recién si la espera pasa de un instante y laten despacio con la opacidad; nada de brillos que se desplazan.
+- **Toques:** respuesta inmediata y corta (`--dur-press`). El hover solo en compu (`@media (hover: hover) and (pointer: fine)`).
+- **Hojas:** suben con `--ease-sheet` (`sheet-up`) y al cerrar bajan (`sheet-down`) antes de desmontarse: `useSheetExit` en `components/useSheetExit.ts`.
+- **Menús y fotos a pantalla completa:** crecen desde 0,95 (`menu-in`, desde el botón que los abrió) o 0,96 (`photo-in`).
+- **Avisos:** suben (`rise-in`) o bajan desde arriba (`drop-in`). **Contadores:** `pop-in` al aparecer o cambiar.
+- **Listas:** `useArrival` (`components/useArrival.ts`) y la clase `.arrive`; fotos con `photoAppear` (`components/photoAppear.ts`) o `<Avatar appear>`; esperas con `components/Skeleton.tsx`.
+- Para esperar a que termine una animación desde TS: `motionMs("--dur-base")` (`src/motion.ts`), nunca milisegundos escritos a mano.
+- Solo `transform`, `scale` y `opacity`. Nada de `scale(0)`: lo que aparece arranca de 0,85 o más.
+- Con movimiento reducido (`prefers-reduced-motion`), todo pasa a fundidos simples.
+- Lo que se repite muchas veces por minuto (escribir, pasar fotos rápido) no se anima o se anima casi nada.
+
 ## Íconos
 
 - **De la interfaz** (`Icons.tsx`): de línea, en una base de 24 × 24, trazo de 2 px redondeado y `currentColor` (toman el color del texto). Un ícono nuevo va ahí, con el mismo estilo.

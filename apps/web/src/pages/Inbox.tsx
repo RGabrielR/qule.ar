@@ -10,10 +10,13 @@ import { Avatar } from "../components/Avatar";
 import { useConversationActions } from "../features/messages/ConversationActions";
 import { ConversationMenuRow } from "../features/messages/ConversationMenuRow";
 import { usePullToRefresh } from "../features/navigation/pullToRefresh";
+import { Skeleton, SkeletonRows } from "../components/Skeleton";
+import { useArrival } from "../components/useArrival";
 import { useTabData } from "../features/navigation/tabData";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { useRememberScroll } from "../features/navigation/viewMemory";
 import { useOlderChats } from "../features/messages/useOlderChats";
+import { useTabTransition } from "../features/navigation/pageTransition";
 
 function ago(iso: string) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -85,22 +88,23 @@ export function Inbox() {
     && (!matching || (chat.other != null && matching.has(chat.other.id)))
     && words.every((word) => normalize(chat.other?.name ?? "").includes(word)));
   const { act, dialog, errorNotice } = useConversationActions();
+  const enter = useTabTransition();
   const pageRef = useRef<HTMLDivElement>(null);
   const positionMenu = useMessageMenuPosition(pageRef);
   useRememberScroll(pageRef, list != null);
   const pullRefresh = usePullToRefresh(pageRef, () => refreshConversations("refresh"));
+  // Las filas entran escalonadas cuando llegan; las que ya estaban guardadas al volver a la pestaña, no
+  const arrival = useArrival(filtered?.map((c) => c.id));
 
   return (
-    <div className="page" ref={pageRef}>
+    <div className={`page ${enter}`} ref={pageRef}>
       <header className="topbar"><h1 className="topbar__title">Mensajes</h1></header>
       {errorNotice}
       {pullRefresh}
       {!!list?.length && (
         <div className="searchbar form">
-          <label className="field">
-            <span>Buscar por nombre</span>
-            <input className="input" type="search" value={query} maxLength={60} onChange={(e) => setQuery(e.target.value)} />
-          </label>
+          <input className="input" type="search" placeholder="Buscar por nombre" aria-label="Buscar por nombre" value={query} maxLength={60}
+            onChange={(e) => setQuery(e.target.value)} />
           <div className="inbox-filters" role="group" aria-label="Filtros">
             <button type="button" className={`chip ${filters.favorites ? "chip--on" : ""}`} aria-pressed={filters.favorites}
               onClick={() => setFilters({ ...filters, favorites: !filters.favorites })}>Favoritos</button>
@@ -115,7 +119,15 @@ export function Inbox() {
           </div>
         </div>
       )}
-      {list === null ? null : list.length === 0 ? (
+      {list === null ? (
+        <>
+          <div className="searchbar form skeleton-wait" aria-hidden>
+            <Skeleton className="skeleton--input" />
+            <div className="inbox-filters"><Skeleton className="skeleton--chip" /><Skeleton className="skeleton--chip" /><Skeleton className="skeleton--chip" /></div>
+          </div>
+          <InboxSkeleton />
+        </>
+      ) : list.length === 0 ? (
         <div className="empty">
           <p className="empty__title">Sin mensajes por ahora</p>
           <p className="muted">Tocá la foto de alguien en el chat general para ver su perfil y escribirle.</p>
@@ -125,9 +137,11 @@ export function Inbox() {
           <p className="empty__title">No hay conversaciones que coincidan.</p>
           {anyFilter && <button className="btn btn--small" onClick={() => setView({ unread: false, filters: EMPTY })}>Sacar filtros</button>}
         </div>
+      ) : filtered === undefined ? (
+        <InboxSkeleton />
       ) : (
         <ul className="inbox">
-          {filtered?.map((c) => {
+          {filtered.map((c) => {
             const mine = c.last.senderId === me?.user.id;
             const kind = albumNoticeKind(c.last, albumNoticeTime);
             const preview =
@@ -137,11 +151,12 @@ export function Inbox() {
               : c.last.expiring ? "⏱ Foto temporal"
               : kind === "photo" || c.last.photo ? "📷 Foto"
               : c.last.body;
+            const { className, style } = arrival(c.id);
             return (
-              <ConversationMenuRow key={c.id} chat={c} positionMenu={positionMenu} onAction={(action) => void act(action, c)}
+              <ConversationMenuRow key={c.id} chat={c} className={className} style={style} positionMenu={positionMenu} onAction={(action) => void act(action, c)}
                 avatar={c.other ? (
                   <Link to={`/perfil/${c.other.id}`} className="inbox__avatar" aria-label={`Ver perfil de ${c.other.name}`}>
-                    <Avatar src={c.other.photo ?? null} name={c.other.name} size={52} />
+                    <Avatar src={c.other.photo ?? null} name={c.other.name} size={52} appear />
                   </Link>
                 ) : (
                   <span className="inbox__avatar"><Avatar src={null} name="?" size={52} /></span>
@@ -154,7 +169,7 @@ export function Inbox() {
                   <p className="inbox__preview">{mine && "Vos: "}{preview}</p>
                 </div>
                 {c.muted && <span className="inbox__muted" role="img" aria-label="Chat silenciado"><BellOffIcon /></span>}
-                {c.unread > 0 && <span className="badge badge--inline">{c.unread}</span>}
+                {c.unread > 0 && <span className="badge badge--inline" key={c.unread}>{c.unread}</span>}
               </ConversationMenuRow>
             );
           })}
@@ -176,4 +191,9 @@ export function Inbox() {
       {dialog}
     </div>
   );
+}
+
+/** Mientras llegan los chats: filas con la forma de las de Mensajes (foto de 52 y dos líneas). */
+function InboxSkeleton() {
+  return <SkeletonRows count={8} avatar={52} />;
 }

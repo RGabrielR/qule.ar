@@ -14,6 +14,9 @@ import { reactionLabel } from "../reactions";
 import { ProfileSwitcher } from "../features/profileSwipe/ProfileSwitcher";
 import { useProfileSwipe } from "../features/profileSwipe/useProfileSwipe";
 import { ShareAlbums } from "../features/photos/ShareAlbums";
+import { usePageTransition } from "../features/navigation/pageTransition";
+import { useSectionBack } from "../useSectionBack";
+import { Skeleton, SkeletonText, SkeletonWait } from "../components/Skeleton";
 
 export function ProfilePage() {
   const { id = "" } = useParams();
@@ -24,6 +27,9 @@ export function ProfilePage() {
 function ProfileView({ id }: { id: string }) {
   const nav = useNavigate();
   const location = useLocation();
+  // Deslizar al perfil siguiente reemplaza la pantalla (REPLACE): ahí anima useProfileSwipe, no esto
+  const enter = usePageTransition();
+  const goBack = useSectionBack("/cerca");
   const [p, setP] = useState<PublicProfile | null>(null);
   const [missing, setMissing] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -96,9 +102,9 @@ function ProfileView({ id }: { id: string }) {
 
   if (missing) {
     return (
-      <div className={`page${swipeClass}`} {...swipeProps}>
+      <div className={`page ${enter}${swipeClass}`} {...swipeProps}>
         <header className="topbar">
-          <button className="iconbtn" onClick={() => nav(-1)} aria-label="Volver"><BackIcon /></button>
+          <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
           {swipe.active && <ProfileSwitcher swipe={swipe} className="topbar__actions" />}
         </header>
         <div className="empty"><p className="empty__title">Este perfil no está disponible</p></div>
@@ -107,7 +113,8 @@ function ProfileView({ id }: { id: string }) {
   }
   const content = p && (
     <>
-      <div className="profile__body">
+      {/* El perfil siempre llega después de la espera: el contenido sube suave en vez de reemplazar al esqueleto de golpe */}
+      <div className="profile__body arrive">
         {!p.isMe && (
           <div className="row">
             <button className="btn btn--primary btn--grow" onClick={message}>Mandar mensaje</button>
@@ -196,17 +203,32 @@ function ProfileView({ id }: { id: string }) {
   );
 
   return (
-    <div className={`page profile${swipeClass}`} {...swipeProps}>
+    <div className={`page profile ${enter}${swipeClass}`} {...swipeProps}>
       <ProfileCover
         photos={p?.photos}
         coverPhoto={swipe.current?.coverPhoto}
         displayName={p?.displayName}
         age={p?.age}
         status={p ?? undefined}
-        back={<button className="iconbtn iconbtn--float" onClick={() => nav(-1)} aria-label="Volver"><BackIcon /></button>}
+        back={<button className="iconbtn iconbtn--float" onClick={goBack} aria-label="Volver"><BackIcon /></button>}
         aside={swipe.active && <ProfileSwitcher swipe={swipe} className="profile-switch--cover" />}
       />
-      {content}
+      {content ?? <ProfileSkeleton />}
     </div>
+  );
+}
+
+/** Mientras llega el perfil: los botones de arriba, el texto y la tabla de datos, con su forma. */
+function ProfileSkeleton() {
+  return (
+    <SkeletonWait className="profile__body">
+      <div className="row">
+        <Skeleton className="skeleton--btn skeleton--grow" />
+        <Skeleton className="skeleton--btn skeleton--icon" />
+        <Skeleton className="skeleton--btn skeleton--icon" />
+      </div>
+      <SkeletonText lines={2} />
+      <Skeleton className="skeleton--stats" />
+    </SkeletonWait>
   );
 }
