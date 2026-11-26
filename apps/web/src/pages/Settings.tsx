@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Link } from "react-router";
 import { api, ApiError, authClient, closeSocket, type NotifyKind } from "../api";
 import { useMe } from "../App";
@@ -120,7 +121,7 @@ function NotificationsSetting({ prefs, staff, owner }: { prefs: Partial<Record<N
 
 function ThemeSetting() {
   const [theme, setCurrent] = useState(getTheme);
-  const choose = (t: ThemeName) => { setTheme(t); setCurrent(t); };
+  const choose = (t: ThemeName) => setTheme(t, () => flushSync(() => setCurrent(t)));
   return (
     <section className="section">
       <h2 className="section__title section__title--tight">Apariencia</h2>

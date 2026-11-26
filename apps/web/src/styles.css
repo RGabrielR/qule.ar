@@ -496,6 +496,9 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 @keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
 @keyframes page-back { from { opacity: 0; transform: translateX(-32px); } }
 @keyframes tab-in { from { opacity: 0; transform: scale(0.98); } }
+/* Cambio de tema (theme.ts, con View Transitions): la pantalla vieja se funde con la nueva. Es un fundido, así que
+   también vale con movimiento reducido */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--dur-page); animation-timing-function: var(--ease-in-out); }
 /* Animaciones compartidas: usar estas antes de crear otras (ver "Movimiento" en docs/LOOK.md) */
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } }
