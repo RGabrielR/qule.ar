@@ -150,22 +150,47 @@ export async function purgeRemovedGroups() {
 // ---------- Alertas automáticas: señales de menores en nombres y descripciones ----------
 // No borran ni ocultan nada: crean un reporte urgente para que una persona lo revise. Ver docs/MODERACION.md.
 
-const MINOR_SIGNALS: RegExp[] = [
-  /(?:^|[^\d+])[-−]\s?18\b/, // "-18"
-  /\+\s?1[0-7]\b/, // "+14", "+16" (el "+18" de adultos no cuenta)
-  /\b1[0-7]\s?(?:anos|anitos)\b|\b1[0-7]a\b/, // "15 años", "16a" (pero no "de 15 a 18", que es un horario)
-  /\bsub\s?-?\s?1[0-8]\b/, // "sub 18", "sub-16"
+/** Una señal: el patrón y, si hace falta, cuándo no cuenta según lo que hay antes y después del fragmento. */
+type Signal = { re: RegExp; unless?: (before: string, after: string) => boolean };
+
+/** "no menores", "sin menores", "nada de menores": la palabra aparece para decir lo contrario. */
+const NEGATED = /\b(?:no|sin|ni|nada de)\s+(?:\S+\s+){0,2}$/;
+/** "menores a 40", "menor de 30": una edad adulta después. "menores de 18" sí cuenta. */
+const ADULT_AGE_AFTER = (after: string) => {
+  const m = /^\s*(?:a|de|que)\s+(\d{2})\b/.exec(after);
+  return Boolean(m && Number(m[1]) >= 19);
+};
+
+const MINOR_SIGNALS: Signal[] = [
+  { re: /(?:^|[^\d+])[-−]\s?18\b/ }, // "-18"
+  { re: /\+\s?1[0-7]\b/ }, // "+14", "+16" (el "+18" de adultos no cuenta)
+  { re: /\b1[0-7]\s?(?:anos|anitos)\b|\b1[0-7]a\b/ }, // "15 años", "16a" (pero no "de 15 a 18", que es un horario)
+  { re: /\bsub\s?-?\s?1[0-8]\b/ }, // "sub 18", "sub-16"
+  // Sin uso inocente en una app de citas: siempre cuentan
+  { re: /\bmenorcit[oa]s?\b/ },
+  { re: /\bteens?\b/ },
+  // "menores", "menor de edad": salvo negados ("no menores") o con una edad adulta ("menores a 40")
+  { re: /\bmenor(?:es)?(?:\s+de\s+edad)?\b/, unless: (before, after) => NEGATED.test(before) || ADULT_AGE_AFTER(after) },
+  // "secundaria", "liceo": solo como estudiante ("voy a la secundaria", "estoy en el liceo", "termino el secundario"),
+  // no "perfil secundario" ni "exalumnos del liceo"
+  { re: /\b(?:voy a|vamos a|estoy en|estamos en|estudio en|sigo en|ando en|curso|cursando|termino|terminando)\s+(?:\S+\s+){0,3}?(?:secundari[oa]|liceo)\b/ },
 ];
+
+/** El primer fragmento que dispara alguna señal, o null. Revisa todas las apariciones, no solo la primera. */
+function findSignal(text: string, signals: Signal[]): string | null {
+  for (const { re, unless } of signals) {
+    for (const m of text.matchAll(new RegExp(re.source, re.flags.replace("g", "") + "g"))) {
+      if (unless?.(text.slice(0, m.index), text.slice(m.index + m[0].length))) continue;
+      return m[0].trim();
+    }
+  }
+  return null;
+}
 
 /** Devuelve el fragmento que dispara la alerta, o null. Ignora mayúsculas y tildes. */
 export function minorSignal(text: string | null | undefined): string | null {
   if (!text) return null;
-  const t = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  for (const re of MINOR_SIGNALS) {
-    const m = re.exec(t);
-    if (m) return m[0].trim();
-  }
-  return null;
+  return findSignal(text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""), MINOR_SIGNALS);
 }
 
 export const AUTO_DETAILS_PREFIX = "Alerta automática";
@@ -217,7 +242,7 @@ export async function checkMinorSignals(
 
 type ForbiddenKind = "menores" | "venta" | "servicios";
 
-const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: RegExp[] }[] = [
+const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: Signal[] }[] = [
   {
     kind: "menores",
     message: "No se pueden crear grupos que sugieran menores de edad. qule.ar es solo para mayores de 18.",
@@ -226,7 +251,7 @@ const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: RegExp[
   {
     kind: "servicios",
     message: "No se pueden crear grupos para ofrecer masajes, acompañantes ni servicios sexuales.",
-    patterns: [/\bmasaj\w*/, /\bescorts?\b/, /\bacompanantes?\b/, /\bprepagos?\b/, /\btrabajo sexual\b/, /\bservicios? sexual\w*/],
+    patterns: [/\bmasaj\w*/, /\bescorts?\b/, /\bacompanantes?\b/, /\bprepagos?\b/, /\btrabajo sexual\b/, /\bservicios? sexual\w*/].map((re) => ({ re })),
   },
   {
     kind: "venta",
@@ -234,7 +259,7 @@ const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: RegExp[
     patterns: [
       /\bvend(?:o|e|emos|en|er|edor\w*)\b/, /\bventas?\b/, /\bcompr(?:o|amos|a y venta)\b/, /\bprecios?\b/,
       /\$\s?\d/, /\bofertas?\b/, /\bcobr(?:o|amos)\b/, /\bdelivery\b/, /\bstock\b/, /\bmayorista\w*/,
-    ],
+    ].map((re) => ({ re })),
   },
 ];
 
@@ -246,10 +271,8 @@ export function forbiddenGroupText(...texts: (string | null | undefined)[]) {
     if (!raw) continue;
     const t = normalize(raw);
     for (const rule of FORBIDDEN_GROUP) {
-      for (const re of rule.patterns) {
-        const m = re.exec(t) ?? re.exec(raw);
-        if (m) return { kind: rule.kind, hit: m[0].trim(), message: rule.message };
-      }
+      const hit = findSignal(t, rule.patterns) ?? findSignal(raw.toLowerCase(), rule.patterns);
+      if (hit) return { kind: rule.kind, hit, message: rule.message };
     }
   }
   return null;

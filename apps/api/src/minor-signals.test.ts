@@ -20,7 +20,10 @@ after(async () => {
 });
 
 test("las palabras ambiguas no disparan alertas ni bloquean el nombre de un grupo", () => {
-  for (const text of ["Menores a 40", "Me gustan más chicos, pero no menores de edad", "Perfil secundario", "Exalumnos del liceo"]) {
+  for (const text of [
+    "Menores a 40", "Me gustan más chicos, pero no menores de edad", "Nada de menores", "Sin menores, solo +18",
+    "Perfil secundario", "Exalumnos del liceo", "Lo conocí en la secundaria hace 20 años",
+  ]) {
     assert.equal(moderation.minorSignal(text), null, text);
     assert.equal(moderation.forbiddenGroupText(text), null, text);
   }
@@ -28,6 +31,17 @@ test("las palabras ambiguas no disparan alertas ni bloquean el nombre de un grup
 
 test("se conservan las señales con edades concretas", () => {
   for (const text of ["+14", "-18", "15 años", "16a", "sub 18"]) {
+    assert.ok(moderation.minorSignal(text), text);
+    assert.equal(moderation.forbiddenGroupText(text)?.kind, "menores", text);
+  }
+});
+
+test("siguen saltando las palabras que apuntan a menores", () => {
+  for (const text of [
+    "Menorcitos", "Teens CABA", "teen", "busco menores", "Menores de 18", "menor de edad", "Pasivo menor",
+    "No me importa, busco menores", "Voy a la secundaria", "Estoy en 5to de la secundaria", "Termino el secundario",
+    "Estoy en el liceo",
+  ]) {
     assert.ok(moderation.minorSignal(text), text);
     assert.equal(moderation.forbiddenGroupText(text)?.kind, "menores", text);
   }

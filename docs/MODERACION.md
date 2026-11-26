@@ -42,7 +42,7 @@ En Argentina, una plataforma no responde por lo que publican otras personas **mi
 
 Un grupo **no se puede crear ni editar** si el nombre o la descripción apuntan a:
 
-- **menores** ("+14", "-18", "15 años", "sub 18"…). Además, el intento le llega a moderación como alerta urgente sobre quien lo intentó;
+- **menores** ("+14", "-18", "15 años", "sub 18", "menorcitos", "teens", "busco menores"…). Además, el intento le llega a moderación como alerta urgente sobre quien lo intentó;
 - **vender o comprar** cosas o servicios ("vendo", "venta", "precio", "$ 500", "stock", "delivery"…);
 - **masajes, acompañantes o servicios sexuales**.
 
@@ -58,7 +58,12 @@ Los grupos que **ya existían** con esos nombres se revisan al arrancar la app y
 
 La app revisa los nombres y las descripciones de los **perfiles y los grupos** cuando se crean o se editan. Si encuentra señales de que puede haber menores, crea un reporte urgente por "menor de edad", marcado como "Alerta automática de la app", y avisa a moderación. **No borra ni oculta nada sola:** lo decide una persona.
 
-El filtro busca señales con edades concretas, como "-18", "+14", "15 años", "16a" o "sub 18". Frases como "menores a 40", "no menores de edad" y "perfil secundario" no generan alertas por sí solas. Si ves algo preocupante, reportalo desde la app. La lista está en `MINOR_SIGNALS` (`apps/api/src/moderation.ts`).
+Busca edades concretas ("-18", "+14" y cualquier "+" seguido de un número menor de 18, "15 años", "16a", "sub 18"), "menorcito/s" y "teen/s", que no tienen uso inocente en una app de citas, y además:
+
+- **"menores" o "menor de edad"**, salvo negados ("no menores", "sin menores", "nada de menores") o con una edad adulta ("menores a 40"). "Menores de 18" sí cuenta.
+- **"secundaria", "secundario" o "liceo"**, solo como estudiante ("voy a la secundaria", "estoy en el liceo", "termino el secundario"). "Perfil secundario" o "exalumnos del liceo" no cuentan.
+
+La lista está en `MINOR_SIGNALS` (`apps/api/src/moderation.ts`). Si aparece una señal nueva, se suma ahí, con su caso en `minor-signals.test.ts`.
 
 ## Reportes de mala fe
 

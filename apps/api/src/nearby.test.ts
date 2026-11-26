@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 /**
  * La grilla de Cerca filtra y ordena en Postgres (routes/nearby.ts). Esta prueba arma miles de perfiles al azar
@@ -298,5 +298,15 @@ test("Mensajes: de las personas con chat, solo las que cumplen los filtros de pe
     const got = await chatPeopleMatching(ME, f) ?? others;
     assert.deepEqual([...got].sort(), expected.sort(), JSON.stringify(q));
   }
+
+  // Quien oculta su edad no aparece con un filtro de edad en Mensajes: si no, achicando el rango se deduciría (#263)
+  const hider = others[0];
+  const age = ageFrom(all.get(hider)!.birthdate);
+  const exact = parseNearbyFilters({ ageMin: String(age), ageMax: String(age) });
+  assert.ok((await chatPeopleMatching(ME, exact))?.includes(hider), "con la edad visible, el rango exacto la encuentra");
+  await db.update(schema.profile).set({ showAge: false }).where(eq(schema.profile.userId, hider));
+  assert.ok(!(await chatPeopleMatching(ME, exact))?.includes(hider), "con la edad oculta, ningún rango la encuentra");
+  assert.ok(!(await chatPeopleMatching(ME, parseNearbyFilters({ ageMin: "18", ageMax: "99" })))?.includes(hider));
+  await db.update(schema.profile).set({ showAge: true }).where(eq(schema.profile.userId, hider));
 });
 
