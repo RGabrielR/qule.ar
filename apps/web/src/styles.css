@@ -500,6 +500,8 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 /* Cambiar de pestaña: sin deslizar (en las apps nativas las pestañas no se mueven), se asienta con un fundido y un
    acercamiento mínimo. Con la curva de las hojas, que no es tan brusca al principio, para que el fundido se llegue a ver */
 .page--tab { animation: tab-in var(--dur-page) var(--ease-sheet) backwards; }
+/* Mientras espera a sus fotos (Gente al volver), la entrada queda en su primer cuadro y arranca todo junto */
+.page--hold { animation-play-state: paused; }
 @keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
 @keyframes page-back { from { opacity: 0; transform: translateX(-32px); } }
 @keyframes tab-in { from { opacity: 0; transform: scale(0.98); } }
