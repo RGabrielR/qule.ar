@@ -2,7 +2,7 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db, schema } from "./db/index.js";
 import { pushTo } from "./push.js";
 import { notifyStaff } from "./staff.js";
-import { deleteImage } from "./storage.js";
+import { deleteImage, deleteReportCapture } from "./storage.js";
 import { forgetFile } from "./fileCache.js";
 import { reportCounts } from "./reportSpam.js";
 
@@ -97,8 +97,11 @@ async function stillInUse(key: string) {
 /** Al descartar reportes: se borra la copia del texto y los archivos que ya nadie usa ni son prueba de otro reporte. */
 export async function releaseEvidence(reportIds: string[]) {
   if (!reportIds.length) return;
-  const rows = await db.select({ keys: report.evidenceKeys }).from(report).where(inArray(report.id, reportIds));
-  await db.update(report).set({ messageBody: null, evidenceKeys: [] }).where(inArray(report.id, reportIds));
+  const rows = await db.select({ keys: report.evidenceKeys, capture: report.captureKey }).from(report).where(inArray(report.id, reportIds));
+  await db.update(report).set({ messageBody: null, evidenceKeys: [], captureKey: null, photoMatch: null }).where(inArray(report.id, reportIds));
+  for (const { capture } of rows) {
+    if (capture) await deleteReportCapture(capture);
+  }
   for (const key of new Set(rows.flatMap((r) => r.keys))) {
     if (!(await isEvidence(key)) && !(await stillInUse(key))) await deleteImage(key);
   }

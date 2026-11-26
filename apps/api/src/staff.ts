@@ -8,6 +8,7 @@
 //     Ante un reporte abierto por menor de edad, también suspender de forma preventiva (la revisa alguien con sanctions).
 //   · sanctions: suspender y reactivar cuentas.
 //   · appeals: revisar pedidos de revisión de suspensiones (mantener o levantar la medida).
+//   · photoVerification: verificar fotos de los reportes junto con el permiso reports.
 // Nadie con permisos chicos ve mails, IPs ni datos de salud, ni puede tocar grupos o permisos.
 import { eq, inArray, sql } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
@@ -17,7 +18,7 @@ import { env } from "./env.js";
 import type { AppEnv } from "./lib.js";
 import { pushTo } from "./push.js";
 
-export const STAFF_PERMISSIONS = ["reports", "sanctions", "appeals"] as const;
+export const STAFF_PERMISSIONS = ["reports", "sanctions", "appeals", "photoVerification"] as const;
 export type StaffPermission = (typeof STAFF_PERMISSIONS)[number];
 export type Access = StaffPermission | "owner";
 

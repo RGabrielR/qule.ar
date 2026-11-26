@@ -189,6 +189,10 @@ export const report = pgTable("report", {
   // Cifrada (ver src/crypt.ts): no se puede comparar en la base, se compara después de leerla
   messageBody: encryptedMessageText("message_body"),
   evidenceKeys: jsonb("evidence_keys").$type<string[]>().notNull().default([]),
+  captureKey: text("capture_key"),
+  photoMatch: jsonb("photo_match").$type<{ photoId: string; viewerId: string; variant: "photo" | "thumb"; at: string }>(),
+  moderatorResponse: encryptedMessageText("moderator_response"),
+  respondedAt: timestamp("responded_at", { withTimezone: true }),
   reason: text("reason").notNull(),
   details: text("details"),
   status: text("status").notNull().default("open"), // open | dismissed | actioned

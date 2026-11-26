@@ -11,6 +11,7 @@ import { pushEnabled, pushTo, vapidPublicKey } from "../push.js";
 import { disconnectUser, emitToGroup, emitToUser } from "../realtime.js";
 import { deleteImage } from "../storage.js";
 import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
+import { canVerifyReportPhoto, reportPhotoRoutes, requireVerifiedPhotoAction } from "./reportPhotos.js";
 import { removeGroup } from "./groups.js";
 import { alertKey, dismissableReportsBy, mutedReporterList, mutedReporters, REPORT_SPAM_IGNORED, reportCounts, REPORTS_MUTED, REPORTS_UNMUTED, reportSpamAlerts, resolveAlert, resolveMuted } from "../reportSpam.js";
 import { AUTO_SUSPENDED, pendingAutoSuspensions } from "../autoSuspend.js";
@@ -70,6 +71,8 @@ adminRoutes.delete("/push/subscribe", requireUser, async (c) => {
 
 adminRoutes.use("/admin/*", requireUser, requireAccess("owner", ...STAFF_PERMISSIONS));
 
+adminRoutes.route("/admin/reports/:id/photo-verification", reportPhotoRoutes);
+
 adminRoutes.get("/admin/stats", async (c) => {
   const count = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
   return c.json({
@@ -84,7 +87,10 @@ adminRoutes.get("/admin/stats", async (c) => {
 /** Reportes, con el mensaje reportado (si hay) y el historial de la persona reportada. */
 adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (c) => {
   // Quién reportó solo lo ve la administración general: al resto no le hace falta para decidir
-  const owner = (await accessFor(c.get("user"))).includes("owner");
+  const actor = c.get("user").id;
+  const access = await accessFor(c.get("user"));
+  const owner = access.includes("owner");
+  const canVerifyPhotos = access.includes("reports") && access.includes("photoVerification");
   const status = c.req.query("status") === "closed" ? "closed" : "open";
   const rows = await db
     .select()
@@ -189,7 +195,9 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
       automatic: !r.reporterId && (r.details ?? "").startsWith(AUTO_DETAILS_PREFIX),
       targetSuspendedAt: suspended.get(tid) ?? null,
       targetReportCount: totalBy.get(tid) ?? 0,
-      evidenceFiles: r.evidenceKeys.length,
+      evidenceFiles: r.evidenceKeys.length + Number(Boolean(r.captureKey)),
+      photoVerification: canVerifyPhotos && canVerifyReportPhoto(r, actor),
+      photoEvidence: Boolean(r.captureKey || r.photoMatch),
       urgent: isUrgent(r.reason),
       targetAutoHidden: hidden.has(tid),
       // Varias personas la reportaron por lo mismo: si nadie lo revisa, se suspende sola en esta fecha
@@ -297,7 +305,16 @@ adminRoutes.post("/admin/reports/:id/dismiss", requireAccess("reports"), async (
 
 /** Borrar el mensaje reportado. */
 adminRoutes.post("/admin/reports/:id/delete-message", requireAccess("reports"), async (c) => {
-  const [r] = await db.select().from(report).where(eq(report.id, c.req.param("id")));
+  const id = c.req.param("id");
+  const verification = c.req.header("content-type")?.startsWith("application/json")
+    ? z.object({ verified: z.literal(true), reason: z.string().trim().min(3, "Escribí un motivo").max(300) }).parse(await c.req.json())
+    : null;
+  const actor = c.get("user");
+  if (verification && !(await accessFor(actor)).includes("photoVerification")) {
+    throw new HTTPException(403, { message: "No tenés permiso para verificar fotos" });
+  }
+  const [r] = verification ? [await requireVerifiedPhotoAction(id, actor.id)] : await db.select().from(report).where(eq(report.id, id));
+  if (verification && r?.status !== "open") throw new HTTPException(409, { message: "Este reporte ya se resolvió" });
   if (!r?.messageId) throw new HTTPException(400, { message: "Este reporte no tiene mensaje" });
   if (r.messageKind === "group") {
     const [m] = await db.update(groupMessage).set({ status: "deleted", body: "" }).where(eq(groupMessage.id, r.messageId)).returning();
@@ -325,7 +342,7 @@ adminRoutes.post("/admin/reports/:id/delete-message", requireAccess("reports"), 
   const same = await db.select({ id: report.id }).from(report)
     .where(and(eq(report.messageId, r.messageId), eq(report.status, "open")));
   await closeReports([r.id, ...same.map((x) => x.id)], c.get("user").id, "actioned", "Mensaje borrado");
-  await logAction(c.get("user").id, "Borró un mensaje reportado", r.id);
+  await logAction(actor.id, "Borró un mensaje reportado", r.id, verification?.reason);
   return c.json({ ok: true });
 });
 
@@ -359,13 +376,17 @@ async function pendingReview(ids: string[]): Promise<Map<string, "preventive" | 
 
 /** Suspender una cuenta: se cierran sus sesiones, deja de aparecer y se borra lo que publicó. Cierra sus reportes abiertos. */
 adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports"), async (c) => {
-  const { reason } = z.object({ reason: z.string().trim().min(3, "Escribí un motivo").max(300) }).parse(await c.req.json());
-  await suspendAccount(c.get("user"), c.req.param("id"), reason);
+  const { reason, photoReportId } = z.object({
+    reason: z.string().trim().min(3, "Escribí un motivo").max(300),
+    // Desde una foto verificada con la marca invisible (ver reportPhotos.ts)
+    photoReportId: z.string().max(200).optional(),
+  }).parse(await c.req.json());
+  await suspendAccount(c.get("user"), c.req.param("id"), reason, photoReportId);
   return c.json({ ok: true });
 });
 
 /** Suspende una cuenta: desde un reporte, o desde una alerta de spam de reportes (ver /admin/report-spam). */
-async function suspendAccount(admin: StaffUser, target: string, reason: string) {
+async function suspendAccount(admin: StaffUser, target: string, reason: string, photoReportId?: string) {
   if (target === admin.id) throw new HTTPException(400, { message: "No podés suspenderte a vos" });
   const mine = await accessFor(admin);
   const preventive = !mine.includes("sanctions");
@@ -385,6 +406,13 @@ async function suspendAccount(admin: StaffUser, target: string, reason: string) 
   if ((await accessFor(t)).length > 0 && !mine.includes("owner")) {
     throw new HTTPException(403, { message: "Solo la administración general puede suspender a alguien del equipo" });
   }
+  if (photoReportId) {
+    if (preventive || !mine.includes("reports") || !mine.includes("photoVerification")) {
+      throw new HTTPException(403, { message: "No tenés permiso para aplicar esta medida" });
+    }
+    const r = await requireVerifiedPhotoAction(photoReportId, admin.id, target);
+    if (r.status !== "open") throw new HTTPException(409, { message: "Este reporte ya se resolvió" });
+  }
   const [p] = await db.update(profile).set({ suspendedAt: new Date(), suspendReason: reason, suspendedBy: admin.id })
     .where(eq(profile.userId, target)).returning();
   if (!p) throw new HTTPException(404, { message: "Esa cuenta no existe" });
@@ -397,8 +425,9 @@ async function suspendAccount(admin: StaffUser, target: string, reason: string) 
   await closeReports(open.map((r) => r.id), admin.id, "actioned", `Cuenta suspendida: ${reason}`);
   // Después se borra lo público: mensajes en grupos, fotos, álbumes, videos y fotos por privado (ver suspension.ts)
   const purged = await purgeSuspendedContent(target);
+  const reportReference = photoReportId ? ` · Reporte ${photoReportId}` : "";
   await logAction(admin.id, preventive ? PREVENTIVE : SUSPENDED, target,
-    `${reason} · Se borraron ${purged.groupMessages} mensajes en grupos y ${purged.files} archivos`);
+    `${reason}${reportReference} · Se borraron ${purged.groupMessages} mensajes en grupos y ${purged.files} archivos`);
   if (preventive) {
     await notifyStaff(
       "sanctions",
@@ -620,8 +649,11 @@ adminRoutes.post("/admin/team", requireAccess("owner"), async (c) => {
   if (u.id === me.id) throw new HTTPException(400, { message: "Ya tenés todos los permisos" });
   if (isOwner(u)) throw new HTTPException(400, { message: "Esa cuenta ya tiene administración general" });
   const perms = [...new Set(permissions)];
+  if (perms.includes("photoVerification") && !perms.includes("reports")) {
+    throw new HTTPException(400, { message: "Verificar fotos también requiere el permiso Reportes" });
+  }
   await grant(u.id, perms, me.id);
-  const names: Record<string, string> = { reports: "Reportes", sanctions: "Suspensiones", appeals: "Revisiones" };
+  const names: Record<string, string> = { reports: "Reportes", sanctions: "Suspensiones", appeals: "Revisiones", photoVerification: "Verificar fotos" };
   await logAction(me.id, perms.length ? "Cambió permisos" : "Sacó todos los permisos", u.id, perms.map((p) => names[p]).join(", ") || null);
   return c.json({ ok: true });
 });

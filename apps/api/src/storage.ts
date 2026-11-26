@@ -20,7 +20,10 @@ import { clustered } from "./shared.js";
  * hasta que se corra files-encrypt.ts.
  */
 const dir = path.join(env.DATA_DIR, "uploads");
-await mkdir(path.join(dir, "thumbs"), { recursive: true });
+await Promise.all([
+  mkdir(path.join(dir, "thumbs"), { recursive: true }),
+  mkdir(path.join(dir, "report-captures"), { recursive: true }),
+]);
 const THUMB_PX = 480;
 
 const s3 = env.STORAGE === "s3"
@@ -104,6 +107,29 @@ export async function saveImage(input: ArrayBuffer | Buffer): Promise<string> {
 }
 
 const KEY_RE = /^[0-9a-f-]{36}\.webp$/;
+const REPORT_CAPTURE_RE = /^report-captures\/[0-9a-f-]{36}\.webp$/;
+
+export async function saveReportCapture(input: ArrayBuffer): Promise<string> {
+  const photo = sharp(Buffer.from(input), { limitInputPixels: MAX_INPUT_PIXELS });
+  const { format, pages } = await photo.metadata();
+  if (!["jpeg", "png", "webp"].includes(format) || (pages ?? 1) > 1) {
+    throw new Error("Formato de captura inválido");
+  }
+  // Conserva los píxeles de la captura para la verificación y descarta los metadatos.
+  const bytes = await photo.autoOrient().webp({ lossless: true }).toBuffer();
+  const key = `report-captures/${crypto.randomUUID()}.webp`;
+  await putBlob(key, bytes, "image/webp");
+  return key;
+}
+
+export function readReportCapture(key: string) {
+  return REPORT_CAPTURE_RE.test(key) ? getBlob(key) : null;
+}
+
+export async function deleteReportCapture(key: string) {
+  if (REPORT_CAPTURE_RE.test(key)) await deleteBlob(key);
+}
+
 const VIDEO_RE = /^[0-9a-f-]{36}\.mp4$/;
 
 export async function readImage(key: string, size?: "thumb" | "cover"): Promise<Buffer | null> {

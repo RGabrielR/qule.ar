@@ -5,7 +5,7 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { BackIcon } from "../components/Icons";
 import { DialogFocus } from "../components/DialogFocus";
-import { PERMISSION_LABELS } from "../staff";
+import { PERMISSION_LABELS, toggleStaffPermission } from "../staff";
 import { AccountSearch } from "../features/moderation/AccountSearch";
 import { PeoplePanel } from "../features/moderation/PeoplePanel";
 import { ModerationNotices } from "../features/moderation/ModerationNotices";
@@ -180,6 +180,7 @@ export function Admin() {
           onSuspend={(r) => r.target?.id && setSuspending({
             url: `/admin/users/${r.target.id}/suspend`, name: r.target.name, reason: `Reportes por ${r.reason}`, preventive: !has("sanctions"),
           })}
+          onRefresh={load}
           onRemoveGroup={setRemoving}
         />
       )}
@@ -519,7 +520,6 @@ function Team({ team, onChange, onPeople }: { team: TeamMember[]; onChange: () =
     }
     setBusy(false);
   }
-  const toggle = (list: string[], p: string) => (list.includes(p) ? list.filter((x) => x !== p) : [...list, p]);
   return (
     <div className="stack admin__team">
       <p className="muted small">
@@ -539,7 +539,7 @@ function Team({ team, onChange, onPeople }: { team: TeamMember[]; onChange: () =
               <div className="team__perms">
                 {PERMISSION_LABELS.map((p) => (
                   <label key={p.id} className="field--inline small">
-                    <input type="checkbox" disabled={busy} checked={m.permissions.includes(p.id)} onChange={() => save(m.id, toggle(m.permissions, p.id))} />
+                    <input type="checkbox" disabled={busy || (p.id === "photoVerification" && !m.permissions.includes("reports"))} checked={m.permissions.includes(p.id)} onChange={() => save(m.id, toggleStaffPermission(m.permissions, p.id))} />
                     {p.label}
                   </label>
                 ))}

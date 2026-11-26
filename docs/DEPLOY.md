@@ -73,6 +73,10 @@ Se puede cortar y volver a correr: lo que ya está cifrado se saltea. Primero ci
 - **Sin `DATA_KEY` no se pueden ver las fotos**, tampoco las de los backups. Guardala fuera del servidor.
 - **Volver a una imagen anterior** con archivos ya cifrados deja las fotos sin poder verse. Para volver atrás, restaurá también las fotos del backup previo.
 
+### Piloto de marca invisible
+
+`ALBUM_WATERMARK_KEY` activa el piloto de fotos de álbumes privados compartidos. Consultá la [guía para configurarlo y verificar una copia](ALBUM-WATERMARK.md).
+
 ### Confirmar el mail y chequeo anti-bots
 
 - Al crear una cuenta con mail se manda un link para confirmarlo (necesita `SMTP_URL`). Las cuentas creadas desde `EMAIL_VERIFY_SINCE` (por defecto en producción, 25/11/2026; fuera de producción no se exige) recién aparecen en Gente cuando lo confirman. Las de antes siguen apareciendo y ven un aviso.
