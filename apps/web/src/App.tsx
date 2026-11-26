@@ -25,6 +25,7 @@ import { Inbox } from "./pages/Inbox";
 import { Conversation } from "./pages/Conversation";
 import { ProfilePage } from "./pages/Profile";
 import { EditProfile } from "./pages/MyProfile";
+import { MyReport, MyReports } from "./pages/MyReports";
 import { MyProfileOverview } from "./pages/MyProfileOverview";
 import { Settings } from "./pages/Settings";
 import { ChatIcon, GridIcon, GroupIcon, UserIcon } from "./components/Icons";
@@ -84,6 +85,8 @@ export function App() {
           <Route path="/mensajes/:id" element={<Conversation />} />
           <Route path="/perfil/:id" element={<ProfilePage />} />
           <Route path="/yo" element={<MyProfileOverview />} />
+          <Route path="/yo/reportes" element={<MyReports />} />
+          <Route path="/yo/reportes/:id" element={<MyReport />} />
           <Route path="/yo/editar" element={<EditProfile />} />
           <Route path="/yo/configuracion" element={<Settings />} />
           <Route path="/visitas" element={<Views />} />

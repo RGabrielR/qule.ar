@@ -1,5 +1,5 @@
 import { ZODIAC_SIGNS } from "@mortero/shared/zodiac";
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { mailEnabled } from "../mail.js";
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -13,6 +13,7 @@ import { env } from "../env.js";
 import { issueChallenge } from "../botCheck.js";
 import { isListed } from "../verification.js";
 import { hasAlbumAccess } from "./premium.js";
+import { markAlbumImage, parseWatermarkKey, type Watermark } from "../albumWatermark.js";
 import { defaultAlbum, MAX_ALBUM_ITEMS, myAlbums, renumberPhotos } from "../albums.js";
 
 import { accessFor } from "../staff.js";
@@ -27,6 +28,7 @@ import { forgetFile, isKnownPublic, rememberPublic, requireUserForFiles } from "
 
 const { profile, photo, user, group, groupMember, directMessage, conversation } = schema;
 const MAX_PHOTOS = 6;
+const albumWatermarkKey = parseWatermarkKey(process.env.ALBUM_WATERMARK_KEY);
 /** El tope de archivos privados es por persona, sumando todos sus álbumes. */
 const albumFullMessage = `Entre todos tus álbumes podés tener hasta ${MAX_ALBUM_ITEMS} fotos y videos`;
 
@@ -56,7 +58,7 @@ export const meRoutes = new Hono<AppEnv>();
 
 // Config pública: qué métodos de login hay
 // passwordReset: sin mails configurados no ofrecemos recuperar la contraseña (en desarrollo sí: el mail sale por consola)
-meRoutes.get("/config", (c) => c.json({ google: googleEnabled, passwordReset: mailEnabled || process.env.NODE_ENV !== "production" }));
+meRoutes.get("/config", (c) => c.json({ google: googleEnabled, reportCapture: Boolean(albumWatermarkKey), passwordReset: mailEnabled || process.env.NODE_ENV !== "production" }));
 
 // Desafío anti-bots para crear una cuenta con mail (ver botCheck.ts). bits 0: no hace falta.
 meRoutes.get("/signup-challenge", (c) => {
@@ -103,13 +105,22 @@ meRoutes.get("/files/:key", requireUserForFiles, async (c) => {
   const noStore = Boolean(ph?.isPrivate || dm?.expiring);
   // Foto de perfil pública o de un grupo activo: la puede ver cualquiera con sesión, se recuerda un minuto
   if ((ph && !ph.isPrivate) || (grp && !grp.removedAt)) rememberPublic(key);
-  return sendImage(c, key, variant, noStore);
+  const watermark = albumWatermarkKey && ph?.isPrivate && ph.kind === "photo" && ph.userId !== viewer
+    ? { secret: albumWatermarkKey, fileKey: key, viewerId: viewer, thumb: variant === "thumb" }
+    : undefined;
+  // La portada es para perfiles. En un álbum compartido servimos la variante completa
+  // marcada para que la señal corresponda a una referencia que Moderación puede verificar.
+  return sendImage(c, key, watermark && variant === "cover" ? undefined : variant, noStore, watermark);
 });
 
-async function sendImage(c: Context<AppEnv>, key: string, variant: "thumb" | "cover" | undefined, noStore: boolean) {
+async function sendImage(
+  c: Context<AppEnv>, key: string, variant: Parameters<typeof readImage>[1], noStore: boolean,
+  watermark?: Watermark,
+) {
   const buf = await readImage(key, variant);
   if (!buf) return c.notFound();
-  return c.body(new Uint8Array(buf), 200, {
+  const body = watermark ? await markAlbumImage(buf, watermark) : buf;
+  return c.body(new Uint8Array(body), 200, {
     "Content-Type": "image/webp",
     "Cache-Control": noStore ? "no-store" : "private, max-age=31536000, immutable",
   });
@@ -211,6 +222,33 @@ meRoutes.put("/me/terms", requireUser, requireProfile, async (c) => {
   if (version !== TERMS_VERSION) throw new HTTPException(409, { message: "Los términos cambiaron. Recargá la página para leer la versión nueva." });
   await db.update(profile).set({ termsVersion: TERMS_VERSION, termsAcceptedAt: new Date() }).where(eq(profile.userId, u.id));
   return c.json({ termsVersion: TERMS_VERSION });
+});
+
+const myReportSummary = {
+  id: schema.report.id, reason: schema.report.reason, targetName: schema.report.targetName,
+  createdAt: schema.report.createdAt, respondedAt: schema.report.respondedAt,
+  open: sql<boolean>`${schema.report.status} = 'open'`,
+};
+
+meRoutes.get("/me/reportes", requireUser, async (c) => {
+  const { report } = schema;
+  c.header("Cache-Control", "no-store");
+  const reports = await db.select(myReportSummary).from(report).where(eq(report.reporterId, c.get("user").id))
+    .orderBy(desc(sql`coalesce(${report.respondedAt}, ${report.createdAt})`), desc(report.id));
+  return c.json(reports);
+});
+
+meRoutes.get("/me/reportes/:id", requireUser, async (c) => {
+  const { report } = schema;
+  c.header("Cache-Control", "no-store");
+  const [found] = await db.select({
+    ...myReportSummary,
+    details: report.details,
+    response: report.moderatorResponse,
+    hasCapture: sql<boolean>`${report.captureKey} is not null`,
+  }).from(report).where(and(eq(report.id, c.req.param("id")), eq(report.reporterId, c.get("user").id)));
+  if (!found) throw new HTTPException(404, { message: "No encontramos ese reporte" });
+  return c.json(found);
 });
 
 /** Qué avisos quiere recibir. Se manda solo lo que cambia; lo demás queda como estaba. */

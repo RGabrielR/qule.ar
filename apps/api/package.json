@@ -6,6 +6,7 @@
     "dev": "node scripts/dev.mjs",
     "start": "tsx --env-file-if-exists=../../.env src/index.ts",
     "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file-if-exists=../../.env src/migrate.ts",
     "test": "tsx --test src/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

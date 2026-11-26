@@ -32,6 +32,6 @@ export async function signIn(page: Page, account: Awaited<ReturnType<typeof crea
 
 export async function openProfile(page: Page, account: Awaited<ReturnType<typeof createAccount>>) {
   await page.getByRole("link", { name: "Gente", exact: true }).click();
-  await page.getByRole("link", { name: new RegExp(`^${account.name},`) }).click();
+  await page.getByRole("link", { name: new RegExp(`^${account.name}(?:,|$)`) }).click();
   await expect(page.getByRole("heading", { name: account.name, exact: true })).toBeVisible();
 }

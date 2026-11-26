@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { isOnline, MAX_ACCOUNT_SOCKETS, reserveSocket } from "./shared.js";
+import { limit, LIMITS } from "./ratelimit.js";
 import { availableParallelism } from "node:os";
 import { test } from "node:test";
 import { workerCount } from "./cluster.js";
@@ -23,4 +25,25 @@ test("ventana de tiempo de los límites", () => {
   assert.equal(countHit(store, "k", 3, 60_000, false, t0 + 60_021), true, "pasado el minuto vuelve a andar");
   sweepHits(store, 60_000, t0 + 200_000);
   assert.equal(store.has("k"), false, "la limpieza saca lo vencido");
+});
+test("las conexiones simultáneas tienen cupo por cuenta y liberar dos veces conserva el conteo", async () => {
+  const account = "cuenta-socket-prueba";
+  const sessions = await Promise.all(Array.from({ length: MAX_ACCOUNT_SOCKETS }, () => reserveSocket(account)));
+  assert.ok(sessions.every(Boolean));
+  assert.equal(isOnline(account), true);
+  assert.equal(await reserveSocket(account), null);
+  sessions[0]?.();
+  sessions[0]?.();
+  const resumed = await reserveSocket(account);
+  assert.ok(resumed);
+  assert.equal(await reserveSocket(account), null);
+  sessions.slice(1).forEach((close) => close?.());
+  resumed();
+  assert.equal(isOnline(account), false);
+});
+
+test("la cuota de Gente se aplica por cuenta", async () => {
+  for (let i = 0; i < LIMITS.nearby.max; i++) await limit("cerca-uno", "nearby");
+  await assert.rejects(limit("cerca-uno", "nearby"), { status: 429 });
+  await limit("cerca-dos", "nearby");
 });

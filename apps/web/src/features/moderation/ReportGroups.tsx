@@ -5,6 +5,7 @@ import { Avatar } from "../../components/Avatar";
 import {
   filterGroups, groupReports, NO_FILTERS, type ReportedMessage, type ReportFilters, type ReportGroup, type ReportSort, type ReportType,
 } from "./groupReports";
+import { VerifyReportPhoto } from "./VerifyReportPhoto";
 import type { Report } from "./types";
 
 const PAGE = 30;
@@ -32,12 +33,13 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
  * Reportes agrupados por tema: si varias personas reportan a la misma persona o al mismo grupo, se ve una sola
  * tarjeta con todos los motivos, los mensajes reportados y las acciones. Se puede buscar, filtrar y ordenar.
  */
-export function ReportGroups({ reports, status, has, act, onSuspend, onRemoveGroup }: {
+export function ReportGroups({ reports, status, has, act, onSuspend, onRemoveGroup, onRefresh }: {
   reports: Report[];
   status: "open" | "closed";
   has: (...need: StaffAccess[]) => boolean;
   act: (fn: () => Promise<unknown>) => void;
   onSuspend: (r: Report) => void;
+  onRefresh: () => void;
   onRemoveGroup: (r: Report) => void;
 }) {
   const [filters, setFilters] = useState<ReportFilters>(NO_FILTERS);
@@ -107,7 +109,7 @@ export function ReportGroups({ reports, status, has, act, onSuspend, onRemoveGro
       ) : (
         <ul className="reports">
           {visible.slice(0, shown).map((g) => (
-            <GroupCard key={g.key} g={g} has={has} act={act} onSuspend={onSuspend} onRemoveGroup={onRemoveGroup} />
+            <GroupCard key={g.key} g={g} has={has} act={act} onSuspend={onSuspend} onRemoveGroup={onRemoveGroup} onRefresh={onRefresh} />
           ))}
         </ul>
       )}
@@ -120,16 +122,21 @@ export function ReportGroups({ reports, status, has, act, onSuspend, onRemoveGro
   );
 }
 
-function GroupCard({ g, has, act, onSuspend, onRemoveGroup }: {
+function GroupCard({ g, has, act, onSuspend, onRemoveGroup, onRefresh }: {
   g: ReportGroup;
   has: (...need: StaffAccess[]) => boolean;
   act: (fn: () => Promise<unknown>) => void;
   onSuspend: (r: Report) => void;
+  onRefresh: () => void;
   onRemoveGroup: (r: Report) => void;
 }) {
   const r = g.first;
+  const [verifying, setVerifying] = useState(false);
+  const verifiable = g.reports.filter((report) => report.photoVerification);
   const open = g.reports.filter((x) => x.status === "open");
   const isOpen = open.length > 0;
+  const preventive = open.find((report) => report.reason === "menor de edad");
+  const generalSuspension = preventive ?? open.find((report) => !report.photoVerification || !report.photoEvidence);
   // Los motivos de un perfil o un grupo (no de un mensaje) y los comentarios de quienes reportaron
   const notes = g.reports.filter((x) => x.details || !x.messageId);
   const resolutions = [...new Set(g.reports.filter((x) => x.status !== "open").map((x) => (x.status === "dismissed" ? "Descartado" : x.resolution ?? "Resuelto")))];
@@ -169,6 +176,7 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup }: {
               {plural(r.targetReportCount, "reporte", "reportes")} en total
               {r.targetSuspendedAt && " · suspendida"}
               {r.targetAutoHidden && !r.targetSuspendedAt && " · oculta de la grilla hasta revisar"}
+              {r.targetAutoSuspendAt && !r.targetSuspendedAt && <b>{` · se suspende sola el ${fmt(r.targetAutoSuspendAt)} si nadie lo revisa`}</b>}
             </span>
           </span>
         </Link>
@@ -179,6 +187,7 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup }: {
         {g.automatic ? " automáticos de la app" : ` de ${plural(g.reporters, "persona", "personas")}`}
         {g.reports.length > 1 && ` · el primero el ${fmt(g.oldest)}`}
         {g.reports.length === 1 && !r.automatic && !r.reporterHidden && ` · ${r.reporter?.name ?? "una cuenta borrada"}`}
+        {g.muted > 0 && (g.reports.length === 1 ? " · no cuenta" : ` · ${g.muted} no ${g.muted === 1 ? "cuenta" : "cuentan"}`)}
       </p>
 
       {g.messages.slice(0, MESSAGES_SHOWN).map((m) => <MessageBlock key={m.key} m={m} has={has} act={act} />)}
@@ -206,20 +215,26 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup }: {
       )}
       {g.automatic && <p className="muted small">Alerta automática de la app: revisalo y decidí.</p>}
 
-      {isOpen ? (
+      {(isOpen || verifiable.length > 0) && (
         <div className="rcard__actions">
-          {has("reports") && (
-            <button className="btn btn--small" onClick={dismissAll}>{open.length > 1 ? `Descartar los ${open.length}` : "Descartar"}</button>
+          {isOpen && has("reports") && (
+            <button type="button" className="btn btn--small" onClick={dismissAll}>{open.length > 1 ? `Descartar los ${open.length}` : "Descartar"}</button>
           )}
-          {has("owner") && r.group?.id && !r.group.removedAt && (
-            <button className="btn btn--small btn--danger" onClick={() => onRemoveGroup(open[0])}>Dar de baja el grupo</button>
+          {verifiable.length > 0 && (
+            <button type="button" className="btn btn--small" onClick={() => setVerifying(true)}>Verificar foto</button>
           )}
-          {(has("sanctions") || (has("reports") && open.some((x) => x.reason === "menor de edad"))) && !r.group && r.target?.id && !r.targetSuspendedAt && (
-            <button className="btn btn--small btn--danger" onClick={() => onSuspend(open.find((x) => x.reason === "menor de edad") ?? open[0])}>Suspender</button>
+          {isOpen && has("owner") && r.group?.id && !r.group.removedAt && (
+            <button type="button" className="btn btn--small btn--danger" onClick={() => onRemoveGroup(open[0])}>Dar de baja el grupo</button>
+          )}
+          {generalSuspension && (has("sanctions") || (has("reports") && preventive)) && !r.group && r.target?.id && !r.targetSuspendedAt && (
+            <button type="button" className="btn btn--small btn--danger" onClick={() => onSuspend(generalSuspension)}>Suspender</button>
           )}
         </div>
-      ) : (
-        <p className="small rcard__resolution">{resolutions.join(" · ")}</p>
+      )}
+      {!isOpen && <p className="small rcard__resolution">{resolutions.join(" · ")}</p>}
+      {verifying && verifiable.length > 0 && (
+        <VerifyReportPhoto reports={verifiable} canSuspend={has("sanctions")}
+          onClose={(refresh) => { setVerifying(false); if (refresh) onRefresh(); }} />
       )}
     </li>
   );

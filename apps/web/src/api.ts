@@ -2,6 +2,7 @@ import type { ZodiacSign } from "@mortero/shared/zodiac";
 import type { HasPlace } from "./features/place/hasPlace";
 import { createAuthClient } from "better-auth/react";
 import { io, type Socket } from "socket.io-client";
+import { SOCKET_RETRY_ERRORS } from "@mortero/shared/realtime";
 
 export const authClient = createAuthClient({ baseURL: window.location.origin, basePath: "/api/auth" });
 
@@ -24,27 +25,44 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
   return data as T;
 }
 
-export const upload = <T,>(path: string, file: File, extra: Record<string, string> = {}) => {
+export const upload = <T,>(path: string, file: File, extra: Record<string, string> = {}, headers?: HeadersInit) => {
   const fd = new FormData();
   fd.append("file", file);
   for (const [k, v] of Object.entries(extra)) fd.append(k, v);
-  return api<T>(path, { method: "POST", body: fd });
+  return api<T>(path, { method: "POST", body: fd, headers });
 };
 
 let socket: Socket | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+/** Espera antes de reintentar: crece de a poco (2 s, 4 s, 8 s…) hasta un minuto como mucho. */
+const retryDelay = (n: number) => Math.min(60_000, 2_000 * 2 ** n) * (0.75 + Math.random() / 2);
+
 export function getSocket(): Socket {
+  if (socket) return socket;
   // Solo WebSocket: el API corre en varios procesos y así cada conexión queda entera en uno (ver apps/api/src/cluster.ts)
-  if (!socket) socket = io({ path: "/socket.io", withCredentials: true, transports: ["websocket"] });
-  return socket;
+  const s = io({ path: "/socket.io", withCredentials: true, transports: ["websocket"] });
+  // Si el servidor rechaza la conexión por un cupo pasajero (muchos intentos o muchas pestañas abiertas),
+  // Socket.IO no reintenta solo: sin esto, la pestaña quedaría sin chat en vivo hasta recargar.
+  let retries = 0;
+  s.on("connect", () => { retries = 0; });
+  s.on("connect_error", (err) => {
+    if (s.active || !SOCKET_RETRY_ERRORS.includes(err.message)) return;
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(() => { if (socket === s && !s.connected) s.connect(); }, retryDelay(retries++));
+  });
+  socket = s;
+  return s;
 }
 export function closeSocket() {
+  clearTimeout(retryTimer);
+  window.dispatchEvent(new Event("mortero:session-ended"));
   socket?.disconnect();
   socket = null;
 }
 
 // ---------- Tipos ----------
 
-export type Author = { id: string; name: string; age: number; photo: string | null };
+export type Author = { id: string; name: string; age: number | null; photo: string | null };
 
 /** Un toque recibido. */
 export type Toque = Author & { kind: string; at: string; unseen: boolean };
@@ -85,9 +103,9 @@ export type Profile = {
 };
 
 /** Tipos de aviso que se pueden apagar. Tienen que coincidir con NOTIFY_KINDS de la API (push.ts). */
-export type NotifyKind = "mensajes" | "toques" | "respuestas" | "grupos" | "solicitudes" | "moderacion" | "moderacion_urgente";
+export type NotifyKind = "mensajes" | "toques" | "respuestas" | "grupos" | "solicitudes" | "reportes" | "moderacion" | "moderacion_urgente";
 
-export type StaffAccess = "owner" | "reports" | "sanctions" | "appeals";
+export type StaffAccess = "owner" | "reports" | "sanctions" | "appeals" | "photoVerification";
 
 /** Pedido de revisión de una suspensión, como lo ve la persona suspendida. */
 export type Appeal = {
@@ -107,6 +125,7 @@ export type Me = {
     hasLocation: boolean;
     showDistance: boolean;
     incognito: boolean;
+    showAge: boolean;
     /** Avisos que apagó (false). Lo que no está cuenta como prendido. */
     notifyPrefs: Partial<Record<NotifyKind, boolean>>;
     suspendedAt: string | null;
@@ -118,7 +137,8 @@ export type Me = {
   albums: MyAlbum[];
 };
 
-export type PublicProfile = Omit<Profile, "birthdate"> & {
+export type PublicProfile = Omit<Profile, "birthdate" | "age"> & {
+  age: number | null;
   id: string;
   photos: string[];
   isMe: boolean;
@@ -139,7 +159,7 @@ export type PublicProfile = Omit<Profile, "birthdate"> & {
 export type NearbyPerson = {
   id: string;
   name: string;
-  age: number;
+  age: number | null;
   photo: string | null;
   coverPhoto: string | null;
   online: boolean;
@@ -148,7 +168,13 @@ export type NearbyPerson = {
   favorite: boolean;
 };
 
+/** Encuesta de un grupo: solo totales, nunca quién votó qué. myVote es mi opción (null si no voté). */
+export type Poll = { options: string[]; counts: number[]; total: number; myVote?: number | null };
+/** Totales nuevos de una encuesta, en vivo (sin el voto de nadie). */
+export type PollEvent = { groupId: string; messageId: string; counts: number[]; total: number };
+
 export type GroupMessage = {
+  idempotencyKey?: string | null;
   id: string;
   groupId: string;
   body: string | null;
@@ -158,11 +184,14 @@ export type GroupMessage = {
   author: Pick<Author, "id" | "name" | "photo">;
   replyTo: { id: string; authorName: string; body: string | null } | null;
   reactions: { kind: string; by: string[] }[];
+  /** Si es una encuesta: el texto (body) es la pregunta. Ver features/polls. */
+  poll?: Poll | null;
   /** Si los links se pueden tocar: la cuenta que lo mandó tenía más de 24 h (ver canOpenLinks en el API). */
   canOpenLinks?: boolean;
 };
 
 export type Dm = {
+  idempotencyKey?: string | null;
   id: string;
   conversationId: string;
   senderId: string;

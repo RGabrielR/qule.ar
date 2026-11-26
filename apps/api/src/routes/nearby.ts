@@ -1,5 +1,5 @@
 import { ZODIAC_SIGNS } from "@mortero/shared/zodiac";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -11,6 +11,7 @@ import { autoHiddenUsers } from "../moderation.js";
 import { isOnline } from "../realtime.js";
 import { hit } from "../shared.js";
 import { unlistedUsers } from "../verification.js";
+import { limit } from "../ratelimit.js";
 
 const { profile } = schema;
 
@@ -63,7 +64,7 @@ nearbyRoutes.delete("/me/location", async (c) => {
 
 nearbyRoutes.put("/me/privacy", async (c) => {
   const u = c.get("user");
-  const data = z.object({ showDistance: z.boolean().optional(), incognito: z.boolean().optional() }).parse(await c.req.json());
+  const data = z.object({ showDistance: z.boolean().optional(), incognito: z.boolean().optional(), showAge: z.boolean().optional() }).parse(await c.req.json());
   await db.update(profile).set(data).where(eq(profile.userId, u.id));
   return c.json({ ok: true });
 });
@@ -119,6 +120,50 @@ function bornOnOrBefore(years: number, now = new Date()): string {
   return `${String(now.getFullYear() - years).padStart(4, "0")}-${mm}-${dd}`;
 }
 
+/**
+ * Condiciones de los filtros de perfil sobre `profile p` (todo menos "en línea", que se mira en memoria).
+ * Las usan Gente y el filtro de Mensajes (ver routes/social.ts).
+ */
+export function profileFilterConds(meId: string, f: NearbyFilters) {
+  const conds: SQL[] = [];
+  // Con un filtro de edad no aparece quien eligió no mostrarla (también en Mensajes, que usa estos filtros)
+  if (f.ageMin != null || f.ageMax != null) conds.push(sql`p.show_age = true`);
+  // Las fechas van como texto AAAA-MM-DD, igual que se guardan
+  if (f.ageMin != null) conds.push(sql`p.birthdate <= ${bornOnOrBefore(f.ageMin)}::date`);
+  if (f.ageMax != null) conds.push(sql`p.birthdate > ${bornOnOrBefore(f.ageMax + 1)}::date`);
+  if (f.heightMin != null) conds.push(sql`p.height_cm >= ${f.heightMin}`);
+  if (f.heightMax != null) conds.push(sql`p.height_cm <= ${f.heightMax}`);
+  if (f.weightMin != null) conds.push(sql`p.weight_kg >= ${f.weightMin}`);
+  if (f.weightMax != null) conds.push(sql`p.weight_kg <= ${f.weightMax}`);
+  const textArray = (xs: string[]) => sql`array[${sql.join(xs.map((x) => sql`${x}`), sql`, `)}]::text[]`;
+  if (f.bodyType.length) conds.push(sql`p.body_type = any(${textArray(f.bodyType)})`);
+  if (f.position.length) conds.push(sql`p.position = any(${textArray(f.position)})`);
+  if (f.relationship.length) conds.push(sql`p.relationship = any(${textArray(f.relationship)})`);
+  if (f.zodiacSign.length) conds.push(sql`p.zodiac_sign = any(${textArray(f.zodiacSign)})`);
+  if (f.hasPlace.length) conds.push(sql`p.has_place = any(${textArray(f.hasPlace)})`);
+  if (f.tribes.length) conds.push(sql`jsonb_exists_any(p.tribes, ${textArray(f.tribes)})`);
+  if (f.lookingFor.length) conds.push(sql`jsonb_exists_any(p.looking_for, ${textArray(f.lookingFor)})`);
+  if (f.favorites) conds.push(sql`exists (select 1 from favorite fv where fv.user_id = ${meId} and fv.favorite_id = p.user_id)`);
+  if (f.withPhoto) conds.push(sql`exists (select 1 from photo ph where ph.user_id = p.user_id and ph.is_private = false)`);
+  return conds;
+}
+
+/**
+ * Filtros de Mensajes: de las personas con las que `meId` tiene chat, las que cumplen los filtros de perfil.
+ * `null` si no hay ninguno de esos filtros (se ve todo).
+ */
+export async function chatPeopleMatching(meId: string, f: NearbyFilters): Promise<string[] | null> {
+  const conds = profileFilterConds(meId, f);
+  if (!conds.length) return null;
+  const result = await db.execute(sql`
+    select p.user_id from profile p
+    where p.user_id in (
+      select case when cv.user_a = ${meId} then cv.user_b else cv.user_a end
+      from conversation cv where cv.user_a = ${meId} or cv.user_b = ${meId}
+    ) and ${sql.join(conds, sql` and `)}`);
+  return (result as unknown as { rows: { user_id: string }[] }).rows.map((r) => r.user_id);
+}
+
 type Candidate = { user_id: string; cell_lat: number | null; cell_lng: number | null; show_distance: boolean; seen: number };
 
 /**
@@ -129,6 +174,7 @@ type Candidate = { user_id: string; cell_lat: number | null; cell_lng: number | 
  * 2. Se ordena acá (en línea vive en memoria) y se buscan nombre, edad y foto solo de la página que se muestra.
  */
 nearbyRoutes.get("/nearby", async (c) => {
+  await limit(c.get("user").id, "nearby");
   return c.json(await nearbyPage(c.get("profile")!, filtersSchema.parse(c.req.query())));
 });
 
@@ -150,23 +196,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
     sql`not exists (select 1 from block b where b.blocker_id = ${u.id} and b.blocked_id = p.user_id)`,
     sql`not exists (select 1 from block b where b.blocker_id = p.user_id and b.blocked_id = ${u.id})`,
   ];
-  // Las fechas van como texto AAAA-MM-DD, igual que se guardan
-  if (f.ageMin != null) conds.push(sql`p.birthdate <= ${bornOnOrBefore(f.ageMin)}::date`);
-  if (f.ageMax != null) conds.push(sql`p.birthdate > ${bornOnOrBefore(f.ageMax + 1)}::date`);
-  if (f.heightMin != null) conds.push(sql`p.height_cm >= ${f.heightMin}`);
-  if (f.heightMax != null) conds.push(sql`p.height_cm <= ${f.heightMax}`);
-  if (f.weightMin != null) conds.push(sql`p.weight_kg >= ${f.weightMin}`);
-  if (f.weightMax != null) conds.push(sql`p.weight_kg <= ${f.weightMax}`);
-  const textArray = (xs: string[]) => sql`array[${sql.join(xs.map((x) => sql`${x}`), sql`, `)}]::text[]`;
-  if (f.bodyType.length) conds.push(sql`p.body_type = any(${textArray(f.bodyType)})`);
-  if (f.position.length) conds.push(sql`p.position = any(${textArray(f.position)})`);
-  if (f.relationship.length) conds.push(sql`p.relationship = any(${textArray(f.relationship)})`);
-  if (f.zodiacSign.length) conds.push(sql`p.zodiac_sign = any(${textArray(f.zodiacSign)})`);
-  if (f.hasPlace.length) conds.push(sql`p.has_place = any(${textArray(f.hasPlace)})`);
-  if (f.tribes.length) conds.push(sql`jsonb_exists_any(p.tribes, ${textArray(f.tribes)})`);
-  if (f.lookingFor.length) conds.push(sql`jsonb_exists_any(p.looking_for, ${textArray(f.lookingFor)})`);
-  if (f.favorites) conds.push(sql`exists (select 1 from favorite fv where fv.user_id = ${u.id} and fv.favorite_id = p.user_id)`);
-  if (f.withPhoto) conds.push(sql`exists (select 1 from photo ph where ph.user_id = p.user_id and ph.is_private = false)`);
+  conds.push(...profileFilterConds(u.id, f));
 
   // Sin pasar por el ORM: son miles de filas chicas y convertirlas una por una era lo que más tiempo llevaba
   const [hidden, unlisted, favorites, result] = await Promise.all([
@@ -206,7 +236,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
   const ids = page.map((x) => x.id);
   const [details, first] = await Promise.all([
     ids.length
-      ? db.select({ userId: profile.userId, displayName: profile.displayName, birthdate: profile.birthdate })
+      ? db.select({ userId: profile.userId, displayName: profile.displayName, birthdate: profile.birthdate, showAge: profile.showAge })
           .from(profile).where(inArray(profile.userId, ids))
       : [],
     firstPublicPhotoKeys(ids),
@@ -225,7 +255,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
       return [{
         id,
         name: d.displayName,
-        age: ageFrom(d.birthdate),
+        age: d.showAge ? ageFrom(d.birthdate) : null,
         photo: thumbUrl(photoKey),
         coverPhoto: imageUrl(photoKey),
         online,

@@ -1,8 +1,8 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { generateVAPIDKeys, sendNotification, setVapidDetails } from "web-push";
 import { db, schema } from "./db/index.js";
+import { readOrCreateDevFile } from "./devFile.js";
 import { env } from "./env.js";
 
 const { profile, pushSubscription } = schema;
@@ -13,7 +13,7 @@ const { profile, pushSubscription } = schema;
  * "moderacion_urgente" (menores de edad y suspensiones preventivas) solo se muestra a la administración general.
  * La notificación de prueba no tiene tipo: llega siempre.
  */
-export const NOTIFY_KINDS = ["mensajes", "toques", "respuestas", "grupos", "solicitudes", "moderacion", "moderacion_urgente"] as const;
+export const NOTIFY_KINDS = ["mensajes", "toques", "respuestas", "grupos", "solicitudes", "reportes", "moderacion", "moderacion_urgente"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 
 /** Si la persona quiere este tipo de aviso. Lo que no eligió cuenta como "sí". */
@@ -34,11 +34,7 @@ function loadKeys(): { publicKey: string; privateKey: string } {
     console.warn("Faltan VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY: las notificaciones push quedan apagadas.");
     return { publicKey: "", privateKey: "" };
   }
-  const file = path.join(env.DATA_DIR, "vapid.json");
-  if (existsSync(file)) return JSON.parse(readFileSync(file, "utf8"));
-  const keys = generateVAPIDKeys();
-  writeFileSync(file, JSON.stringify(keys));
-  return keys;
+  return JSON.parse(readOrCreateDevFile(path.join(env.DATA_DIR, "vapid.json"), () => JSON.stringify(generateVAPIDKeys())));
 }
 
 const keys = loadKeys();

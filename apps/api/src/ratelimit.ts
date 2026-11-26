@@ -12,8 +12,11 @@ type Rule = { max: number; windowMs: number; message: string };
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
+const DAY = 24 * HOUR;
 
 export const LIMITS = {
+  nearby: { max: 60, windowMs: MIN, message: "Hiciste muchas búsquedas. Probá de nuevo en un momento." },
+  socket: { max: 30, windowMs: MIN, message: "Demasiados intentos de conexión." },
   /** Mensajes privados de texto */
   dm: { max: 40, windowMs: MIN, message: "Vas muy rápido. Esperá un momento y seguí." },
   /** Charlas nuevas con alguien con quien nunca hablaste (el spam masivo empieza así) */
@@ -24,8 +27,12 @@ export const LIMITS = {
   upload: { max: 60, windowMs: HOUR, message: "Subiste muchas fotos. Probá de nuevo en un rato." },
   /** Reportes */
   report: { max: 15, windowMs: HOUR, message: "Mandaste muchos reportes. Si es urgente, esperá un rato y volvé a intentar." },
+  /** Reportes por día: frena a quien reporta sin parar, hora tras hora (ver reportSpam.ts) */
+  reportDay: { max: 40, windowMs: DAY, message: "Mandaste muchos reportes hoy. Si alguien te molesta, bloqueá a esa persona y volvé a intentar más tarde." },
   /** Toques a cualquier persona (a una misma ya hay un límite de uno cada 12 horas) */
   toque: { max: 40, windowMs: HOUR, message: "Mandaste muchos toques. Probá de nuevo en un rato." },
+  /** Votos en encuestas de grupos (cambiar de opción cuenta como otro voto) */
+  pollVote: { max: 120, windowMs: HOUR, message: "Cambiaste muchas veces tu voto. Probá de nuevo en un rato." },
   /** Aceptar o rechazar solicitudes en lote (cada pedido resuelve hasta 200) */
   bulkRequests: { max: 60, windowMs: HOUR, message: "Resolviste muchas solicitudes de una. Probá de nuevo en un rato." },
   /** Pedidos de revisión de una suspensión (igual hay uno por suspensión y una sola ampliación) */
