@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type TouchEvent } from "react";
+import { NEARBY_PAGE_SIZE } from "@mortero/shared/nearby";
 import { InstallBanner } from "../components/InstallBanner";
 import { Link, useLocation, useNavigate } from "react-router";
 import { api, type NearbyPerson } from "../api";
@@ -38,7 +39,7 @@ function saveFilters(f: Filters) {
   }
 }
 
-export function toQuery(f: Filters, offset: number) {
+export function toQuery(f: Filters) {
   const q = new URLSearchParams();
   for (const k of ["ageMin", "ageMax", "heightMin", "heightMax", "weightMin", "weightMax"] as const) {
     if (f[k] != null) q.set(k, String(f[k]));
@@ -49,7 +50,6 @@ export function toQuery(f: Filters, offset: number) {
   if (f.online) q.set("online", "1");
   if (f.withPhoto) q.set("withPhoto", "1");
   if (f.favorites) q.set("favorites", "1");
-  if (offset) q.set("offset", String(offset));
   return q.toString();
 }
 
@@ -68,14 +68,14 @@ export function countFilters(f: Filters) {
 type Status = "loading" | "ready" | "error";
 type LocState = "none" | "asking" | "denied" | "unsupported" | "ok";
 const REFRESH_DISTANCE = 100;
-type NearbyPage = { hasLocation: boolean; people: NearbyPerson[]; hasMore: boolean };
+type NearbyPage = { hasLocation: boolean; people: NearbyPerson[]; nextOffset: number | null };
 type NearbyPosition = { userId: string; query: string; top: number; count: number };
 
 // Guarda las posiciones recientes por entrada del historial, sin guardar los perfiles.
 const positions = new Map<string, NearbyPosition>();
 const POSITION_LIMIT = 20;
 
-export function Nearby() {
+export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
   const { me, reload } = useMe();
   const location = useLocation();
   const navigate = useNavigate();
@@ -87,7 +87,7 @@ export function Nearby() {
   const userId = me?.user.id;
   const [filters, setFilters] = useState<Filters>(loadFilters);
   const [people, setPeople] = useState<NearbyPerson[]>([]);
-  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [loc, setLoc] = useState<LocState>("ok");
   const [updating, setUpdating] = useState<"idle" | "busy" | "done">("idle");
@@ -101,25 +101,25 @@ export function Nearby() {
   const [returnPosition] = useState(() => {
     const previousEntry = typeof state?.nearbyEntry === "string" ? state.nearbyEntry : entry;
     const saved = positions.get(entry) ?? positions.get(previousEntry);
-    if (!saved || saved.userId !== userId || saved.query !== toQuery(filters, 0)) return undefined;
+    if (!saved || saved.userId !== userId || saved.query !== toQuery(filters)) return undefined;
     // Si desde el perfil pasaste a personas de páginas que la grilla no había cargado, se cargan también.
     const list = getGridList(positions.has(entry) ? entry : previousEntry, userId);
     const swiped = list && list.query === saved.query ? list.people.length : 0;
     return { ...saved, count: Math.max(saved.count, swiped) };
   });
   const pendingRestore = useRef(returnPosition);
-  const visible = useRef({ count: 0, ready: false });
+  const visible = useRef<{ people: NearbyPerson[]; ready: boolean }>({ people: [], ready: false });
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
   // El perfil usa esta lista para pasar al anterior o al siguiente, con el mismo orden y los mismos filtros.
   useLayoutEffect(() => {
     if (status !== "ready" || !userId) return;
-    saveGridList(entry, { userId, query: toQuery(filtersRef.current, 0), people: people.map(toGridPerson), hasMore });
-  }, [entry, userId, people, hasMore, status]);
+    saveGridList(entry, { userId, query: toQuery(filtersRef.current), people: people.map(toGridPerson), nextOffset });
+  }, [entry, userId, people, nextOffset, status]);
 
   useLayoutEffect(() => {
-    visible.current = { count: people.length, ready: status === "ready" };
+    visible.current = { people, ready: status === "ready" };
     if (status === "ready" && pendingRestore.current && pageRef.current) {
       pageRef.current.scrollTop = pendingRestore.current.top;
       pendingRestore.current = undefined;
@@ -129,10 +129,10 @@ export function Nearby() {
   useLayoutEffect(() => {
     const page = pageRef.current;
     return () => {
-      const { count, ready } = visible.current;
+      const { people, ready } = visible.current;
       if (page && userId && ready) {
         positions.delete(entry);
-        positions.set(entry, { userId, query: toQuery(filtersRef.current, 0), top: page.scrollTop, count });
+        positions.set(entry, { userId, query: toQuery(filtersRef.current), top: page.scrollTop, count: people.length });
         if (positions.size > POSITION_LIMIT) {
           const oldest = positions.keys().next().value;
           if (oldest !== undefined) positions.delete(oldest);
@@ -146,22 +146,38 @@ export function Nearby() {
     const controller = new AbortController();
     requestRef.current = controller;
     const { signal } = controller;
-    const fetchPage = (start: number) => api<NearbyPage>(`/nearby?${toQuery(f, start)}`, { signal });
+    const page = pageRef.current;
+    const columns = page ? Number(getComputedStyle(page).getPropertyValue("--people-grid-columns")) || 1 : 1;
+    const previous = offset ? visible.current.people : [];
+    const target = Math.max(
+      Math.floor((previous.length + NEARBY_PAGE_SIZE) / columns) * columns,
+      Math.ceil(restoreCount / columns) * columns,
+    );
+    const loaded = [...previous];
+    const seen = new Set(previous.map((p) => p.id));
+    const query = new URLSearchParams(toQuery(f));
+    let cursor: number | null = offset;
+    let hasLocation: boolean;
     setRefreshDistance(releasedDistance);
     setRefreshError(false);
     try {
-      const d = await fetchPage(offset);
-      const loaded = [...d.people];
-      let hasMore = d.hasMore;
-      while (hasMore && loaded.length < restoreCount) {
-        const next = await fetchPage(loaded.length);
-        loaded.push(...next.people);
-        hasMore = next.hasMore && next.people.length > 0;
-      }
+      do {
+        query.set("offset", String(cursor));
+        query.set("limit", String(Math.min(target - loaded.length, NEARBY_PAGE_SIZE)));
+        const result: NearbyPage = await api<NearbyPage>(`/nearby?${query}`, { signal });
+        hasLocation = result.hasLocation;
+        cursor = result.nextOffset;
+        // El orden puede cambiar entre pedidos si alguien entra en línea.
+        for (const person of result.people) {
+          if (seen.has(person.id)) continue;
+          seen.add(person.id);
+          loaded.push(person);
+        }
+      } while (!signal.aborted && cursor !== null && loaded.length < target);
       if (signal.aborted) return;
-      setLoc((prev) => (d.hasLocation ? "ok" : prev === "ok" ? "none" : prev));
-      setPeople((prev) => (offset ? [...prev, ...loaded] : loaded));
-      setHasMore(hasMore);
+      setLoc((prev) => (hasLocation ? "ok" : prev === "ok" ? "none" : prev));
+      setPeople(loaded);
+      setNextOffset(cursor);
       setStatus("ready");
     } catch {
       if (controller.signal.aborted) return;
@@ -251,7 +267,7 @@ export function Nearby() {
   useEffect(() => {
     // Cada vez que se manda una ubicación nueva (a mano o sola), la grilla se reordena.
     // Si volvés de un perfil, carga tantas personas como había para poder volver a la misma posición.
-    const onLocation = () => load(filtersRef.current, 0, 0, pendingRestore.current?.count ?? visible.current.count);
+    const onLocation = () => load(filtersRef.current, 0, 0, pendingRestore.current?.count ?? visible.current.people.length);
     onLocation();
     window.addEventListener(LOCATION_EVENT, onLocation);
     return () => {
@@ -305,6 +321,7 @@ export function Nearby() {
         )}
       </header>
 
+      {tabs}
       <InstallBanner />
 
       <p className="sr-only" aria-live="polite">{updating === "done" ? "Ubicación actualizada" : ""}</p>
@@ -373,10 +390,10 @@ export function Nearby() {
               </li>
             ))}
           </ul>
-          {hasMore && (
+          {nextOffset !== null && (
             <div className="center">
               <button className="btn btn--small" disabled={refreshing} onClick={() => {
-                if (!requestRef.current) void load(filters, people.length);
+                if (!requestRef.current) void load(filters, nextOffset);
               }}>Ver más</button>
             </div>
           )}

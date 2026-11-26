@@ -375,7 +375,14 @@ meRoutes.delete("/me", requireUser, async (c) => {
   const u = c.get("user");
   const photos = await db.select().from(photo).where(eq(photo.userId, u.id));
   const dmPhotos = await db.select().from(directMessage).where(eq(directMessage.senderId, u.id));
-  await db.delete(user).where(eq(user.id, u.id)); // en cascada: perfil, fotos, mensajes, sesiones, etc.
+  const groupPhotos = await db.transaction(async (tx) => {
+    await tx.select({ id: profile.userId }).from(profile).where(eq(profile.userId, u.id)).for("update");
+    const files = await tx.select({ key: schema.groupMessage.photoKey }).from(schema.groupMessage)
+      .where(eq(schema.groupMessage.userId, u.id));
+    await tx.delete(user).where(eq(user.id, u.id)); // en cascada: perfil, fotos, mensajes, sesiones, etc.
+    return files;
+  });
+  for (const { key } of groupPhotos) if (key) await deleteImageUnlessEvidence(key);
   for (const p of photos) {
     await deleteImageUnlessEvidence(p.key);
     if (p.posterKey) await deleteImageUnlessEvidence(p.posterKey);

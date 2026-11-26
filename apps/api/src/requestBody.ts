@@ -16,7 +16,7 @@ export const limitApiBody = createMiddleware(async (c, next) => {
   if (!multipart) return small(c, next);
 
   if (c.req.method === "POST" && c.req.path === "/api/me/photos") return album(c, next);
-  if (c.req.method === "POST" && /^\/api\/(?:reports|conversations\/[^/]+\/messages|groups\/[^/]+\/photo|admin\/reports\/[^/]+\/photo-verification)$/.test(c.req.path)) {
+  if (c.req.method === "POST" && /^\/api\/(?:reports|conversations\/[^/]+\/messages|groups\/[^/]+\/(?:photo|messages\/photo)|admin\/reports\/[^/]+\/photo-verification)$/.test(c.req.path)) {
     return photo(c, next);
   }
   return small(c, next);

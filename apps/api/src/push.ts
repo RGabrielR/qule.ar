@@ -1,11 +1,11 @@
 import path from "node:path";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { generateVAPIDKeys, sendNotification, setVapidDetails } from "web-push";
 import { db, schema } from "./db/index.js";
 import { readOrCreateDevFile } from "./devFile.js";
 import { env } from "./env.js";
 
-const { profile, pushSubscription } = schema;
+const { conversationSettings, profile, pushSubscription } = schema;
 
 /**
  * Tipos de aviso que cada persona puede apagar desde Yo → Configuración → Notificaciones.
@@ -82,4 +82,16 @@ export async function pushTo(userId: string, { kind, ...payload }: PushPayload):
     }),
   );
   return sent;
+}
+
+export async function pushDm(userId: string, conversationId: string) {
+  if (!pushEnabled) return;
+  const [settings] = await db.select({ muted: conversationSettings.muted }).from(conversationSettings)
+    .where(and(eq(conversationSettings.userId, userId), eq(conversationSettings.conversationId, conversationId)));
+  if (settings?.muted) return;
+  // El service worker decide si la muestra cuando la app está abierta y a la vista.
+  await pushTo(userId, {
+    title: "Te llegó un mensaje", body: "Abrí el chat para leerlo.",
+    url: `/mensajes/${conversationId}`, tag: `dm-${conversationId}`, kind: "mensajes",
+  });
 }
