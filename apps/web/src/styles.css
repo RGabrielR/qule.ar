@@ -516,12 +516,9 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
      es tan brusca al principio, para que se llegue a ver.
    Quedan afuera lo que va encima de la pantalla y lo que trae su propia entrada. La clase se va sola cuando la
    entrada termina (useEntryClass), así lo que se monte después (una hoja, un aviso, la lista) no la repite. */
-.page--forward { --enter: page-forward; --enter-time: var(--dur-page); --enter-ease: var(--ease-out); }
-.page--back { --enter: page-back; --enter-time: var(--dur-page); --enter-ease: var(--ease-out); }
-.page--tab { --enter: tab-in; --enter-time: var(--dur-sheet); --enter-ease: var(--ease-sheet); }
-:is(.page--forward, .page--back, .page--tab) > :not(.topbar, .tabs, .skeleton-wait, .arrive, .notice, .empty--in, .sheet-backdrop, .lightbox, .viewer, dialog) {
-  transform-origin: 50% 0; animation: var(--enter) var(--enter-time) var(--enter-ease) backwards;
-}
+.page--forward > :not(.topbar, .tabs, .skeleton-wait, .arrive, .notice, .empty--in, .sheet-backdrop, .lightbox, .viewer, dialog) { animation: page-forward var(--dur-page) var(--ease-out) backwards; }
+.page--back > :not(.topbar, .tabs, .skeleton-wait, .arrive, .notice, .empty--in, .sheet-backdrop, .lightbox, .viewer, dialog) { animation: page-back var(--dur-page) var(--ease-out) backwards; }
+.page--tab > :not(.topbar, .tabs, .skeleton-wait, .arrive, .notice, .empty--in, .sheet-backdrop, .lightbox, .viewer, dialog) { transform-origin: 50% 0; animation: tab-in var(--dur-sheet) var(--ease-sheet) backwards; }
 /* Lo que se desliza no tiene que dejar desplazar la pantalla de costado mientras entra */
 .page--forward, .page--back { overflow-x: clip; }
 @keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
@@ -529,7 +526,8 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 @keyframes page-back { from { transform: translateX(-32px); } }
 /* El contenido del encabezado y de las solapas aparece con un fundido. Entre solapas de la misma pestaña el
    encabezado es el mismo y no se funde; al volver tampoco: la pantalla de antes ya estaba. */
-:is(.page--forward, .page--tab:not(.page--same-header)) > :is(.topbar, .tabs) > * { animation: fade-in var(--enter-time) var(--enter-ease) backwards; }
+.page--forward > .topbar > * { animation: fade-in var(--dur-page) var(--ease-out) backwards; }
+.page--tab:not(.page--same-header) > :is(.topbar, .tabs) > * { animation: fade-in var(--dur-sheet) var(--ease-sheet) backwards; }
 @keyframes tab-in { from { opacity: 0; transform: scale(0.977); } }
 @keyframes tile-in { from { opacity: 0; transform: scale(0.96); } }
 /* Cambio de tema (theme.ts, con View Transitions): la pantalla vieja se funde con la nueva. Es un fundido, así que
@@ -560,8 +558,8 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 @keyframes sheet-down { to { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) {
   /* Con movimiento reducido: solo fundidos, y al volver nada */
-  .page--forward, .page--tab { --enter: fade-in; --enter-time: var(--dur-fast); --enter-ease: var(--ease-out); }
-  .page--back { --enter: none; }
+  .page--forward > :not(.topbar, .tabs, .skeleton-wait, .arrive, .notice, .empty--in, .sheet-backdrop, .lightbox, .viewer, dialog), .page--tab > :not(.topbar, .tabs, .skeleton-wait, .arrive, .notice, .empty--in, .sheet-backdrop, .lightbox, .viewer, dialog) { animation: fade-in var(--dur-fast) var(--ease-out) backwards; }
+  .page--back > :not(.topbar, .tabs, .skeleton-wait, .arrive, .notice, .empty--in, .sheet-backdrop, .lightbox, .viewer, dialog) { animation: none; }
 }
 
 /* ---------- Grupos ---------- */
