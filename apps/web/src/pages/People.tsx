@@ -24,7 +24,7 @@ function PeopleGrid({ title, people, empty, note, tabs }: { title: string; peopl
     <div className="page" ref={pageRef}>
       <header className={tabs ? "topbar" : "topbar topbar--thread"}>
         {!tabs && <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>}
-        <h1 className="topbar__title topbar__title--sm">{tabs ? "Gente" : title}</h1>
+        <h1 className="topbar__title">{tabs ? "Gente" : title}</h1>
       </header>
       {tabs}
       {note && <p className="muted small page-note">{note}</p>}
