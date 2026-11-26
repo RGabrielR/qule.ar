@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { Readable } from "node:stream";
-import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import path from "node:path";
@@ -89,12 +89,15 @@ export const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
  */
 const MAX_INPUT_PIXELS = 40_000_000;
 
+export class InvalidImageError extends Error {}
+
 export async function saveImage(input: ArrayBuffer | Buffer): Promise<string> {
   const out = await sharp(Buffer.isBuffer(input) ? input : Buffer.from(input), { limitInputPixels: MAX_INPUT_PIXELS })
     .rotate()
     .resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true })
     .webp({ quality: 82 })
-    .toBuffer();
+    .toBuffer()
+    .catch((cause) => { throw new InvalidImageError("No pudimos leer esa imagen", { cause }); });
   const key = `${crypto.randomUUID()}.webp`;
   await putBlob(key, out, "image/webp");
   return key;
@@ -178,12 +181,14 @@ export function saveVideo(input: ArrayBuffer): Promise<{ key: string; posterKey:
 
 async function processVideo(input: ArrayBuffer): Promise<{ key: string; posterKey: string; seconds: number }> {
   const id = crypto.randomUUID();
-  const tmpIn = path.join(tmpdir(), `${id}.in`);
   const key = `${id}.mp4`;
-  // ffmpeg escribe en una carpeta temporal; después el video se guarda en el disco o en el bucket
-  const out = path.join(tmpdir(), key);
-  const frame = path.join(tmpdir(), `${id}.png`);
-  await writeFile(tmpIn, Buffer.from(input));
+  // ffmpeg trabaja en una carpeta temporal propia, con permisos 700 (solo el proceso del API la puede leer): el video
+  // todavía no está cifrado. Después se guarda cifrado en el disco o en el bucket, y la carpeta se borra entera.
+  const work = await mkdtemp(path.join(tmpdir(), "qule-video-"));
+  const tmpIn = path.join(work, "in");
+  const out = path.join(work, key);
+  const frame = path.join(work, "frame.png");
+  await writeFile(tmpIn, Buffer.from(input), { mode: 0o600 });
   try {
     const { stderr } = await run(FFMPEG, [
       "-hide_banner", "-y", "-i", tmpIn,
@@ -202,9 +207,7 @@ async function processVideo(input: ArrayBuffer): Promise<{ key: string; posterKe
     await putBlob(key, await readFile(out), "video/mp4");
     return { key, posterKey, seconds };
   } finally {
-    await unlink(tmpIn).catch(() => {});
-    await unlink(frame).catch(() => {});
-    await unlink(out).catch(() => {});
+    await rm(work, { recursive: true, force: true }).catch(() => {});
   }
 }
 

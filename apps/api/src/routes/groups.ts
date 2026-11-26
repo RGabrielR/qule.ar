@@ -5,19 +5,20 @@ import { z } from "zod";
 import { nextSlot } from "../antispam.js";
 import { db, schema } from "../db/index.js";
 import { DEFAULT_SPAM_RULES } from "../db/schema.js";
-import { ageFrom, authorsFor, blockedWith, newId, requireProfile, requireUser, thumbUrl, type AppEnv } from "../lib.js";
+import { ageFrom, authorsFor, blockedWith, messageKey, newId, requireProfile, requireUser, thumbUrl, type AppEnv } from "../lib.js";
 import { distanceLabel, visibleKm } from "../geo.js";
 import { autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, forbiddenGroupText, groupIsEvidence, reportMinorGroupAttempt } from "../moderation.js";
 import { BULK_MAX, bulkInput, pendingConds, requestFilters, requestPage } from "../joinRequests.js";
 import { limit } from "../ratelimit.js";
 import { MAX_UPLOAD_BYTES, saveImage } from "../storage.js";
-import { emitToGroup, emitToUser, isOnline, serializeGroupMessages, syncGroupRoom } from "../realtime.js";
+import { emitPublishedMessage, emitToGroup, emitToUser, isOnline, serializeGroupMessages, syncGroupRoom } from "../realtime.js";
 import { broadcast, onBroadcast } from "../shared.js";
 import { pushTo } from "../push.js";
 import { notifyGroupMessage } from "../groupNotify.js";
 import { forgetFile } from "../fileCache.js";
+import { dropPolls, POLL_QUESTION_MAX, pollOptionsInput, pollTotals } from "../polls.js";
 
-const { group, groupMember, groupMessage, groupJoinRequest, groupInvite, profile, user } = schema;
+const { group, groupMember, groupMessage, groupJoinRequest, groupInvite, groupPoll, groupPollVote, profile, user } = schema;
 
 /** Días que tiene que esperar alguien rechazado o expulsado para volver a pedir ingreso. */
 const REAPPLY_DAYS = 7;
@@ -1018,7 +1019,7 @@ groupRoutes.get("/groups/:id/messages", async (c) => {
         .orderBy(asc(groupMessage.scheduledAt), asc(groupMessage.id)).limit(26),
     ]);
     return c.json({
-      messages: await serializeGroupMessages([...older.slice(0, 24).reverse(), target, ...newer.slice(0, 25)]),
+      messages: await serializeGroupMessages([...older.slice(0, 24).reverse(), target, ...newer.slice(0, 25)], u.id),
       hasMore: older.length > 24, hasNewer: newer.length > 25,
     });
   }
@@ -1042,7 +1043,7 @@ groupRoutes.get("/groups/:id/messages", async (c) => {
     .orderBy(order(groupMessage.scheduledAt), order(groupMessage.id)).limit(51);
   const published = rows.slice(0, 50);
   const hasMore = rows.length > 50;
-  if (after) return c.json({ messages: await serializeGroupMessages(published), hasMore, hasNewer: hasMore });
+  if (after) return c.json({ messages: await serializeGroupMessages(published, u.id), hasMore, hasNewer: hasMore });
 
   const queued = before
     ? []
@@ -1053,8 +1054,8 @@ groupRoutes.get("/groups/:id/messages", async (c) => {
         .orderBy(asc(groupMessage.scheduledAt));
 
   return c.json({
-    messages: await serializeGroupMessages(published.reverse()),
-    queued: await serializeGroupMessages(queued),
+    messages: await serializeGroupMessages(published.reverse(), u.id),
+    queued: await serializeGroupMessages(queued, u.id),
     hasMore,
   });
 });
@@ -1068,41 +1069,60 @@ groupRoutes.post("/groups/:id/messages", async (c) => {
   if (!member) throw new HTTPException(403, { message: "No sos parte de este grupo" });
   const raw = await c.req.json();
   const { body } = parse(bodySchema, raw);
-  // Respuesta a otro mensaje: tiene que ser del mismo grupo y estar publicado
-  let replyToId: string | null = null;
-  if (typeof raw?.replyToId === "string" && raw.replyToId) {
-    const [orig] = await db.select({ id: groupMessage.id }).from(groupMessage)
-      .where(and(eq(groupMessage.id, raw.replyToId), eq(groupMessage.groupId, groupId), eq(groupMessage.status, "published")));
-    if (!orig) throw new HTTPException(400, { message: "Ese mensaje ya no está" });
-    replyToId = orig.id;
+  // Encuesta: el texto es la pregunta y van entre 2 y 5 opciones (ver polls.ts)
+  const options = raw?.poll === undefined ? null : parse(z.object({ options: pollOptionsInput }), raw.poll).options;
+  if (options && body.length > POLL_QUESTION_MAX) {
+    throw new HTTPException(400, { message: `La pregunta puede tener hasta ${POLL_QUESTION_MAX} caracteres` });
   }
+  const idempotencyKey = messageKey(c.req.header("Idempotency-Key"));
+  const { row, slot } = await db.transaction(async (tx) => {
+    await tx.select({ id: group.id }).from(group).where(eq(group.id, groupId)).for("update");
+    if (idempotencyKey) {
+      const [existing] = await tx.select().from(groupMessage).where(and(eq(groupMessage.userId, u.id), eq(groupMessage.idempotencyKey, idempotencyKey)));
+      if (existing && existing.groupId !== groupId) throw new HTTPException(409);
+      if (existing) return { row: existing, slot: null };
+    }
+    // Respuesta a otro mensaje: tiene que ser del mismo grupo y estar publicado
+    let replyToId: string | null = null;
+    if (typeof raw?.replyToId === "string" && raw.replyToId) {
+      const [orig] = await tx.select({ id: groupMessage.id }).from(groupMessage)
+        .where(and(eq(groupMessage.id, raw.replyToId), eq(groupMessage.groupId, groupId), eq(groupMessage.status, "published")));
+      if (!orig) throw new HTTPException(400, { message: "Ese mensaje ya no está" });
+      replyToId = orig.id;
+    }
 
-  // Cuentas nuevas no pueden mandar links en grupos
-  const isNew = Date.now() - new Date(u.createdAt).getTime() < g.spamRules.newAccountHours * 3_600_000;
-  if (isNew && /(https?:\/\/|www\.|\.[a-z]{2,}\/)/i.test(body)) {
-    throw new HTTPException(400, { message: `Las cuentas nuevas no pueden mandar links en grupos durante las primeras ${g.spamRules.newAccountHours} h` });
-  }
+    // Cuentas nuevas no pueden mandar links en grupos
+    const isNew = Date.now() - new Date(u.createdAt).getTime() < g.spamRules.newAccountHours * 3_600_000;
+    if (isNew && /(https?:\/\/|www\.|\.[a-z]{2,}\/)/i.test([body, ...(options ?? [])].join("\n"))) {
+      throw new HTTPException(400, { message: `Las cuentas nuevas no pueden mandar links en grupos durante las primeras ${g.spamRules.newAccountHours} h` });
+    }
 
-  const slot = await nextSlot({ groupId, userId: u.id, userCreatedAt: new Date(u.createdAt), rules: g.spamRules });
-  if (!slot.ok) throw new HTTPException(429, { message: slot.error });
+    const slot = await nextSlot({ groupId, userId: u.id, userCreatedAt: new Date(u.createdAt), rules: g.spamRules }, tx);
+    if (!slot.ok) throw new HTTPException(429, { message: slot.error });
 
-  const now = new Date();
-  const publishNow = slot.at.getTime() <= now.getTime();
-  const [row] = await db
-    .insert(groupMessage)
-    .values({
-      id: newId(),
-      groupId,
-      userId: u.id,
-      body,
-      replyToId,
-      status: publishNow ? "published" : "queued",
-      scheduledAt: publishNow ? now : slot.at,
-    })
-    .returning();
-  const [msg] = await serializeGroupMessages([row]);
-  if (publishNow) {
-    await emitToGroup(groupId, u.id, "group:message", msg);
+    const now = new Date();
+    const publishNow = slot.at.getTime() <= now.getTime();
+    const [row] = await tx
+      .insert(groupMessage)
+      .values({
+        id: newId(),
+        idempotencyKey,
+        groupId,
+        userId: u.id,
+        body,
+        replyToId,
+        status: publishNow ? "published" : "queued",
+        scheduledAt: publishNow ? now : slot.at,
+      })
+      .onConflictDoNothing({ target: [groupMessage.userId, groupMessage.idempotencyKey] }).returning();
+    if (!row) throw new HTTPException(409);
+    if (options) await tx.insert(groupPoll).values({ messageId: row.id, options });
+    return { row, slot };
+  });
+  const [msg] = await serializeGroupMessages([row], u.id);
+  if (!slot) return c.json({ message: msg, reasons: [], intervalSeconds: g.spamRules.intervalSeconds });
+  if (row.status === "published") {
+    await emitPublishedMessage(msg, row.idempotencyKey);
     notifyGroupMessage(row).catch((e) => console.error("notifyGroupMessage", e));
   }
   else emitToUser(u.id, "group:queued", msg);
@@ -1113,6 +1133,10 @@ groupRoutes.post("/groups/:id/messages", async (c) => {
 groupRoutes.patch("/groups/:id/messages/:mid", async (c) => {
   const u = c.get("user");
   const { body } = parse(bodySchema, await c.req.json());
+  const [poll] = await db.select({ id: groupPoll.messageId }).from(groupPoll).where(eq(groupPoll.messageId, c.req.param("mid")));
+  if (poll && body.length > POLL_QUESTION_MAX) {
+    throw new HTTPException(400, { message: `La pregunta puede tener hasta ${POLL_QUESTION_MAX} caracteres` });
+  }
   const [row] = await db
     .update(groupMessage)
     .set({ body })
@@ -1123,7 +1147,7 @@ groupRoutes.patch("/groups/:id/messages/:mid", async (c) => {
     ))
     .returning();
   if (!row) throw new HTTPException(409, { message: "Ese mensaje ya salió" });
-  const [msg] = await serializeGroupMessages([row]);
+  const [msg] = await serializeGroupMessages([row], u.id);
   emitToUser(u.id, "group:queued", msg);
   return c.json({ message: msg });
 });
@@ -1157,11 +1181,48 @@ groupRoutes.delete("/groups/:id/messages/:mid", async (c) => {
       if (current?.status === "published") throw new HTTPException(409, { message: "El mensaje ya se publicó." });
       return c.json({ ok: true });
     }
+    await dropPolls([row.id]);
     emitToUser(u.id, "group:cancelled", { id: row.id, groupId: row.groupId });
   } else if (row.status === "published") {
     await db.update(groupMessage).set({ status: "deleted", body: "" }).where(eq(groupMessage.id, row.id));
     await db.delete(schema.reaction).where(eq(schema.reaction.messageId, row.id));
+    await dropPolls([row.id]);
     await emitToGroup(row.groupId, row.userId, "group:deleted", { id: row.id, groupId: row.groupId });
   }
   return c.json({ ok: true });
+});
+
+// ---------- Encuestas ----------
+
+/**
+ * Votar en una encuesta, cambiar el voto o sacarlo (option = null). Un voto por miembro.
+ * Al grupo le llegan en vivo solo los totales: nunca quién votó qué.
+ */
+groupRoutes.put("/groups/:id/polls/:mid/vote", async (c) => {
+  const u = c.get("user");
+  const groupId = c.req.param("id");
+  const messageId = c.req.param("mid");
+  const { member } = await membership(groupId, u.id);
+  if (!member) throw new HTTPException(403, { message: "No sos parte de este grupo" });
+  const { option } = parse(z.object({ option: z.number().int().min(0).nullable() }), await c.req.json().catch(() => ({})));
+  const [row] = await db.select({ userId: groupMessage.userId, options: groupPoll.options }).from(groupMessage)
+    .innerJoin(groupPoll, eq(groupPoll.messageId, groupMessage.id))
+    .where(and(eq(groupMessage.id, messageId), eq(groupMessage.groupId, groupId), eq(groupMessage.status, "published")));
+  if (!row) throw new HTTPException(404, { message: "Esa encuesta ya no está" });
+  // Quien tiene un bloqueo con quien la creó no la ve, así que tampoco puede votar
+  if ((await blockedWith(u.id)).has(row.userId)) throw new HTTPException(404, { message: "Esa encuesta ya no está" });
+  if (option !== null && option >= row.options.length) throw new HTTPException(400, { message: "Esa opción no existe" });
+  await limit(u.id, "pollVote");
+
+  const mine = and(eq(groupPollVote.messageId, messageId), eq(groupPollVote.userId, u.id));
+  if (option === null) await db.delete(groupPollVote).where(mine);
+  else {
+    await db.insert(groupPollVote).values({ messageId, userId: u.id, option })
+      .onConflictDoUpdate({ target: [groupPollVote.messageId, groupPollVote.userId], set: { option, createdAt: new Date() } });
+  }
+  const totals = await pollTotals(messageId);
+  if (!totals) throw new HTTPException(404, { message: "Esa encuesta ya no está" });
+  // A quienes ven la encuesta (sin bloqueo con quien la creó), como el mensaje
+  await emitToGroup(groupId, row.userId, "group:poll", { groupId, messageId, ...totals });
+  return c.json({ ...totals, myVote: option });
 });
