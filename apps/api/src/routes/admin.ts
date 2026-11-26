@@ -12,6 +12,7 @@ import { disconnectUser, emitToGroup, emitToUser } from "../realtime.js";
 import { deleteImage } from "../storage.js";
 import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
 import { removeGroup } from "./groups.js";
+import { alertKey, dismissableReportsBy, REPORT_SPAM_IGNORED, reportSpamAlerts, resolveAlert } from "../reportSpam.js";
 import { keepEvidence, purgeSuspendedContent } from "../suspension.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, ownerIds, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
@@ -200,6 +201,52 @@ async function closeReports(ids: string[], adminId: string, status: "dismissed" 
   if (status === "dismissed") await releaseEvidence(ids);
 }
 
+// ---------- Alerta de spam de reportes (ver reportSpam.ts y la discusión #219) ----------
+// Quién reporta solo lo ve con nombre la administración general (como en los reportes). El resto del equipo con el
+// permiso Suspensiones ve la alerta con los números y puede actuar igual.
+
+adminRoutes.get("/admin/report-spam", requireAccess("owner", "sanctions"), async (c) => {
+  const owner = (await accessFor(c.get("user"))).includes("owner");
+  const alerts = await reportSpamAlerts();
+  const people = owner ? await authorsFor(alerts.map((a) => a.reporterId)) : new Map();
+  // Sin el id de la cuenta: con él se podría ver quién reporta. Se actúa con el identificador de la alerta.
+  return c.json(alerts.map(({ reporterId, ...a }) => ({
+    ...a,
+    id: alertKey(reporterId),
+    reporter: owner ? people.get(reporterId) ?? null : null,
+  })));
+});
+
+/** La cuenta detrás de una alerta activa (ver resolveAlert). */
+async function alertReporter(key: string) {
+  const reporterId = await resolveAlert(key);
+  if (!reporterId) throw new HTTPException(404, { message: "Esta alerta ya no está activa" });
+  return reporterId;
+}
+
+/** Descarta en bloque sus reportes de la ventana de la alerta. Los urgentes y los anteriores quedan para revisar de a uno. */
+adminRoutes.post("/admin/report-spam/:id/dismiss", requireAccess("owner", "sanctions"), async (c) => {
+  const admin = c.get("user");
+  const reporterId = await alertReporter(c.req.param("id"));
+  const ids = await dismissableReportsBy(reporterId);
+  await closeReports(ids, admin.id, "dismissed", "Descartado en bloque: spam de reportes");
+  await logAction(admin.id, "Descartó en bloque los reportes de una cuenta (spam de reportes)", reporterId, `${ids.length} reportes`);
+  return c.json({ ok: true, dismissed: ids.length });
+});
+
+adminRoutes.post("/admin/report-spam/:id/ignore", requireAccess("owner", "sanctions"), async (c) => {
+  const reporterId = await alertReporter(c.req.param("id"));
+  await logAction(c.get("user").id, REPORT_SPAM_IGNORED, reporterId);
+  return c.json({ ok: true });
+});
+
+adminRoutes.post("/admin/report-spam/:id/suspend", requireAccess("owner", "sanctions"), async (c) => {
+  const reporterId = await alertReporter(c.req.param("id"));
+  const { reason } = z.object({ reason: z.string().trim().min(3, "Escribí un motivo").max(300) }).parse(await c.req.json());
+  await suspendAccount(c.get("user"), reporterId, reason);
+  return c.json({ ok: true });
+});
+
 /** Descartar varios reportes de una vez (todos los de una misma persona o grupo). */
 adminRoutes.post("/admin/reports/dismiss", requireAccess("reports"), async (c) => {
   const { ids } = z.object({ ids: z.array(z.string().min(1).max(64)).min(1).max(500) }).parse(await c.req.json());
@@ -250,6 +297,7 @@ adminRoutes.post("/admin/reports/:id/delete-message", requireAccess("reports"), 
 // Suspensión preventiva: quien tiene solo el permiso Reportes puede suspender ante un reporte abierto por menor de edad,
 // para no dejar la cuenta activa hasta que aparezca alguien con Suspensiones. Después otra persona la confirma o la levanta.
 // Se marca en el registro (sin migración): está pendiente si la última de estas acciones sobre la cuenta es la preventiva.
+type StaffUser = Parameters<typeof accessFor>[0] & { id: string };
 const SUSPENDED = "Suspendió una cuenta";
 const PREVENTIVE = "Suspendió una cuenta de forma preventiva (menor de edad)";
 const CONFIRMED = "Confirmó una suspensión preventiva";
@@ -268,8 +316,13 @@ async function pendingPreventive(ids: string[]): Promise<Set<string>> {
 
 /** Suspender una cuenta: se cierran sus sesiones, deja de aparecer y se borra lo que publicó. Cierra sus reportes abiertos. */
 adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports"), async (c) => {
-  const admin = c.get("user");
-  const target = c.req.param("id");
+  const { reason } = z.object({ reason: z.string().trim().min(3, "Escribí un motivo").max(300) }).parse(await c.req.json());
+  await suspendAccount(c.get("user"), c.req.param("id"), reason);
+  return c.json({ ok: true });
+});
+
+/** Suspende una cuenta: desde un reporte, o desde una alerta de spam de reportes (ver /admin/report-spam). */
+async function suspendAccount(admin: StaffUser, target: string, reason: string) {
   if (target === admin.id) throw new HTTPException(400, { message: "No podés suspenderte a vos" });
   const mine = await accessFor(admin);
   const preventive = !mine.includes("sanctions");
@@ -285,7 +338,6 @@ adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports
   if ((await accessFor(t)).length > 0 && !mine.includes("owner")) {
     throw new HTTPException(403, { message: "Solo la administración general puede suspender a alguien del equipo" });
   }
-  const { reason } = z.object({ reason: z.string().trim().min(3, "Escribí un motivo").max(300) }).parse(await c.req.json());
   const [p] = await db.update(profile).set({ suspendedAt: new Date(), suspendReason: reason, suspendedBy: admin.id })
     .where(eq(profile.userId, target)).returning();
   if (!p) throw new HTTPException(404, { message: "Esa cuenta no existe" });
@@ -310,8 +362,7 @@ adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports
   // Aviso por mail (sin el motivo: se lee en la app, donde también se pide la revisión)
   const [u] = await db.select({ email: user.email }).from(user).where(eq(user.id, target));
   if (u) void sendMail(suspendedMail(u.email), "account");
-  return c.json({ ok: true });
-});
+}
 
 /** Reactivar una cuenta. Si tenía un pedido de revisión abierto, queda resuelto a su favor. */
 adminRoutes.post("/admin/users/:id/unsuspend", requireAccess("sanctions"), async (c) => {

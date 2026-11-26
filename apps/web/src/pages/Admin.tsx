@@ -8,6 +8,7 @@ import { DialogFocus } from "../components/DialogFocus";
 import { PERMISSION_LABELS } from "../staff";
 import { PeoplePanel } from "../features/moderation/PeoplePanel";
 import { ModerationNotices } from "../features/moderation/ModerationNotices";
+import { ReportSpamAlerts } from "../features/moderation/ReportSpamAlerts";
 import { ReportGroups } from "../features/moderation/ReportGroups";
 import type { Report } from "../features/moderation/types";
 
@@ -73,7 +74,7 @@ export function Admin() {
   const [reports, setReports] = useState<Report[] | null>(null);
   const [suspended, setSuspended] = useState<Suspended[] | null>(null);
   const [removed, setRemoved] = useState<RemovedGroup[] | null>(null);
-  const [suspending, setSuspending] = useState<{ id: string; name: string; reason: string; done?: () => void } | null>(null);
+  const [suspending, setSuspending] = useState<SuspendTarget | null>(null);
   const [removing, setRemoving] = useState<Report | null>(null);
   const [error, setError] = useState("");
   // Hasta que termina la primera carga no se muestra el panel; si el servidor dice que no hay permiso, se sale.
@@ -161,6 +162,10 @@ export function Admin() {
 
       {error && <div className="notice notice--error" role="alert">{error}</div>}
 
+      {tab === "open" && (has("owner") || has("sanctions")) && (
+        <ReportSpamAlerts act={act} onSuspend={(t) => setSuspending({ ...t, preventive: false })} refresh={reports} />
+      )}
+
       {(tab === "open" || tab === "closed") && reports && (
         <ReportGroups
           key={tab}
@@ -168,7 +173,9 @@ export function Admin() {
           status={tab}
           has={has}
           act={act}
-          onSuspend={(r) => r.target?.id && setSuspending({ id: r.target.id, name: r.target.name, reason: `Reportes por ${r.reason}` })}
+          onSuspend={(r) => r.target?.id && setSuspending({
+            url: `/admin/users/${r.target.id}/suspend`, name: r.target.name, reason: `Reportes por ${r.reason}`, preventive: !has("sanctions"),
+          })}
           onRemoveGroup={setRemoving}
         />
       )}
@@ -298,7 +305,7 @@ export function Admin() {
       )}
 
       {tab === "people" && (
-        <PeoplePanel onSuspend={(p, done) => setSuspending({ id: p.id, name: p.name, reason: "", done })} />
+        <PeoplePanel onSuspend={(p, done) => setSuspending({ url: `/admin/users/${p.id}/suspend`, name: p.name, reason: "", preventive: false, done })} />
       )}
 
       {tab === "team" && team && <Team team={team} onChange={load} />}
@@ -330,7 +337,6 @@ export function Admin() {
       {suspending && (
         <SuspendDialog
           target={suspending}
-          preventive={!has("sanctions")}
           onClose={() => setSuspending(null)}
           onDone={() => { suspending.done?.(); setSuspending(null); load(); }}
         />
@@ -346,9 +352,14 @@ export function Admin() {
   );
 }
 
-function SuspendDialog({ target, preventive, onClose, onDone }: {
-  target: { id: string; name: string; reason: string }; preventive: boolean; onClose: () => void; onDone: () => void;
-}) {
+/**
+ * A quién se suspende: la persona reportada, o quien satura el canal de reportes (ver ReportSpamAlerts). `url` es la
+ * ruta que suspende: en la alerta va con su identificador, porque el equipo no ve de qué cuenta es.
+ */
+type SuspendTarget = { url: string; name: string; reason: string; preventive: boolean; done?: () => void };
+
+function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onClose: () => void; onDone: () => void }) {
+  const { preventive } = target;
   const [reason, setReason] = useState(target.reason);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -356,7 +367,7 @@ function SuspendDialog({ target, preventive, onClose, onDone }: {
     setBusy(true);
     setError("");
     try {
-      await api(`/admin/users/${target.id}/suspend`, { method: "POST", json: { reason } });
+      await api(target.url, { method: "POST", json: { reason } });
       onDone();
     } catch (e) {
       setError((e as Error).message);
