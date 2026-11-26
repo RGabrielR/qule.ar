@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, type Author } from "../../api";
 import { Avatar } from "../../components/Avatar";
 
@@ -28,6 +28,9 @@ export type ReportSpamAlert = {
 
 /** Una cuenta cuyos reportes dejaron de contar. `id` tampoco deja saber de qué cuenta es. */
 export type MutedReporter = { id: string; reporter: Author | null; mutedAt: string; reason: string | null; history: History };
+
+/** Lo que devuelve GET /admin/report-spam. */
+export type ReportSpamData = { alerts: ReportSpamAlert[]; muted: MutedReporter[] };
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const fmt = (iso: string) => new Date(iso).toLocaleDateString("es-AR", { day: "numeric", month: "short" });
@@ -65,32 +68,24 @@ function HistoryLine({ h }: { h: History }) {
 }
 
 /**
- * Quién reporta: cuentas que reportan de una forma para mirar, arriba de los reportes abiertos. No esconde nada y
+ * Quién reporta: cuentas que reportan de una forma para mirar, en su propia pestaña de Moderación. No esconde nada y
  * no decide nada: muestra los datos y deja actuar. A la persona no se le avisa de nada de esto. El equipo actúa con el
  * identificador de cada tarjeta, sin ver de qué cuenta es (salvo la administración general, que ve el nombre).
  */
-export function ReportSpamAlerts({ act, onSuspend, refresh }: {
+export function ReportSpamAlerts({ data, act, onSuspend }: {
+  data: ReportSpamData;
+  /** Hace la acción y recarga el panel (y con eso, esta lista). */
   act: (fn: () => Promise<unknown>) => Promise<void>;
   onSuspend: (target: { url: string; name: string; reason: string }) => void;
-  /** Cambia cuando el panel se recarga (por ejemplo, después de suspender). */
-  refresh: unknown;
 }) {
-  const [data, setData] = useState<{ alerts: ReportSpamAlert[]; muted: MutedReporter[] }>({ alerts: [], muted: [] });
-  const [reload, setReload] = useState(0);
   /** La tarjeta cuyo descarte en bloque se está confirmando. */
   const [confirming, setConfirming] = useState<string | null>(null);
 
-  useEffect(() => {
-    api<{ alerts: ReportSpamAlert[]; muted: MutedReporter[] }>("/admin/report-spam").then(setData, () => setData({ alerts: [], muted: [] }));
-  }, [refresh, reload]);
-
   const { alerts, muted } = data;
-  if (!alerts.length && !muted.length) return null;
-  const done = () => {
-    setConfirming(null);
-    setReload((n) => n + 1);
-  };
-  const post = (path: string, json?: unknown) => act(() => api(path, { method: "POST", json })).then(done);
+  if (!alerts.length && !muted.length) {
+    return <div className="empty"><p className="muted">Por ahora no hay cuentas que reporten de una forma para mirar.</p></div>;
+  }
+  const post = (path: string, json?: unknown) => act(() => api(path, { method: "POST", json })).then(() => setConfirming(null));
 
   return (
     <section className="reports spam-alerts" aria-label="Quién reporta">
