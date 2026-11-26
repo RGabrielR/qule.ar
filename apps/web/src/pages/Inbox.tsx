@@ -9,6 +9,7 @@ import { albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumN
 import { Avatar } from "../components/Avatar";
 import { useTabData } from "../features/navigation/tabData";
 import { useRememberScroll } from "../features/navigation/viewMemory";
+import { useOlderChats } from "../features/messages/useOlderChats";
 
 function ago(iso: string) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -53,7 +54,9 @@ function useMatchingPeople(filters: Filters, people: string) {
 
 export function Inbox() {
   const { me } = useMe();
-  const { conversations: list } = useTabData();
+  const { conversations: live } = useTabData();
+  // Los 100 más recientes vienen en vivo; los anteriores se cargan a pedido
+  const { chats: list, hasMore, loading: loadingMore, error: moreError, loadMore } = useOlderChats(live);
   const albumNoticeTime = useAlbumNoticeTime(list?.map(({ last }) => last) ?? []);
   const [query, setQuery] = useState("");
   const [{ unread, filters }, setView] = useState(loadInboxFilters);
@@ -148,6 +151,15 @@ export function Inbox() {
             );
           })}
         </ul>
+      )}
+      {hasMore && (
+        <div className="inbox__more">
+          {moreError && <p className="muted small" role="status">No se pudieron cargar. Probá de nuevo.</p>}
+          {(query.trim() || anyFilter) && <p className="muted small">Buscás entre los chats cargados. Puede haber más abajo.</p>}
+          <button className="btn" disabled={loadingMore} onClick={() => void loadMore()}>
+            {loadingMore ? "Cargando…" : "Cargar chats anteriores"}
+          </button>
+        </div>
       )}
       {sheet && <FilterSheet initial={filters} onClose={() => setSheet(false)} onApply={(f) => {
         setFilters(f);

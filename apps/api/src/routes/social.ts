@@ -208,28 +208,38 @@ async function albumNoticeStates(
   return states;
 }
 
+/**
+ * La bandeja, de a INBOX_LIMIT chats, del más reciente al más viejo. Con `before` y `beforeId` (la fecha y el id del
+ * último chat de la página anterior) trae los que siguen. Los bloqueos y los chats sin mensajes se filtran en la
+ * consulta, así una página corta quiere decir que no hay más.
+ */
 socialRoutes.get("/conversations", async (c) => {
   const me = c.get("user");
-  const convs = await db
+  const cursor = z.object({ before: z.iso.datetime({ offset: true }), beforeId: z.string().min(1).max(64) })
+    .safeParse({ before: c.req.query("before"), beforeId: c.req.query("beforeId") });
+  if (!cursor.success && (c.req.query("before") || c.req.query("beforeId"))) {
+    throw new HTTPException(400, { message: "Página inválida" });
+  }
+  // Los ms alcanzan: la fecha viaja en ISO y se compara redondeada igual que en la consulta.
+  const at = sql`date_trunc('milliseconds', ${conversation.lastMessageAt})`;
+  const before = cursor.success ? new Date(cursor.data.before).toISOString() : null;
+  const otherOf = sql`case when ${conversation.userA} = ${me.id} then ${conversation.userB} else ${conversation.userA} end`;
+  const visible = await db
     .select()
     .from(conversation)
-    .where(or(eq(conversation.userA, me.id), eq(conversation.userB, me.id)))
-    .orderBy(desc(conversation.lastMessageAt), desc(conversation.id))
+    .where(and(
+      or(eq(conversation.userA, me.id), eq(conversation.userB, me.id)),
+      sql`not exists (select 1 from ${block} where (${block.blockerId} = ${me.id} and ${block.blockedId} = ${otherOf})
+        or (${block.blockedId} = ${me.id} and ${block.blockerId} = ${otherOf}))`,
+      sql`exists (select 1 from ${directMessage} where ${directMessage.conversationId} = ${conversation.id})`,
+      before && cursor.success
+        ? sql`(${at} < ${before}::timestamptz or (${at} = ${before}::timestamptz and ${conversation.id} < ${cursor.data.beforeId}))`
+        : undefined,
+    ))
+    .orderBy(desc(at), desc(conversation.id))
     .limit(INBOX_LIMIT);
-  if (!convs.length) return c.json([]);
-  const otherIdFor = (cv: typeof conversation.$inferSelect) => cv.userA === me.id ? cv.userB : cv.userA;
-  const others = convs.map(otherIdFor);
-  const blockedRows = await db
-    .select()
-    .from(block)
-    .where(or(
-      and(eq(block.blockerId, me.id), inArray(block.blockedId, others)),
-      and(eq(block.blockedId, me.id), inArray(block.blockerId, others)),
-    ));
-  const blocked = new Set(blockedRows.map((r) => (r.blockerId === me.id ? r.blockedId : r.blockerId)));
-
-  const visible = convs.filter((cv) => !blocked.has(otherIdFor(cv)));
   if (!visible.length) return c.json([]);
+  const otherIdFor = (cv: typeof conversation.$inferSelect) => cv.userA === me.id ? cv.userB : cv.userA;
   const ids = visible.map((cv) => cv.id);
   // El índice por conversación y fecha permite buscar solo el último mensaje de cada chat.
   const lastMessage = db.select().from(directMessage)
@@ -327,9 +337,17 @@ socialRoutes.get("/conversations/:id/messages", async (c) => {
   const me = c.get("user");
   const { conv, otherId } = await myConversation(c.req.param("id"), me.id);
   if (await isBlocked(me.id, otherId)) return c.notFound();
+  // Página anterior: `before` (fecha del mensaje más viejo que ya tenés) y, si la mandás, `beforeId` para desempatar.
   const before = c.req.query("before");
+  const beforeId = c.req.query("beforeId");
   const conds = [eq(directMessage.conversationId, conv.id)];
-  if (before) conds.push(lt(directMessage.createdAt, new Date(before)));
+  if (before) {
+    const at = new Date(before);
+    if (Number.isNaN(at.getTime())) throw new HTTPException(400, { message: "Página inválida" });
+    conds.push(beforeId
+      ? or(lt(directMessage.createdAt, at), and(eq(directMessage.createdAt, at), lt(directMessage.id, beforeId)))!
+      : lt(directMessage.createdAt, at));
+  }
   const rows = await db
     .select({ message: directMessage, senderCreatedAt: schema.user.createdAt })
     .from(directMessage)

@@ -24,7 +24,8 @@ function replaceConversation(list: ConversationSummary[], id: string, summary: C
   const index = next.findIndex((chat) => compareConversations(summary, chat) > 0);
   if (index === -1) next.push(summary);
   else next.splice(index, 0, summary);
-  return next.slice(0, INBOX_LIMIT);
+  // Sin recortar: si la persona cargó chats anteriores, el que queda último no tiene que desaparecer.
+  return next;
 }
 
 function addMessage(chat: ConversationSummary, message: Dm, userId: string): ConversationSummary {
@@ -131,7 +132,7 @@ export function useLiveInbox(
       const list = currentData.current;
       const hidesPreview = list?.some((chat) => chat.id === conversationId && chat.last.id === id);
       if (list && hidesPreview) update(replaceConversation(list, conversationId, null));
-      void refreshConversation(conversationId, Boolean(hidesPreview && list?.length === INBOX_LIMIT));
+      void refreshConversation(conversationId, Boolean(hidesPreview && (list?.length ?? 0) >= INBOX_LIMIT));
     }
 
     // El socket y la respuesta HTTP pueden confirmar la misma escritura en cualquier orden.
