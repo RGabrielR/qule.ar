@@ -197,6 +197,13 @@
       "when": 1795699063548,
       "tag": "0027_captura_y_respuesta_en_reporte",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1795700735179,
+      "tag": "0028_privacidad_edad",
+      "breakpoints": true
     }
   ]
 }
