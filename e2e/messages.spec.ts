@@ -45,7 +45,7 @@ test("abre una foto del chat para quien la manda y quien la recibe", async ({ pa
     upload.release();
     await expect(sentPhoto.locator("img")).toHaveAttribute("src", /^\/api\/files\//);
 
-    await recipientPage.getByRole("link", { name: new RegExp(sender.name) }).click();
+    await recipientPage.locator(".inbox__item").filter({ hasText: sender.name }).click();
     await expect(recipientPage.locator("html")).toHaveAttribute("data-theme", "penumbra");
     const receivedPhoto = recipientPage.getByRole("button", { name: "Abrir foto" });
     await receivedPhoto.tap();
@@ -81,7 +81,7 @@ test("entrega un mensaje a otra sesión y lo conserva al reabrir el chat", async
     await signIn(recipientPage, recipient);
     const inbox = recipientPage.getByRole("link", { name: "Mensajes", exact: true });
     await inbox.click();
-    const conversation = recipientPage.getByRole("link", { name: new RegExp(sender.name) });
+    const conversation = recipientPage.locator(".inbox__item").filter({ hasText: sender.name });
     await expect(recipientPage.getByText("Sin mensajes por ahora", { exact: true })).toBeVisible();
 
     await signIn(page, sender);
@@ -134,7 +134,7 @@ test("entrega un mensaje a otra sesión y lo conserva al reabrir el chat", async
     await recipientPage.unroute("**/summary");
     const otherTab = await recipientContext.newPage();
     await otherTab.goto("/mensajes");
-    const otherChat = otherTab.getByRole("link", { name: new RegExp(sender.name) });
+    const otherChat = otherTab.locator(".inbox__item").filter({ hasText: sender.name });
     await expect(otherChat.locator(".badge--inline")).toHaveText("2");
     const summaryCounts = [0, 0];
     const tabs = [recipientPage, otherTab];
