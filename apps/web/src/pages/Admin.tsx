@@ -6,6 +6,7 @@ import { Avatar } from "../components/Avatar";
 import { BackIcon } from "../components/Icons";
 import { DialogFocus } from "../components/DialogFocus";
 import { PERMISSION_LABELS } from "../staff";
+import { AccountSearch, type AccountMatch } from "../features/moderation/AccountSearch";
 import { ModerationNotices } from "../features/moderation/ModerationNotices";
 import { ReportGroups } from "../features/moderation/ReportGroups";
 import type { Report } from "../features/moderation/types";
@@ -71,7 +72,8 @@ export function Admin() {
   const [reports, setReports] = useState<Report[] | null>(null);
   const [suspended, setSuspended] = useState<Suspended[] | null>(null);
   const [removed, setRemoved] = useState<RemovedGroup[] | null>(null);
-  const [suspending, setSuspending] = useState<Report | null>(null);
+  const [suspending, setSuspending] = useState<{ target: AccountMatch; reason: string } | null>(null);
+  const [searchVersion, setSearchVersion] = useState(0);
   const [removing, setRemoving] = useState<Report | null>(null);
   const [error, setError] = useState("");
   // Hasta que termina la primera carga no se muestra el panel; si el servidor dice que no hay permiso, se sale.
@@ -165,9 +167,19 @@ export function Admin() {
           status={tab}
           has={has}
           act={act}
-          onSuspend={setSuspending}
+          onSuspend={(report) => {
+            if (report.target?.id) setSuspending({ target: { id: report.target.id, name: report.target.name }, reason: `Reportes por ${report.reason}` });
+          }}
           onRemoveGroup={setRemoving}
         />
+      )}
+
+      {tab === "suspended" && has("sanctions") && (
+        <section className="rcard" aria-label="Buscar cuenta por ID">
+          <h2 className="small">Buscar cuenta por ID</h2>
+          <p className="muted small">El código de una captura sirve para buscar la cuenta. Revisá el contexto antes de suspender.</p>
+          <AccountSearch key={searchVersion} mode="sanctions" onSelect={(target) => setSuspending({ target, reason: "" })} />
+        </section>
       )}
 
       {tab === "suspended" && suspended && (
@@ -322,10 +334,11 @@ export function Admin() {
       )}
       {suspending && (
         <SuspendDialog
-          report={suspending}
+          target={suspending.target}
+          initialReason={suspending.reason}
           preventive={!has("sanctions")}
           onClose={() => setSuspending(null)}
-          onDone={() => { setSuspending(null); load(); }}
+          onDone={() => { setSuspending(null); setSearchVersion((v) => v + 1); load(); }}
         />
       )}
       {removing && (
@@ -339,15 +352,15 @@ export function Admin() {
   );
 }
 
-function SuspendDialog({ report, preventive, onClose, onDone }: { report: Report; preventive: boolean; onClose: () => void; onDone: () => void }) {
-  const [reason, setReason] = useState(`Reportes por ${report.reason}`);
+function SuspendDialog({ target, initialReason, preventive, onClose, onDone }: { target: AccountMatch; initialReason: string; preventive: boolean; onClose: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState(initialReason);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function submit() {
     setBusy(true);
     setError("");
     try {
-      await api(`/admin/users/${report.target?.id}/suspend`, { method: "POST", json: { reason } });
+      await api(`/admin/users/${encodeURIComponent(target.id)}/suspend`, { method: "POST", json: { reason } });
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -358,10 +371,15 @@ function SuspendDialog({ report, preventive, onClose, onDone }: { report: Report
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal aria-labelledby="suspend-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
-        <h2 id="suspend-title">Suspender a {report.target?.name}</h2>
+        <h2 id="suspend-title">Suspender a {target.name}</h2>
         <p className="muted small">Se cierran sus sesiones, deja de aparecer en la app y se cierran sus reportes abiertos. También se borran sus mensajes en grupos y todo lo que subió: fotos, álbumes, videos y fotos que mandó por privado. Lo que sea prueba de un reporte queda guardado. La cuenta se puede reactivar después, pero lo borrado no vuelve.</p>
         {preventive && (
           <p className="small">Es una <b>suspensión preventiva</b>: hacela si hay indicios de que es menor de edad. Después alguien con el permiso Suspensiones la revisa y decide si se mantiene.</p>
+        )}
+        {!preventive && (
+          <button type="button" className="btn btn--small" disabled={busy} onClick={() => setReason("Filtración de fotos de álbum")}>
+            Usar motivo «Filtración de fotos de álbum»
+          </button>
         )}
         <label className="field">
           <span>Motivo (la persona lo va a ver)</span>
@@ -462,7 +480,8 @@ function ResolveAppealDialog({ appeal, decision, onClose, onDone }: {
 
 /** Equipo de moderación: dar, cambiar y sacar permisos chicos. Solo la administración general. */
 function Team({ team, onChange }: { team: TeamMember[]; onChange: () => void }) {
-  const [account, setAccount] = useState("");
+  const [account, setAccount] = useState<AccountMatch | null>(null);
+  const [searchVersion, setSearchVersion] = useState(0);
   const [perms, setPerms] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -471,7 +490,8 @@ function Team({ team, onChange }: { team: TeamMember[]; onChange: () => void }) 
     setError("");
     try {
       await api("/admin/team", { method: "POST", json: { account: acc, permissions: list } });
-      setAccount("");
+      setAccount(null);
+      setSearchVersion((v) => v + 1);
       setPerms([]);
       onChange();
     } catch (e) {
@@ -512,20 +532,21 @@ function Team({ team, onChange }: { team: TeamMember[]; onChange: () => void }) 
         </ul>
       )}
       <div className="rcard">
-        <h2 className="small"><b>Sumar a alguien</b></h2>
-        <label className="field">
-          <span>ID de la cuenta o mail</span>
-          <input className="input" value={account} onChange={(e) => setAccount(e.target.value)} autoCapitalize="off" autoCorrect="off" />
-        </label>
+        <h2 className="small"><b>Buscar a alguien</b></h2>
+        <AccountSearch key={searchVersion} mode="team" disabled={busy} onSelect={(match) => {
+          setAccount(match);
+          setPerms(team.find((member) => member.id === match?.id)?.permissions ?? []);
+        }} />
+        {account && <p className="small">Permisos de <b>{account.name}</b></p>}
         {PERMISSION_LABELS.map((p) => (
           <label key={p.id} className="field--inline small">
-            <input type="checkbox" checked={perms.includes(p.id)} onChange={() => setPerms(toggle(perms, p.id))} />
+            <input type="checkbox" disabled={!account || busy} checked={perms.includes(p.id)} onChange={() => setPerms(toggle(perms, p.id))} />
             <span><b>{p.label}</b> <span className="muted">· {p.hint}</span></span>
           </label>
         ))}
         {error && <p className="error" role="alert">{error}</p>}
-        <button className="btn btn--primary" disabled={busy || account.trim().length < 3 || perms.length === 0} onClick={() => save(account.trim(), perms)}>
-          Dar permisos
+        <button className="btn btn--primary" disabled={busy || !account} onClick={() => { if (account) void save(account.id, perms); }}>
+          Guardar permisos
         </button>
       </div>
     </div>

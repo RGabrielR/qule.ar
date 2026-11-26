@@ -461,6 +461,40 @@ adminRoutes.get("/admin/groups/removed", requireAccess("owner"), async (c) => {
   })));
 });
 
+// Se usa POST para que los mails y códigos queden fuera de la URL.
+const accountSearch = z.object({ query: z.string().trim().min(3).max(200) });
+const accountName = sql<string>`coalesce(${profile.displayName}, ${user.name})`;
+
+adminRoutes.post("/admin/team/search", requireAccess("owner"), async (c) => {
+  const { query } = accountSearch.parse(await c.req.json());
+  const rows = await db.select({
+    id: user.id, name: accountName, email: user.email, emailVerified: user.emailVerified,
+  }).from(user).leftJoin(profile, eq(profile.userId, user.id))
+    .where(or(
+      eq(user.id, query),
+      sql`lower(${user.email}) = lower(${query})`,
+      sql`strpos(lower(${accountName}), lower(${query})) > 0`,
+    ))
+    .orderBy(sql`case when ${user.id} = ${query} or lower(${user.email}) = lower(${query}) then 0 else 1 end`, accountName, user.id)
+    .limit(21);
+  c.header("Cache-Control", "no-store");
+  return c.json({
+    accounts: rows.slice(0, 20).map(({ emailVerified, ...row }) => ({ ...row, owner: isOwner({ ...row, emailVerified }) })),
+    more: rows.length > 20,
+  });
+});
+
+adminRoutes.post("/admin/accounts/search", requireAccess("sanctions"), async (c) => {
+  const query = z.object({ query: z.string().trim().regex(/^[a-zA-Z0-9_-]{8,64}$/) }).parse(await c.req.json()).query;
+  const fields = { id: user.id, name: accountName, suspendedAt: profile.suspendedAt };
+  // Una cadena de ocho caracteres puede ser también el ID completo de otra cuenta.
+  const matches = await db.select(fields).from(user).innerJoin(profile, eq(profile.userId, user.id))
+    .where(query.length === 8 ? sql`left(${user.id}, 8) = ${query}` : eq(user.id, query)).limit(2);
+  const account = matches.length === 1 ? matches[0] : null;
+  c.header("Cache-Control", "no-store");
+  return c.json({ account, ambiguous: matches.length > 1 });
+});
+
 // ---------- Equipo y registro (solo administración general) ----------
 
 /** Quiénes tienen permisos chicos. */

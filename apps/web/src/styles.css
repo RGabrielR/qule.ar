@@ -798,3 +798,5 @@ button.quote:hover { background: var(--surface-3); }
 }
 /* Al cambiar de app o abrir el selector de apps, las fotos privadas no quedan a la vista */
 .app-away .private-media { visibility: hidden; }
+
+.admin-account-detail { overflow-wrap: anywhere; }

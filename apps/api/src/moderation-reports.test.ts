@@ -72,6 +72,49 @@ test("reportes agrupados por tema, descarte en bloque y avisos de moderación", 
   const bea = await account("Bea");
   await db.insert(schema.staffPermission).values({ userId: mod.id, permission: "reports" });
 
+  await t.test("búsqueda de Equipo y de cuentas con permisos separados", async () => {
+    const { env } = await import("./env.js");
+    env.ADMIN_USER_IDS.push(ana.id);
+    await db.insert(schema.staffPermission).values({ userId: bea.id, permission: "sanctions" });
+    try {
+      const teamSearch = (query: string, actor: Account) =>
+        request("/api/admin/team/search", actor, json("POST", { query }));
+      const sanctionSearch = (query: string, actor: Account) =>
+        request("/api/admin/accounts/search", actor, json("POST", { query }));
+
+      assert.equal((await teamSearch("Tito", mod)).status, 403);
+      assert.equal((await teamSearch("Tito", bea)).status, 403);
+      for (const query of ["tit", "TITO@example.test", target.id]) {
+        const response = await teamSearch(query, ana);
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("cache-control"), "no-store");
+        assert.deepEqual(await response.json(), {
+          accounts: [{ id: target.id, name: "Tito", email: "tito@example.test", owner: false }], more: false,
+        });
+      }
+      assert.equal((await sanctionSearch(target.id, mod)).status, 403);
+      for (const query of [target.id, target.id.slice(0, 8)]) {
+        const response = await sanctionSearch(query, bea);
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), {
+          account: { id: target.id, name: "Tito", suspendedAt: null }, ambiguous: false,
+        });
+      }
+      const otherId = target.id.slice(0, 8) + "-colision";
+      await db.insert(schema.user).values({ id: otherId, name: "Otra cuenta", email: "colision@example.test" });
+      await db.insert(schema.profile).values({ userId: otherId, displayName: "Otra cuenta", birthdate: "1990-01-01" });
+      try {
+        const response = await sanctionSearch(target.id.slice(0, 8), bea);
+        assert.deepEqual(await response.json(), { account: null, ambiguous: true });
+      } finally {
+        await db.delete(schema.user).where(eq(schema.user.id, otherId));
+      }
+    } finally {
+      env.ADMIN_USER_IDS.pop();
+      await db.delete(schema.staffPermission).where(eq(schema.staffPermission.userId, bea.id));
+    }
+  });
+
   // Un mensaje privado de Tito a Ana, que reportan Ana y Bea (Bea, por una captura)
   const [a, b] = [ana.id, target.id].sort();
   await db.insert(schema.conversation).values({ id: "conv1", userA: a, userB: b });
