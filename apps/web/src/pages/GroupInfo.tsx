@@ -13,6 +13,7 @@ import { markBack, usePageTransition } from "../features/navigation/pageTransiti
 import { GroupAvatar } from "../components/GroupAvatar";
 import { Skeleton, SkeletonRows, SkeletonText, SkeletonWait } from "../components/Skeleton";
 import { useInstalledAndroidBack } from "../useSectionBack";
+import { AiChip } from "../features/photos/AiChip";
 
 export function GroupInfo() {
   const { id = "" } = useParams();
@@ -154,6 +155,7 @@ export function GroupInfo() {
 
       <section className="section group-head">
         <GroupAvatar name={info.name} photo={info.photo} general={info.isGeneral} size="big" />
+        {info.photo && <AiChip origin={info.photoAi} className="ai-chip--inline" />}
       </section>
 
       <section className="section">

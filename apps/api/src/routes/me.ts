@@ -4,6 +4,7 @@ import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { db, schema } from "../db/index.js";
+import { aiOriginOf } from "../aiOrigin.js";
 import { ageFrom, mediaOut, newId, requireProfile, requireUser, type AppEnv } from "../lib.js";
 import { syncGroupRoom } from "../realtime.js";
 import { deleteImage, MAX_UPLOAD_BYTES, MAX_VIDEO_BYTES, readImage, saveImage, saveVideo, videoEnabled, videoFile, type VideoSource } from "../storage.js";
@@ -284,17 +285,21 @@ meRoutes.post("/me/photos", requireUser, requireProfile, async (c) => {
   if (!isPrivate && same >= MAX_PHOTOS) throw new HTTPException(400, { message: `Podés tener hasta ${MAX_PHOTOS} fotos en tu perfil` });
   const albumId = isPrivate ? (albumField ? (await ownAlbumOr404(u.id, albumField)).id : (await defaultAlbum(u.id)).id) : null;
 
+  const bytes = await file.arrayBuffer();
+  // Antes de procesarla: al guardarla se le borran los metadatos. `ai` lo manda la web si el original (antes del
+  // recorte) traía la marca.
+  const ai = await aiOriginOf(bytes, body.ai);
   let saved: { key: string; posterKey: string | null; seconds: number | null };
   try {
-    saved = isVideo ? await saveVideo(await file.arrayBuffer()) : { key: await saveImage(await file.arrayBuffer()), posterKey: null, seconds: null };
+    saved = isVideo ? await saveVideo(bytes) : { key: await saveImage(bytes), posterKey: null, seconds: null };
   } catch {
     throw new HTTPException(400, { message: isVideo ? "No pudimos procesar ese video" : "No pudimos leer esa imagen" });
   }
   const id = newId();
   const kind = isVideo ? "video" : "photo";
   const position = mine.length;
-  await db.insert(photo).values({ id, userId: u.id, position, isPrivate, albumId, kind, ...saved });
-  return c.json({ id, position, isPrivate, albumId, ...mediaOut({ kind, ...saved }) });
+  await db.insert(photo).values({ id, userId: u.id, position, isPrivate, albumId, kind, ai, ...saved });
+  return c.json({ id, position, isPrivate, albumId, ...mediaOut({ kind, ai, ...saved }) });
 });
 
 /**

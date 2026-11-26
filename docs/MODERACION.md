@@ -90,6 +90,18 @@ Ninguna señal decide sola. Puede ser alguien que encontró varios problemas de 
 
 A quien reporta no se le dice nada, ni a quien reporta de buena fe ni a quien quedó marcado. Además hay un tope de 15 reportes por hora y 40 por día por persona. Todo queda en el registro de moderación. El nombre de quien reporta lo ve solo la administración general; el resto del equipo ve "Una cuenta" con los números y puede actuar igual (el panel no recibe el id de la cuenta: cada tarjeta tiene un identificador propio).
 
+## Fotos hechas con IA
+
+Las fotos y videos que **dicen en su propio archivo** que los creó una inteligencia artificial muestran un aviso "Hecha con IA" donde se vean: la grilla, el perfil, los álbumes, el chat y la foto del grupo. **No se bloquean ni se esconden**: solo se avisa.
+
+- **Qué se mira:** las marcas que ponen los mismos generadores. Content Credentials (C2PA) de ChatGPT, Gemini, Firefly, Bing, Flux, Ideogram y otros; el campo IPTC `DigitalSourceType` (Midjourney, Meta AI, Apple); y los datos que guardan Stable Diffusion, ComfyUI o NovelAI. Se leen antes de borrar los metadatos y queda guardado solo el resultado.
+- **Qué no se mira:** el contenido de la imagen. No hay ningún modelo que "adivine" si una foto es de IA: los que existen se equivocan con muchas fotos reales, y marcar como falsa la foto de una persona real hace daño.
+- **El límite:** una captura de pantalla o una foto reenviada por WhatsApp pierde la marca. Que una foto no tenga el aviso **no prueba que sea real**.
+- **Fotos reales retocadas con IA** (por ejemplo, con el borrador mágico del celu) quedan registradas como "retocada", pero no llevan el aviso.
+- Si alguien usa fotos hechas con IA para hacerse pasar por otra persona, se reporta como **perfil falso**.
+
+El código está en `packages/shared/src/aiProvenance.ts` (lo usan la web y el API) y `apps/api/src/aiOrigin.ts`.
+
 ## Qué hacer en cada caso
 
 ### Menor de edad

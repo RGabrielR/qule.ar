@@ -1,3 +1,4 @@
+import { aiOriginOf, aiOut, type AiOrigin } from "../aiOrigin.js";
 import { DM_EVENTS, INBOX_LIMIT, READ_RECEIPT_LIMIT, type DmReadReceipt, type DmSettingsChange } from "@mortero/shared/realtime";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, notExists, or, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -82,6 +83,8 @@ socialRoutes.get("/users/:id", async (c) => {
     photos: photos.map((x) => imageUrl(x.key)),
     // Cuáles se ven borrosas, en el mismo orden (si eligió tapar las fotos explícitas; las propias nunca)
     photosBlur: photos.map((x) => blurFor(mine, id, x.explicit)),
+    // Para cada foto de `photos`, si está hecha con IA ("generated", "edited" o null)
+    photosAi: photos.map((x) => aiOut(x.ai)),
     isMe: id === me.id,
     online: on,
     recent: !p.incognito && (on || Date.now() - p.lastSeenAt.getTime() < 15 * 60_000),
@@ -432,6 +435,7 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
   const multipart = (c.req.header("content-type") ?? "").includes("multipart/form-data");
   let body: string | null = null;
   let photoKey: string | null = null;
+  let photoAi: AiOrigin | null = null;
   let expiring = false;
   let replyToId: string | null = null;
   if (multipart) {
@@ -442,8 +446,10 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
     if (!(file instanceof File)) throw new HTTPException(400, { message: "Falta la foto" });
     if (file.size > MAX_UPLOAD_BYTES) throw new HTTPException(413, { message: "La foto pesa demasiado (máx. 12 MB)" });
     replyToId = await replyToIdFor(typeof form.replyToId === "string" ? form.replyToId.trim() : undefined, conv.id);
+    const bytes = await file.arrayBuffer();
+    photoAi = await aiOriginOf(bytes, form.ai);
     try {
-      photoKey = await saveImage(await file.arrayBuffer());
+      photoKey = await saveImage(bytes);
     } catch (error) {
       if (error instanceof InvalidImageError) throw new HTTPException(400, { message: error.message });
       throw error;
@@ -468,7 +474,7 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
       conversationId: conv.id,
       senderId: me.id,
       kind: photoKey ? "photo" : "text",
-      body, photoKey, expiring, replyToId, createdAt: now,
+      body, photoKey, photoAi, expiring, replyToId, createdAt: now,
     }).onConflictDoNothing({ target: [directMessage.senderId, directMessage.idempotencyKey] }).returning();
     if (!inserted) {
       const saved = await previous(tx);

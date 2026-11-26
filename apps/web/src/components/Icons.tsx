@@ -51,6 +51,9 @@ export const EyeOffIcon = () => (
 export const TimerIcon = () => (
   <svg {...base} width={18} height={18}><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2M9 2h6" /></svg>
 );
+export const WarningIcon = ({ size = 22 }: { size?: number }) => (
+  <svg {...base} width={size} height={size}><path d="M10.3 4.2L2.6 17.5a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z" /><path d="M12 9.5v4M12 17h.01" /></svg>
+);
 export const InfoIcon = () => (
   <svg {...base}><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
 );

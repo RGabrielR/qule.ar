@@ -1,7 +1,7 @@
 import { api, type NearbyPerson } from "../../api";
 
 /** Lo mínimo de cada persona de la grilla para pasar de un perfil al otro. */
-export type GridPerson = Pick<NearbyPerson, "id" | "name" | "coverPhoto" | "blur">;
+export type GridPerson = Pick<NearbyPerson, "id" | "name" | "coverPhoto" | "blur" | "photoAi">;
 
 export type GridList = {
   userId: string;
@@ -18,8 +18,8 @@ const lists = new Map<string, GridList>();
 const pending = new Map<string, Promise<GridList | undefined>>();
 const LIMIT = 20;
 
-export function toGridPerson({ id, name, coverPhoto, blur }: NearbyPerson): GridPerson {
-  return { id, name, coverPhoto, blur };
+export function toGridPerson({ id, name, coverPhoto, blur, photoAi }: NearbyPerson): GridPerson {
+  return { id, name, coverPhoto, blur, photoAi };
 }
 
 export function saveGridList(entry: string, list: GridList) {

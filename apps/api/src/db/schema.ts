@@ -143,6 +143,9 @@ export const photo = pgTable("photo", {
   // Moderación la revisó: su decisión queda en `explicit` y el modelo no la vuelve a tocar
   explicitReviewedAt: timestamp("explicit_reviewed_at", { withTimezone: true }),
   explicitReviewedBy: text("explicit_reviewed_by").references(() => user.id, { onDelete: "set null" }),
+  // Hecha con IA según sus propios metadatos: "generated" (creada por IA) o "edited" (real, retocada con IA).
+  // null = no trae señal, lo que no prueba que sea real. Ver src/aiOrigin.ts.
+  ai: text("ai"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("photo_user_idx").on(t.userId, t.position),
@@ -263,6 +266,8 @@ export const group = pgTable("group", {
   // Foto del grupo (la pone el dueño). El general no tiene: muestra el logo de la app.
   photoKey: text("photo_key"),
   photoUploadsPaused: boolean("photo_uploads_paused").notNull().default(false),
+  // Si la foto del grupo está hecha con IA (como photo.ai)
+  photoAi: text("photo_ai"),
   spamRules: jsonb("spam_rules").$type<SpamRules>().notNull().default(DEFAULT_SPAM_RULES),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // Dado de baja (por moderación, o por su dueño si tenía reportes): desaparece para todo el mundo pero queda
@@ -390,6 +395,8 @@ export const directMessage = pgTable("direct_message", {
   // si se borra el original, la cita queda huérfana y se muestra "Mensaje borrado".
   replyToId: text("reply_to_id"),
   photoKey: text("photo_key"),
+  // Si la foto está hecha con IA (como photo.ai)
+  photoAi: text("photo_ai"),
   // Foto temporal: se ve una sola vez y después se borra del servidor
   expiring: boolean("expiring").notNull().default(false),
   openedAt: timestamp("opened_at", { withTimezone: true }),

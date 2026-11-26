@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { api, upload } from "../api";
+import { api, upload, type AiOrigin } from "../api";
+import { aiFieldsFor } from "../features/photos/aiOrigin";
 import { preparePhotoForUpload } from "../features/photos/preparePhoto";
 import { GroupAvatar } from "./GroupAvatar";
 
@@ -47,15 +48,16 @@ export function PhotoPicker({ name, file, onPick }: { name: string; file: File |
 }
 
 /** En la edición del grupo: el dueño pone, cambia o saca la foto. */
-export function GroupPhotoSetting({ groupId, photo, onChange }: { groupId: string; photo: string | null; onChange: (photo: string | null) => void }) {
+export function GroupPhotoSetting({ groupId, photo, onChange }: { groupId: string; photo: string | null; onChange: (photo: string | null, photoAi: AiOrigin) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function run(fn: () => Promise<{ photo: string | null }>) {
+  async function run(fn: () => Promise<{ photo: string | null; photoAi?: AiOrigin }>) {
     setBusy(true);
     setError("");
     try {
-      onChange((await fn()).photo);
+      const r = await fn();
+      onChange(r.photo, r.photoAi ?? null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -69,7 +71,7 @@ export function GroupPhotoSetting({ groupId, photo, onChange }: { groupId: strin
         <PickButton
           label={busy ? "Subiendo…" : photo ? "Cambiar foto" : "Poner foto"}
           disabled={busy}
-          onFile={(f) => run(async () => upload<{ photo: string }>(`/groups/${groupId}/photo`, await preparePhotoForUpload(f)))}
+          onFile={(f) => run(async () => upload<{ photo: string; photoAi: AiOrigin }>(`/groups/${groupId}/photo`, await preparePhotoForUpload(f), await aiFieldsFor(f)))}
         />
         {photo && (
           <button type="button" className="linkbtn" disabled={busy} onClick={() => run(() => api<{ photo: null }>(`/groups/${groupId}/photo`, { method: "DELETE" }))}>

@@ -1,3 +1,4 @@
+import { aiOut, type AiOrigin } from "./aiOrigin.js";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
@@ -45,29 +46,33 @@ export const imageUrl = (key: string | null | undefined) => (key ? `/api/files/$
 export const thumbUrl = (key: string | null | undefined) => (key ? `/api/files/${key}?s=thumb` : null);
 
 /** Una foto o video del perfil/álbum, tal como lo ve la web. */
-export const mediaOut = (x: { key: string; kind: string; posterKey: string | null; seconds: number | null }) => ({
+export const mediaOut = (x: { key: string; kind: string; posterKey: string | null; seconds: number | null; ai?: string | null }) => ({
   url: imageUrl(x.key)!,
   kind: x.kind === "video" ? ("video" as const) : ("photo" as const),
   // Miniatura: de las fotos, la versión chica; de los videos, el fotograma
   thumb: thumbUrl(x.kind === "video" ? x.posterKey : x.key),
   seconds: x.seconds ?? null,
+  // Hecha con IA según sus metadatos ("generated" o "edited"); null si no trae señal
+  ai: aiOut(x.ai),
 });
 
-export type Author = { id: string; name: string; age: number | null; photo: string | null };
+/** `photoAi` solo viaja si la foto principal está hecha con IA. */
+export type Author = { id: string; name: string; age: number | null; photo: string | null; photoAi?: AiOrigin };
 
-/** Primera foto pública por persona: la clave y si está marcada como explícita (ver src/explicit/). */
-export async function firstPublicPhotos(ids: string[]): Promise<Map<string, { key: string; explicit: boolean }>> {
+/** Primera foto pública por persona: la clave, si está marcada como explícita (ver src/explicit/) y si está hecha con IA. */
+export async function firstPublicPhotos(ids: string[]): Promise<Map<string, { key: string; explicit: boolean; ai: AiOrigin | null }>> {
   if (!ids.length) return new Map();
-  const photos = await db.selectDistinctOn([photo.userId], { userId: photo.userId, key: photo.key, explicit: photo.explicit }).from(photo)
+  const photos = await db.selectDistinctOn([photo.userId], { userId: photo.userId, key: photo.key, explicit: photo.explicit, ai: photo.ai }).from(photo)
     .where(and(inArray(photo.userId, ids), eq(photo.isPrivate, false)))
     .orderBy(asc(photo.userId), asc(photo.position));
-  return new Map(photos.map((p) => [p.userId, { key: p.key, explicit: p.explicit }]));
+  return new Map(photos.map((p) => [p.userId, { key: p.key, explicit: p.explicit, ai: aiOut(p.ai) }]));
 }
 
 /** Clave de la primera foto pública, por persona. */
 export async function firstPublicPhotoKeys(ids: string[]): Promise<Map<string, string>> {
   return new Map([...await firstPublicPhotos(ids)].map(([id, p]) => [id, p.key]));
 }
+
 
 /**
  * ¿Tapar esta foto para quien la mira? Solo si está marcada como explícita, quien mira eligió taparlas y no es suya.
@@ -99,7 +104,7 @@ export async function authorsFor(ids: string[], options: { presence?: boolean; r
       ...(options.presence && { incognito: profile.incognito, suspendedAt: profile.suspendedAt, lastSeenAt: profile.lastSeenAt }),
     })
       .from(profile).where(inArray(profile.userId, unique)),
-    firstPublicPhotoKeys(unique),
+    firstPublicPhotos(unique),
   ]);
   for (const p of profiles) {
     let presence: "online" | "recent" | undefined;
@@ -112,7 +117,8 @@ export async function authorsFor(ids: string[], options: { presence?: boolean; r
       id: p.userId,
       name: p.displayName,
       age: p.showAge || options.realAge ? ageFrom(p.birthdate) : null,
-      photo: thumbUrl(firstPhoto.get(p.userId)),
+      photo: thumbUrl(firstPhoto.get(p.userId)?.key),
+      ...(firstPhoto.get(p.userId)?.ai && { photoAi: firstPhoto.get(p.userId)!.ai! }),
     });
   }
   return map;
@@ -162,6 +168,7 @@ export function serializeDm(
     ...(m.albumId ? { albumId: m.albumId } : {}),
     // Las fotos temporales nunca viajan en la lista: se piden una sola vez con /open
     photo: m.expiring ? null : imageUrl(m.photoKey),
+    photoAi: m.photoKey ? aiOut(m.photoAi) : null,
     expiring: m.expiring,
     opened: Boolean(m.openedAt),
     readAt: m.readAt?.toISOString() ?? null,

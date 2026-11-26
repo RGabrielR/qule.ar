@@ -15,6 +15,8 @@ import { useEditorKeyboard } from "../features/profile/useEditorKeyboard";
 import { EXPLICIT_PHOTOS_HELP, ExplicitPhotoNote } from "../features/explicit/ExplicitPhotoNote";
 import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 import { BODY_TYPES, HIV_STATUS, LOOKING_FOR, POSITIONS, PRONOUNS, RELATIONSHIP, TRIBES } from "../options";
+import { AiChip } from "../features/photos/AiChip";
+import { aiFieldsFor } from "../features/photos/aiOrigin";
 
 type Form = Omit<Profile, "birthdate" | "age">;
 
@@ -273,7 +275,9 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
   /** Sube la foto ya recortada y sigue con el resto de la tanda. */
   async function uploadCrop(batch: MediaBatch, file: File) {
     const { index, slots } = batch;
-    await upload("/me/photos", file, uploadFields(batch));
+    // El recorte pierde los metadatos: la marca de IA se lee del archivo original
+    const ai = await aiFieldsFor(batch.files[index]);
+    await upload("/me/photos", file, { ...uploadFields(batch), ...ai });
     await reload().catch(() => setMediaError("Recargá para ver las fotos que subiste."));
     await advanceBatch({ ...batch, index: index + 1, slots: slots - 1 });
   }
@@ -386,6 +390,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
             <div key={p.id}>
               <div className="photos__item">
                 <img src={p.thumb ?? p.url} alt={`Tu foto ${i + 1}`} />
+                <AiChip origin={p.ai} compact />
                 {i === 0 ? <span className="photos__main">Principal</span> : (
                   <button className="photos__action" disabled={mediaLocked} onClick={() => reorder(publicPhotos, i, 0)}>Hacer principal</button>
                 )}

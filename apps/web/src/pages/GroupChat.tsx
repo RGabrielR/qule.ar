@@ -26,6 +26,7 @@ import { preparePhotoForUpload } from "../features/photos/preparePhoto";
 import { useSectionBack } from "../useSectionBack";
 import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 import { useNewArrivals } from "../features/messages/useNewArrivals";
+import { AiChip } from "../features/photos/AiChip";
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
@@ -604,6 +605,7 @@ function GroupChatThread({ id }: { id: string }) {
         </header>
         <div className="preview">
           <GroupAvatar name={info.name} photo={info.photo} general={info.isGeneral} size="big" />
+          {info.photo && <AiChip origin={info.photoAi} className="ai-chip--inline" />}
           <h2>{info.name}</h2>
           {info.description && <p className="muted group-description">{info.description}</p>}
           <p className="muted small">{info.memberCount} {info.memberCount === 1 ? "miembro" : "miembros"} · {rulesText}</p>

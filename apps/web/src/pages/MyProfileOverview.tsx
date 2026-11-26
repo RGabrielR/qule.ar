@@ -21,6 +21,7 @@ export function MyProfileOverview() {
   if (!me?.profile) return null;
   const { profile, photos } = me;
   const publicPhotos = photos.filter((photo) => !photo.isPrivate).map((photo) => photo.url);
+  const publicPhotosAi = photos.filter((photo) => !photo.isPrivate).map((photo) => photo.ai);
   // Cada álbum privado con lo que tiene adentro (los vacíos no se muestran acá)
   const albums = me.albums.flatMap((a) => {
     const items = photos.filter((photo) => photo.isPrivate && photo.albumId === a.id);
@@ -37,7 +38,7 @@ export function MyProfileOverview() {
         </Link>
       </header>
 
-      <ProfileCover photos={publicPhotos} displayName={profile.displayName} age={profile.showAge ? profile.age : null} />
+      <ProfileCover photos={publicPhotos} photosAi={publicPhotosAi} displayName={profile.displayName} age={profile.showAge ? profile.age : null} />
 
       <div className="profile__body">
         <Link to="/yo/editar" className="btn btn--primary"><EditIcon /> Editar perfil</Link>

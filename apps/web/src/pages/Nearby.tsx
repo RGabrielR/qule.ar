@@ -17,6 +17,7 @@ import { useTabTransition } from "../features/navigation/pageTransition";
 import { photoAppear } from "../components/photoAppear";
 import { Skeleton, SkeletonGrid } from "../components/Skeleton";
 import { useArrival } from "../components/useArrival";
+import { AiChip } from "../features/photos/AiChip";
 
 export type Filters = {
   ageMin?: number; ageMax?: number;
@@ -442,6 +443,7 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
                   {p.photo ? <img src={p.photo} alt="" {...(cachedIds.has(p.id) ? CACHED_PHOTO : { loading: "lazy" as const, ...photoAppear })} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
                   {p.photo && p.blur && <ExplicitTileMark />}
                   {p.favorite && <span className="tile__fav" aria-label="Favorito"><StarIcon filled size={14} /></span>}
+                  {p.photo && <AiChip origin={p.photoAi} compact />}
                   <span className="tile__info">
                     <span className="tile__name">
                       {p.online ? <i className="dot dot--on" /> : p.recent ? <i className="dot dot--recent" /> : null}

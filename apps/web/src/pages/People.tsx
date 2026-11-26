@@ -11,6 +11,7 @@ import { useEntryTransition } from "../features/navigation/pageTransition";
 import { photoAppear } from "../components/photoAppear";
 import { SkeletonGrid } from "../components/Skeleton";
 import { useArrival } from "../components/useArrival";
+import { AiChip } from "../features/photos/AiChip";
 
 function ago(iso: string) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -45,6 +46,7 @@ function PeopleGrid({ title, people, empty, note, tabs }: { title: string; peopl
             <li key={p.id} {...arrival(p.id)}>
               <Link to={`/perfil/${p.id}`} className="tile" aria-label={p.name}>
                 {p.photo ? <img src={p.photo} alt="" loading="lazy" {...photoAppear} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
+                {p.photo && <AiChip origin={p.photoAi} compact />}
                 {p.reaction && (
                   <span className={`tile__reaction ${p.isNew ? "tile__reaction--new" : ""}`} title={reactionLabel(p.reaction)}>
                     <ReactionIcon kind={p.reaction} size={26} />

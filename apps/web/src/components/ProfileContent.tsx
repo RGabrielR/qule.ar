@@ -1,15 +1,20 @@
 import { useState, type ReactNode } from "react";
-import type { PublicProfile } from "../api";
+import type { AiOrigin, PublicProfile } from "../api";
 import { hasPlaceLabel } from "../features/place/hasPlace";
 import { ProfileCoverImage } from "../features/profile/ProfileCoverImage";
 import { ExplicitVeil } from "../features/explicit/ExplicitVeil";
+import { AiChip } from "../features/photos/AiChip";
 
 type CoverProps = {
   photos?: string[];
+  /** Para cada foto de `photos`, si está hecha con IA. */
+  photosAi?: AiOrigin[];
   coverPhoto?: string | null;
   /** Cuáles de `photos` van borrosas (fotos explícitas, si eligió taparlas), y si va borrosa `coverPhoto`. */
   photosBlur?: boolean[];
   coverBlur?: boolean;
+  /** Si `coverPhoto` (la de la grilla, mientras carga el perfil) está hecha con IA. */
+  coverAi?: AiOrigin;
   displayName?: string;
   age?: number | null;
   status?: Pick<PublicProfile, "online" | "recent" | "distance">;
@@ -18,7 +23,7 @@ type CoverProps = {
   aside?: ReactNode;
 };
 
-export function ProfileCover({ photos, coverPhoto, photosBlur, coverBlur, displayName, age, status, back, aside }: CoverProps) {
+export function ProfileCover({ photos, photosAi, coverPhoto, coverAi, photosBlur, coverBlur, displayName, age, status, back, aside }: CoverProps) {
   const [selected, setSelected] = useState(0);
   // Fotos tapadas que se destaparon con "Ver foto" (cada una por separado, hasta salir del perfil)
   const [revealed, setRevealed] = useState<ReadonlySet<number>>(new Set());
@@ -44,6 +49,7 @@ export function ProfileCover({ photos, coverPhoto, photosBlur, coverBlur, displa
       )}
       {blurred && photos && <ExplicitVeil onReveal={() => setRevealed(new Set(revealed).add(index))} />}
       {back}
+      {source && <AiChip origin={photos ? photosAi?.[index] : coverAi} className="ai-chip--cover" />}
       {photos && count > 1 && (
         <div className={back ? "profile__dots profile__dots--with-back" : "profile__dots"}>
           {photos.map((_, i) => (

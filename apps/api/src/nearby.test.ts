@@ -77,8 +77,9 @@ before(async () => {
     if (r < 0.2) return []; // sin fotos
     if (r < 0.3) return [{ id: `${id}-p`, userId: id, key: `${id}-privada.jpg`, position: 0, isPrivate: true }];
     return [
-      { id: `${id}-a`, userId: id, key: `${id}-a.jpg`, position: 1, isPrivate: false },
-      { id: `${id}-b`, userId: id, key: `${id}-b.jpg`, position: 0, isPrivate: rand() < 0.3 },
+      // Algunas hechas con IA, para que la grilla tenga que mandar la marca de la primera foto pública
+      { id: `${id}-a`, userId: id, key: `${id}-a.jpg`, position: 1, isPrivate: false, ai: r < 0.45 ? "generated" : null },
+      { id: `${id}-b`, userId: id, key: `${id}-b.jpg`, position: 0, isPrivate: rand() < 0.3, ai: r > 0.85 ? "generated" : r > 0.75 ? "edited" : null },
     ];
   });
   await db.insert(schema.photo).values(photos);
@@ -111,7 +112,8 @@ async function reference(me: { userId: string; cellLat: number | null; cellLng: 
   const favs = new Set((await db.select().from(schema.favorite)).filter((x) => x.userId === me.userId).map((x) => x.favoriteId));
   const photos = (await db.select().from(schema.photo)).filter((p) => !p.isPrivate).sort((a, b) => a.position - b.position);
   const first = new Map<string, string>();
-  for (const p of photos) if (!first.has(p.userId)) first.set(p.userId, p.key);
+  const firstAi = new Map<string, string | null>();
+  for (const p of photos) if (!first.has(p.userId)) first.set(p.userId, p.key), firstAi.set(p.userId, p.ai);
   const anyOf = (w: string[], v: string | null) => !w.length || (v != null && w.includes(v));
   const overlap = (w: string[], vs: string[]) => !w.length || vs.some((v) => w.includes(v));
   const inRange = (v: number | null, min?: number, max?: number) =>
@@ -131,7 +133,7 @@ async function reference(me: { userId: string; cellLat: number | null; cellLng: 
     hasMore: list.length > f.offset + 60,
     total: list.length,
     people: page.map(({ p, km, age }) => ({
-      id: p.userId, name: p.displayName, age, photo: thumbUrl(first.get(p.userId)), coverPhoto: imageUrl(first.get(p.userId)), blur: false, online: false,
+      id: p.userId, name: p.displayName, age, photo: thumbUrl(first.get(p.userId)), coverPhoto: imageUrl(first.get(p.userId)), blur: false, photoAi: firstAi.get(p.userId) ?? null, online: false,
       recent: Date.now() - p.lastSeenAt.getTime() < 15 * 60_000, favorite: favs.has(p.userId),
       distance: km != null ? distanceLabel(km) : null,
     })),
