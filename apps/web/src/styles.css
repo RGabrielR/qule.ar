@@ -500,8 +500,6 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 /* Cambiar de pestaña: sin deslizar (en las apps nativas las pestañas no se mueven), se asienta con un fundido y un
    acercamiento mínimo. Con la curva de las hojas, que no es tan brusca al principio, para que el fundido se llegue a ver */
 .page--tab { animation: tab-in var(--dur-page) var(--ease-sheet) backwards; }
-/* Mientras espera a sus fotos (Gente al volver), la entrada queda en su primer cuadro y arranca todo junto */
-.page--hold { animation-play-state: paused; }
 @keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
 @keyframes page-back { from { opacity: 0; transform: translateX(-32px); } }
 @keyframes tab-in { from { opacity: 0; transform: scale(0.98); } }
@@ -618,12 +616,13 @@ a.gcard:active { background: var(--surface); }
 /* ---------- Cerca (grilla) ---------- */
 .grid { list-style: none; margin: 0; padding: 2px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
 @media (min-width: 560px) { .grid { grid-template-columns: repeat(4, 1fr); } }
-.tile { display: block; position: relative; aspect-ratio: 1; overflow: hidden; background: var(--surface-2); transition: scale var(--dur-press) var(--ease-out); }
+/* El fondo puede traer la vista previa borrosa de la foto (components/photoPreview.ts) */
+.tile { display: block; position: relative; aspect-ratio: 1; overflow: hidden; background: var(--surface-2) center / cover no-repeat; transition: scale var(--dur-press) var(--ease-out); }
 /* La foto de la grilla se hunde apenas al tocarla */
 .tile:active { scale: 0.97; }
 @media (prefers-reduced-motion: reduce) { .tile:active { scale: none; opacity: 0.7; } }
-/* La foto entra con un fundido al cargar (photoAppear) y crece apenas con el mouse encima */
-.tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out); }
+/* La foto entra con un fundido al cargar (gridPhoto, sobre su vista previa borrosa) y crece apenas con el mouse encima */
+.tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out); }
 @media (hover: hover) and (pointer: fine) { .tile:hover img { transform: scale(1.03); } }
 .tile__empty { width: 100%; height: 100%; display: grid; place-items: center; font-family: var(--display); font-size: var(--display-md); font-weight: 800; color: var(--accent); background: var(--accent-soft); }
 .tile::after { content: ""; position: absolute; inset: 45% 0 0; background: linear-gradient(transparent, var(--scrim-fade)); pointer-events: none; }

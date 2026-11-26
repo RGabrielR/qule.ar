@@ -11,8 +11,7 @@ import { useSheetExit } from "../components/useSheetExit";
 import { getGridList, saveGridList, toGridPerson } from "../features/profileSwipe/gridList";
 import { HasPlaceChips, type HasPlace } from "../features/place/hasPlace";
 import { useTabTransition } from "../features/navigation/pageTransition";
-import { photoAppear } from "../components/photoAppear";
-import { motionMs } from "../motion";
+import { gridPhoto, previewStyle } from "../components/photoPreview";
 import { Skeleton, SkeletonGrid } from "../components/Skeleton";
 import { useArrival } from "../components/useArrival";
 
@@ -99,16 +98,6 @@ function keepPhotos(people: NearbyPerson[]) {
   }
 }
 
-/** Espera a que las fotos que se ven estén listas para dibujar, con un tope para no trabar la pantalla. */
-function photosReady(root: HTMLElement, max: number) {
-  const visible = [...root.querySelectorAll<HTMLImageElement>(".grid img")].filter((img) => img.getBoundingClientRect().top < window.innerHeight);
-  const ready = visible.map((img) => (img.complete ? img.decode() : new Promise((done) => {
-    img.addEventListener("load", done, { once: true });
-    img.addEventListener("error", done, { once: true });
-  })).catch(() => {}));
-  return Promise.race([Promise.all(ready), new Promise((done) => setTimeout(done, max))]);
-}
-
 export function Nearby() {
   const { me, reload } = useMe();
   const location = useLocation();
@@ -128,8 +117,6 @@ export function Nearby() {
   const [refreshes, setRefreshes] = useState(0);
   const [hasMore, setHasMore] = useState(cached?.hasMore ?? false);
   const [status, setStatus] = useState<Status>(cached ? "ready" : "loading");
-  // Al volver con la grilla guardada, la pantalla espera a sus fotos para aparecer todo junto (ver .page--hold)
-  const [holding, setHolding] = useState(Boolean(cached));
   const [loc, setLoc] = useState<LocState>("ok");
   const [updating, setUpdating] = useState<"idle" | "busy" | "done">("idle");
   const [refreshDistance, setRefreshDistance] = useState(0);
@@ -166,14 +153,6 @@ export function Nearby() {
     gridCache = { userId, query: toQuery(filtersRef.current, 0), people, hasMore };
     keepPhotos(people);
   }, [entry, userId, people, hasMore, status]);
-
-  useLayoutEffect(() => {
-    if (!holding || !pageRef.current) return;
-    let live = true;
-    void photosReady(pageRef.current, motionMs("--dur-page")).then(() => { if (live) setHolding(false); });
-    return () => { live = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useLayoutEffect(() => {
     visible.current = { count: people.length, ready: status === "ready" };
@@ -341,7 +320,7 @@ export function Nearby() {
   const readyToRefresh = pullDistance === REFRESH_DISTANCE;
 
   return (
-    <div ref={pageRef} className={`page nearby-page ${enter}${holding ? " page--hold" : ""}`} onTouchStart={startPull} onTouchEnd={endPull} onTouchCancel={cancelPull}>
+    <div ref={pageRef} className={`page nearby-page ${enter}`} onTouchStart={startPull} onTouchEnd={endPull} onTouchCancel={cancelPull}>
       <header className="topbar">
         <h1 className="topbar__title">Gente</h1>
         {status === "loading" && <Skeleton className="skeleton--btn-sm" />}
@@ -421,8 +400,8 @@ export function Nearby() {
           <ul className="grid">
             {people.map((p) => (
               <li key={p.id} {...arrival(p.id)}>
-                <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
-                  {p.photo ? <img src={p.photo} alt="" loading="lazy" {...photoAppear} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
+                <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" style={previewStyle(p.photo)} aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
+                  {p.photo ? <img alt="" loading="lazy" {...gridPhoto(p.photo)} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
                   {p.favorite && <span className="tile__fav" aria-label="Favorito"><StarIcon filled size={14} /></span>}
                   <span className="tile__info">
                     <span className="tile__name">

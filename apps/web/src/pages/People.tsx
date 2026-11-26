@@ -8,7 +8,7 @@ import { BackIcon } from "../components/Icons";
 import { useSectionBack } from "../useSectionBack";
 import { useRememberScroll } from "../features/navigation/viewMemory";
 import { usePageTransition } from "../features/navigation/pageTransition";
-import { photoAppear } from "../components/photoAppear";
+import { gridPhoto, previewStyle } from "../components/photoPreview";
 import { SkeletonGrid } from "../components/Skeleton";
 import { useArrival } from "../components/useArrival";
 
@@ -41,8 +41,8 @@ function PeopleGrid({ title, people, empty, note }: { title: string; people: (Au
         <ul className="grid grid--spaced">
           {people.map((p) => (
             <li key={p.id} {...arrival(p.id)}>
-              <Link to={`/perfil/${p.id}`} className="tile" aria-label={p.name}>
-                {p.photo ? <img src={p.photo} alt="" loading="lazy" {...photoAppear} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
+              <Link to={`/perfil/${p.id}`} className="tile" style={previewStyle(p.photo)} aria-label={p.name}>
+                {p.photo ? <img alt="" loading="lazy" {...gridPhoto(p.photo)} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
                 {p.reaction && (
                   <span className={`tile__reaction ${p.isNew ? "tile__reaction--new" : ""}`} title={reactionLabel(p.reaction)}>
                     <ReactionIcon kind={p.reaction} size={26} />
