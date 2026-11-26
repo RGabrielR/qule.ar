@@ -176,9 +176,16 @@ button.chip:active:not(:disabled) { scale: 0.97; }
 .auth__slogan { font-family: var(--display); font-weight: 600; font-size: var(--title-xs); color: var(--text); margin-top: 8px; }
 .auth__tag { color: var(--muted); margin-top: 10px; max-width: 30ch; font-size: var(--text-lg); }
 .auth__card { width: 100%; max-width: 400px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-4xl); padding: 22px; display: flex; flex-direction: column; gap: 16px; }
-.segmented { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: var(--radius-pill); padding: 4px; }
-.segmented button { height: 38px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--muted); font-weight: 600; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
-.segmented button[aria-selected="true"], .segmented button[aria-checked="true"] { background: var(--surface-3); color: var(--text); }
+.segmented { position: relative; display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: var(--radius-pill); padding: 4px; }
+/* La marca de la opción elegida es una sola pieza que se desliza de una opción a la otra */
+.segmented::before {
+  content: ""; position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 2);
+  border-radius: var(--radius-pill); background: var(--surface-3); transition: transform var(--dur-base) var(--ease-in-out);
+}
+.segmented:has(> button:nth-child(2)[aria-selected="true"], > button:nth-child(2)[aria-checked="true"])::before { transform: translateX(100%); }
+@media (prefers-reduced-motion: reduce) { .segmented::before { transition: none; } }
+.segmented button { position: relative; height: 38px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--muted); font-weight: 600; transition: color var(--dur-base) var(--ease-in-out); }
+.segmented button[aria-selected="true"], .segmented button[aria-checked="true"] { color: var(--text); }
 
 /* ---------- Layout con barra de pestañas ---------- */
 .shell { height: 100%; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; border-inline: 1px solid var(--line); }
