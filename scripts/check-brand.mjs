@@ -54,7 +54,7 @@ for (const dir of ["apps/web/src", "apps/api/src", "packages"]) {
 }
 
 // Las variables de la marca se definen en packages/brand, no en el CSS (solo se permiten las de layout)
-const LAYOUT_VARS = new Set(["--tabbar-h", "--tabbar-inset", "--safe-b", "--composer-action-height", "--people-grid-columns"]);
+const LAYOUT_VARS = new Set(["--tabbar-h", "--tabbar-inset", "--topbar-h", "--safe-b", "--composer-action-height", "--people-grid-columns"]);
 for (const name of readdirSync(join(root, "apps/web/src"))) {
   if (!name.endsWith(".css")) continue;
   readFileSync(join(root, "apps/web/src", name), "utf8").split("\n").forEach((line, i) => {
