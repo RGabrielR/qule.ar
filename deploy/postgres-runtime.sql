@@ -1,0 +1,18 @@
+-- Ejecutar en la base de qule.ar como el rol que aplica las migraciones.
+-- Asignar la contraseña con \password qule_api desde psql después.
+BEGIN;
+DO $block$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'qule_api') THEN
+    CREATE ROLE qule_api LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT;
+  END IF;
+END
+$block$;
+
+GRANT USAGE ON SCHEMA public TO qule_api;
+REVOKE CREATE ON SCHEMA public FROM qule_api;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO qule_api;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO qule_api;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO qule_api;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO qule_api;
+COMMIT;
