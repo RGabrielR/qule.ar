@@ -61,7 +61,7 @@ export function closeSocket() {
 
 // ---------- Tipos ----------
 
-export type Author = { id: string; name: string; age: number; photo: string | null };
+export type Author = { id: string; name: string; age: number | null; photo: string | null };
 
 /** Un toque recibido. */
 export type Toque = Author & { kind: string; at: string; unseen: boolean };
@@ -123,6 +123,7 @@ export type Me = {
     hasLocation: boolean;
     showDistance: boolean;
     incognito: boolean;
+    showAge: boolean;
     /** Avisos que apagó (false). Lo que no está cuenta como prendido. */
     notifyPrefs: Partial<Record<NotifyKind, boolean>>;
     suspendedAt: string | null;
@@ -134,7 +135,8 @@ export type Me = {
   albums: MyAlbum[];
 };
 
-export type PublicProfile = Omit<Profile, "birthdate"> & {
+export type PublicProfile = Omit<Profile, "birthdate" | "age"> & {
+  age: number | null;
   id: string;
   photos: string[];
   isMe: boolean;
@@ -155,7 +157,7 @@ export type PublicProfile = Omit<Profile, "birthdate"> & {
 export type NearbyPerson = {
   id: string;
   name: string;
-  age: number;
+  age: number | null;
   photo: string | null;
   coverPhoto: string | null;
   online: boolean;

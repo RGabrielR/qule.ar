@@ -64,7 +64,7 @@ socialRoutes.get("/users/:id", async (c) => {
   return c.json({
     id,
     displayName: p.displayName,
-    age: ageFrom(p.birthdate),
+    age: p.showAge ? ageFrom(p.birthdate) : null,
     about: p.about,
     heightCm: p.heightCm,
     weightKg: p.weightKg,

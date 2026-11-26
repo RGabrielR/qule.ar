@@ -32,7 +32,7 @@ function PeopleGrid({ title, people, empty, note }: { title: string; people: (Au
         <ul className="grid grid--spaced">
           {people.map((p) => (
             <li key={p.id}>
-              <Link to={`/perfil/${p.id}`} className="tile" aria-label={`${p.name}, ${p.age}`}>
+              <Link to={`/perfil/${p.id}`} className="tile" aria-label={p.name}>
                 {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
                 {p.reaction && (
                   <span className={`tile__reaction ${p.isNew ? "tile__reaction--new" : ""}`} title={reactionLabel(p.reaction)}>
@@ -40,7 +40,7 @@ function PeopleGrid({ title, people, empty, note }: { title: string; people: (Au
                   </span>
                 )}
                 <span className="tile__info">
-                  <span className="tile__name">{p.name} <span className="tile__dist">{p.age}</span></span>
+                  <span className="tile__name">{p.name}</span>
                   {p.sub && <span className="tile__dist">{p.sub}</span>}
                 </span>
               </Link>

@@ -53,7 +53,7 @@ export const mediaOut = (x: { key: string; kind: string; posterKey: string | nul
   seconds: x.seconds ?? null,
 });
 
-export type Author = { id: string; name: string; age: number; photo: string | null };
+export type Author = { id: string; name: string; age: number | null; photo: string | null };
 
 /** Clave de la primera foto pública, por persona. */
 export async function firstPublicPhotoKeys(ids: string[]): Promise<Map<string, string>> {
@@ -80,7 +80,7 @@ export async function authorsFor(ids: string[], options: { presence?: boolean } 
   if (!unique.length) return map;
   const [profiles, firstPhoto] = await Promise.all([
     db.select({
-      userId: profile.userId, displayName: profile.displayName, birthdate: profile.birthdate,
+      userId: profile.userId, displayName: profile.displayName, birthdate: profile.birthdate, showAge: profile.showAge,
       ...(options.presence && { incognito: profile.incognito, suspendedAt: profile.suspendedAt, lastSeenAt: profile.lastSeenAt }),
     })
       .from(profile).where(inArray(profile.userId, unique)),
@@ -96,7 +96,7 @@ export async function authorsFor(ids: string[], options: { presence?: boolean } 
       ...(presence && { presence }),
       id: p.userId,
       name: p.displayName,
-      age: ageFrom(p.birthdate),
+      age: p.showAge ? ageFrom(p.birthdate) : null,
       photo: thumbUrl(firstPhoto.get(p.userId)),
     });
   }

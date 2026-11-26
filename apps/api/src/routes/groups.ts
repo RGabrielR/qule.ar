@@ -762,12 +762,12 @@ groupRoutes.get("/groups/:id/invite-candidates", async (c) => {
     .map((p) => {
       // null si alguien escondió la distancia: tampoco se usa para ordenar ni para el filtro de km
       const km = visibleKm(me, p);
-      return { p, km, age: ageFrom(p.birthdate), online: !p.incognito && isOnline(p.userId) };
+      return { p, km, age: p.showAge ? ageFrom(p.birthdate) : null, online: !p.incognito && isOnline(p.userId) };
     })
     .filter(({ km, age, online }) =>
       (f.maxKm == null || (km != null && km <= f.maxKm)) &&
-      (f.ageMin == null || age >= f.ageMin) &&
-      (f.ageMax == null || age <= f.ageMax) &&
+      (f.ageMin == null || (age != null && age >= f.ageMin)) &&
+      (f.ageMax == null || (age != null && age <= f.ageMax)) &&
       (!f.online || online));
 
   // Estado en el grupo (miembro, invitado, pidió entrar…): por defecto se esconde a quien ya está

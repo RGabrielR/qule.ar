@@ -87,6 +87,7 @@ export function pendingConds(groupId: string, f: Omit<RequestFilters, "cursor">,
   if (f.foto === "sin") conds.push(not(hasPublicPhoto));
   if (f.nueva) conds.push(gt(user.createdAt, new Date(now.getTime() - NEW_ACCOUNT_DAYS * 86_400_000)));
   const { bornOnOrBefore, bornAfter } = birthdateRange(f.edadMin, f.edadMax, now);
+  if (bornOnOrBefore || bornAfter) conds.push(eq(profile.showAge, true));
   if (bornOnOrBefore) conds.push(lte(profile.birthdate, bornOnOrBefore));
   if (bornAfter) conds.push(gt(profile.birthdate, bornAfter));
   return conds;

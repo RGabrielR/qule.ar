@@ -183,6 +183,13 @@
       "when": 1795697899174,
       "tag": "0025_encuestas_grupos",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795699803604,
+      "tag": "0026_privacidad_edad",
+      "breakpoints": true
     }
   ]
 }

@@ -63,7 +63,7 @@ nearbyRoutes.delete("/me/location", async (c) => {
 
 nearbyRoutes.put("/me/privacy", async (c) => {
   const u = c.get("user");
-  const data = z.object({ showDistance: z.boolean().optional(), incognito: z.boolean().optional() }).parse(await c.req.json());
+  const data = z.object({ showDistance: z.boolean().optional(), incognito: z.boolean().optional(), showAge: z.boolean().optional() }).parse(await c.req.json());
   await db.update(profile).set(data).where(eq(profile.userId, u.id));
   return c.json({ ok: true });
 });
@@ -123,6 +123,8 @@ function bornOnOrBefore(years: number, now = new Date()): string {
  */
 export function profileFilterConds(meId: string, f: NearbyFilters) {
   const conds: SQL[] = [];
+  // Con un filtro de edad no aparece quien eligió no mostrarla (también en Mensajes, que usa estos filtros)
+  if (f.ageMin != null || f.ageMax != null) conds.push(sql`p.show_age = true`);
   // Las fechas van como texto AAAA-MM-DD, igual que se guardan
   if (f.ageMin != null) conds.push(sql`p.birthdate <= ${bornOnOrBefore(f.ageMin)}::date`);
   if (f.ageMax != null) conds.push(sql`p.birthdate > ${bornOnOrBefore(f.ageMax + 1)}::date`);
@@ -230,7 +232,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
   const ids = page.map((x) => x.id);
   const [details, first] = await Promise.all([
     ids.length
-      ? db.select({ userId: profile.userId, displayName: profile.displayName, birthdate: profile.birthdate })
+      ? db.select({ userId: profile.userId, displayName: profile.displayName, birthdate: profile.birthdate, showAge: profile.showAge })
           .from(profile).where(inArray(profile.userId, ids))
       : [],
     firstPublicPhotoKeys(ids),
@@ -249,7 +251,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
       return [{
         id,
         name: d.displayName,
-        age: ageFrom(d.birthdate),
+        age: d.showAge ? ageFrom(d.birthdate) : null,
         photo: thumbUrl(photoKey),
         coverPhoto: imageUrl(photoKey),
         online,
