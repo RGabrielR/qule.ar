@@ -328,7 +328,7 @@ export function Conversation() {
               ))}
               {kind === "album" || kind === "album_expired" ? (
                 kind === "album" && !mine ? (
-                  <Link to={`/perfil/${m.senderId}${m.albumId ? `?album=${encodeURIComponent(m.albumId)}` : ""}`} className="album-msg">
+                  <Link to={`/perfil/${m.senderId}${m.albumId ? `?album=${encodeURIComponent(m.albumId)}` : ""}`} state={{ fromChat: true }} className="album-msg">
                     {albumText} · <u>Ver</u>
                   </Link>
                 ) : <p>{albumText}</p>
