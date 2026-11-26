@@ -101,7 +101,7 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
     .limit(status === "open" ? 1000 : 300);
   // Quien reportó o fue reportado puede haber borrado su cuenta: el reporte queda, sin la cuenta
   const ids = (xs: (string | null)[]) => xs.filter((x): x is string => x != null);
-  const people = await authorsFor(ids(rows.flatMap((r) => [r.reporterId, r.targetUserId])));
+  const people = await authorsFor(ids(rows.flatMap((r) => [r.reporterId, r.targetUserId])), { realAge: true });
   const targets = [...new Set(ids(rows.map((r) => r.targetUserId)))];
   const profiles = targets.length ? await db.select().from(profile).where(inArray(profile.userId, targets)) : [];
   const suspended = new Map(profiles.map((p) => [p.userId, p.suspendedAt?.toISOString() ?? null]));
@@ -225,7 +225,7 @@ async function closeReports(ids: string[], adminId: string, status: "dismissed" 
 adminRoutes.get("/admin/report-spam", requireAccess("owner", "sanctions"), async (c) => {
   const owner = (await accessFor(c.get("user"))).includes("owner");
   const [alerts, muted] = await Promise.all([reportSpamAlerts(), mutedReporterList()]);
-  const people = owner ? await authorsFor([...alerts, ...muted].map((a) => a.reporterId)) : new Map();
+  const people = owner ? await authorsFor([...alerts, ...muted].map((a) => a.reporterId), { realAge: true }) : new Map();
   // Sin el id de la cuenta: con él se podría ver quién reporta. Se actúa con el identificador de la tarjeta.
   return c.json({
     alerts: alerts.map(({ reporterId, ...a }) => ({ ...a, id: alertKey(reporterId), reporter: owner ? people.get(reporterId) ?? null : null })),
@@ -474,7 +474,7 @@ adminRoutes.get("/admin/suspended", requireAccess("sanctions", "appeals"), async
     .from(profile)
     .where(isNotNull(profile.suspendedAt))
     .orderBy(desc(profile.suspendedAt));
-  const people = await authorsFor(rows.map((r) => r.id));
+  const people = await authorsFor(rows.map((r) => r.id), { realAge: true });
   const pending = await pendingReview(rows.map((r) => r.id));
   return c.json(rows.map((r) => ({
     ...people.get(r.id)!,
@@ -496,7 +496,7 @@ adminRoutes.get("/admin/appeals", requireAccess("appeals"), async (c) => {
     .where(closed ? inArray(appeal.status, ["upheld", "lifted"]) : eq(appeal.status, "open"))
     .orderBy(closed ? desc(appeal.reviewedAt) : appeal.createdAt)
     .limit(100);
-  const people = await authorsFor(rows.map((a) => a.userId));
+  const people = await authorsFor(rows.map((a) => a.userId), { realAge: true });
   const othersCanReview = (await staffIdsWith("appeals")).some((id) => id !== me.id);
   const out = [];
   for (const a of rows) {
@@ -616,7 +616,7 @@ adminRoutes.post("/admin/accounts/search", requireAccess("sanctions"), async (c)
 /** Quiénes tienen permisos chicos. */
 adminRoutes.get("/admin/team", requireAccess("owner"), async (c) => {
   const rows = await db.select().from(staffPermission).orderBy(staffPermission.createdAt);
-  const people = await authorsFor(rows.map((r) => r.userId));
+  const people = await authorsFor(rows.map((r) => r.userId), { realAge: true });
   const byUser = new Map<string, { permissions: string[]; since: string }>();
   for (const r of rows) {
     const x = byUser.get(r.userId) ?? { permissions: [], since: r.createdAt.toISOString() };
@@ -696,7 +696,7 @@ adminRoutes.post("/admin/people", requireAccess("owner"), async (c) => {
   const page = rows.slice(0, LIMIT);
   const ids = page.map((r) => r.id);
   const [people, open] = await Promise.all([
-    authorsFor(ids),
+    authorsFor(ids, { realAge: true }),
     ids.length
       ? db.select({ id: report.targetUserId, n: sql<number>`count(*)::int` }).from(report)
         .where(and(inArray(report.targetUserId, ids), eq(report.status, "open"))).groupBy(report.targetUserId)
@@ -725,7 +725,7 @@ adminRoutes.post("/admin/people", requireAccess("owner"), async (c) => {
 /** Lo último que hizo moderación. */
 adminRoutes.get("/admin/log", requireAccess("owner"), async (c) => {
   const rows = await db.select().from(modAction).orderBy(desc(modAction.createdAt)).limit(200);
-  const people = await authorsFor(rows.flatMap((r) => (r.actorId ? [r.actorId] : [])));
+  const people = await authorsFor(rows.flatMap((r) => (r.actorId ? [r.actorId] : [])), { realAge: true });
   return c.json(rows.map((r) => ({
     id: r.id,
     actor: r.actorId ? people.get(r.actorId)?.name ?? "Cuenta sin perfil" : r.action.startsWith(AUTO_SUSPENDED) ? "La app" : "Cuenta borrada",

@@ -64,7 +64,7 @@ test("la pestaña Personas es solo para la administración general", async (t) =
   const { eq } = await import("drizzle-orm");
   await db.update(schema.profile).set({ suspendedAt: new Date(), suspendReason: "Spam" }).where(eq(schema.profile.userId, tito.id));
 
-  type Person = { id: string; name: string; owner: boolean; permissions: string[]; suspendedAt: string | null; suspendReason: string | null; email?: string };
+  type Person = { id: string; name: string; owner: boolean; permissions: string[]; suspendedAt: string | null; suspendReason: string | null; age: number | null; email?: string };
   const search = (who: Account, body: Record<string, string> = {}) => request("/api/admin/people", who, {
     method: "POST", body: JSON.stringify(body),
   });
@@ -102,4 +102,9 @@ test("la pestaña Personas es solo para la administración general", async (t) =
   // Suspendidas, con el motivo
   const suspended = await people(gabi, { filter: "suspended" });
   assert.deepEqual(suspended.map((p) => [p.name, p.suspendReason]), [["Tito", "Spam"]]);
+
+  // Moderación ve la edad aunque la persona haya elegido no mostrarla (#263)
+  await db.update(schema.profile).set({ showAge: false }).where(eq(schema.profile.userId, juan.id));
+  const [hiddenAge] = await people(gabi, { q: "Juan" });
+  assert.equal(typeof hiddenAge.age, "number", "la edad sigue visible para moderación");
 });

@@ -73,8 +73,11 @@ export const LINKS_MIN_ACCOUNT_AGE_MS = 24 * 60 * 60 * 1000;
 export const canOpenLinks = (sentAt: Date, accountCreatedAt: Date) =>
   sentAt.getTime() - accountCreatedAt.getTime() >= LINKS_MIN_ACCOUNT_AGE_MS;
 
-/** Nombre, edad y foto principal (pública) de varios usuarios. */
-export async function authorsFor(ids: string[], options: { presence?: boolean } = {}): Promise<Map<string, Author>> {
+/**
+ * Nombre, edad y foto principal (pública) de varios usuarios. La edad va null si la persona eligió no mostrarla,
+ * salvo con `realAge` (solo moderación: ante un reporte por menor de edad, la edad declarada es clave para decidir).
+ */
+export async function authorsFor(ids: string[], options: { presence?: boolean; realAge?: boolean } = {}): Promise<Map<string, Author>> {
   const unique = [...new Set(ids)];
   const map = new Map<string, Author>();
   if (!unique.length) return map;
@@ -96,7 +99,7 @@ export async function authorsFor(ids: string[], options: { presence?: boolean } 
       ...(presence && { presence }),
       id: p.userId,
       name: p.displayName,
-      age: p.showAge ? ageFrom(p.birthdate) : null,
+      age: p.showAge || options.realAge ? ageFrom(p.birthdate) : null,
       photo: thumbUrl(firstPhoto.get(p.userId)),
     });
   }
