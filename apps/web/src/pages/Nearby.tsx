@@ -88,6 +88,9 @@ let gridCache: GridCache | null = null;
 // pestaña), no se vuelve a pedir: casi siempre sería la misma, y reacomodarla se ve como una recarga.
 let gridFetchedAt = 0;
 const FRESH_MS = 2 * 60_000;
+// Fotos que ya estaban en la grilla guardada: se piden y se decodifican junto con la ficha, sin esperar a saber si
+// están en pantalla (lazy) ni dibujarse un instante después (en iPhone, eso dejaba las fichas vacías al volver)
+const CACHED_PHOTO = { loading: "eager", decoding: "sync" } as const;
 // Las fotos de la grilla quedan decodificadas en memoria, así al volver se dibujan enseguida (en iPhone, si no,
 // las vuelve a leer del disco y aparecen un instante después).
 const keptPhotos = new Map<string, HTMLImageElement>();
@@ -412,7 +415,7 @@ export function Nearby() {
             {people.map((p) => (
               <li key={p.id} {...arrival(p.id)}>
                 <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
-                  {p.photo ? <img src={p.photo} alt="" loading="lazy" {...(cachedIds.has(p.id) ? {} : photoAppear)} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
+                  {p.photo ? <img src={p.photo} alt="" {...(cachedIds.has(p.id) ? CACHED_PHOTO : { loading: "lazy" as const, ...photoAppear })} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
                   {p.favorite && <span className="tile__fav" aria-label="Favorito"><StarIcon filled size={14} /></span>}
                   <span className="tile__info">
                     <span className="tile__name">

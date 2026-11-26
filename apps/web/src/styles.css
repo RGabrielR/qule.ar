@@ -501,7 +501,8 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
    acercamiento mínimo. Con la curva de las hojas, que no es tan brusca al principio, para que el fundido se llegue a ver */
 .page--tab { animation: tab-in var(--dur-page) var(--ease-sheet) backwards; }
 @keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
-@keyframes page-back { from { opacity: 0; transform: translateX(-32px); } }
+/* Volver: la pantalla de antes ya estaba, así que no se funde (parpadearía): solo se desliza a su lugar, como en iOS */
+@keyframes page-back { from { transform: translateX(-32px); } }
 @keyframes tab-in { from { opacity: 0; transform: scale(0.98); } }
 @keyframes tile-in { from { opacity: 0; transform: scale(0.96); } }
 /* Cambio de tema (theme.ts, con View Transitions): la pantalla vieja se funde con la nueva. Es un fundido, así que
@@ -532,7 +533,10 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 /* Hojas de abajo, como en iOS */
 @keyframes sheet-up { from { transform: translateY(100%); } }
 @keyframes sheet-down { to { transform: translateY(100%); } }
-@media (prefers-reduced-motion: reduce) { .page--forward, .page--back, .page--tab { animation: fade-in var(--dur-fast) var(--ease-out) backwards; } }
+@media (prefers-reduced-motion: reduce) {
+  .page--forward, .page--tab { animation: fade-in var(--dur-fast) var(--ease-out) backwards; }
+  .page--back { animation: none; }
+}
 
 /* ---------- Grupos ---------- */
 .tabs { display: flex; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--line); }
