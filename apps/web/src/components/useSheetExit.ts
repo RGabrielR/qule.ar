@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-
-/** Lo que dura la salida de una hoja: `--dur-base`, igual que `.sheet-backdrop[data-closing]` en styles.css. */
-function exitMs() {
-  const raw = getComputedStyle(document.documentElement).getPropertyValue("--dur-base").trim();
-  const ms = raw.endsWith("ms") ? parseFloat(raw) : parseFloat(raw) * 1000;
-  return Number.isFinite(ms) ? ms : 0;
-}
+import { motionMs } from "../motion";
 
 /**
  * Salida de una hoja (`.sheet-backdrop` + `.sheet`): `close()` marca el fondo con `data-closing`, la hoja baja y el
@@ -29,7 +23,7 @@ export function useSheetExit(onClose: () => void) {
       timer.current = undefined;
       setClosing(false);
       (then ?? done.current)();
-    }, exitMs());
+    }, motionMs("--dur-base")); // igual que `.sheet-backdrop[data-closing]` en styles.css
   }, []);
 
   return { closing, close, backdrop: { "data-closing": closing ? "" : undefined, onClick: () => close() } };

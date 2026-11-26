@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, type Author } from "../api";
+import { motionMs } from "../motion";
 import { Avatar } from "../components/Avatar";
 import { BackIcon } from "../components/Icons";
 import { SkeletonRows } from "../components/Skeleton";
@@ -11,8 +12,6 @@ type Page = { people: Author[]; total: number; hasMore: boolean };
 type Row = { person: Author; i: number };
 type List = { q: string; rows: Row[]; total: number; hasMore: boolean };
 
-// Lo que dura el cierre de una fila al desbloquear (--dur-base)
-const LEAVE_MS = 240;
 
 export function BlockedPeople() {
   const goBack = useSectionBack("/yo/configuracion");
@@ -85,7 +84,7 @@ export function BlockedPeople() {
           next.delete(person.id);
           return next;
         });
-      }, LEAVE_MS);
+      }, motionMs("--dur-base")); // lo que dura el cierre de la fila (.blocked__row--leaving)
     } catch {
       setNotice("No se pudo desbloquear. Probá de nuevo.");
     } finally {

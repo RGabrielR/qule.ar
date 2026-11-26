@@ -112,7 +112,12 @@ Las animaciones hacen que la app se sienta fluida, como una app instalada y no c
 - **Contenido que llega:** sube y aparece (`rise-in`), escalonado por `--stagger` dentro de cada tanda (`useArrival` en `components/useArrival.ts`). Lo que ya estaba guardado al abrir la pantalla no se anima, y cada fila se anima una sola vez. Las fotos aparecen con un fundido al terminar de cargar (`photoAppear`), sin fundido si ya estaban en caché.
 - **Esperas:** esqueletos con la forma de lo que va a llegar, en vez de "Cargando…" (`components/Skeleton.tsx`). Aparecen recién si la espera pasa de un instante y laten despacio con la opacidad; nada de brillos que se desplazan.
 - **Toques:** respuesta inmediata y corta (`--dur-press`). El hover solo en compu (`@media (hover: hover) and (pointer: fine)`).
-- Solo `transform` y `opacity`. Nada de `scale(0)`: lo que aparece arranca de 0,95 o más.
+- **Hojas:** suben con `--ease-sheet` (`sheet-up`) y al cerrar bajan (`sheet-down`) antes de desmontarse: `useSheetExit` en `components/useSheetExit.ts`.
+- **Menús y fotos a pantalla completa:** crecen desde 0,95 (`menu-in`, desde el botón que los abrió) o 0,96 (`photo-in`).
+- **Avisos:** suben (`rise-in`) o bajan desde arriba (`drop-in`). **Contadores:** `pop-in` al aparecer o cambiar.
+- **Listas:** `useArrival` (`components/useArrival.ts`) y la clase `.arrive`; fotos con `photoAppear` (`components/photoAppear.ts`) o `<Avatar appear>`; esperas con `components/Skeleton.tsx`.
+- Para esperar a que termine una animación desde TS: `motionMs("--dur-base")` (`src/motion.ts`), nunca milisegundos escritos a mano.
+- Solo `transform`, `scale` y `opacity`. Nada de `scale(0)`: lo que aparece arranca de 0,85 o más.
 - Con movimiento reducido (`prefers-reduced-motion`), todo pasa a fundidos simples.
 - Lo que se repite muchas veces por minuto (escribir, pasar fotos rápido) no se anima o se anima casi nada.
 
