@@ -200,15 +200,6 @@ html:has(.shell--thread), body:has(.shell--thread) { overflow: hidden; overscrol
 /* La pestaña activa cambia de color con transición */
 .tabbar__item { height: var(--tabbar-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: var(--text-2xs); font-weight: 600; position: relative; transition: color var(--dur-fast) var(--ease-out); }
 .tabbar__item.active { color: var(--accent); }
-/* El ícono de la pestaña se hunde al apretar y rebota al tocarlo (App.tsx) */
-.tabbar__icon { display: grid; transition: scale var(--dur-press) var(--ease-out); }
-.tabbar__item:active .tabbar__icon { scale: 0.9; }
-.tabbar__icon--pop { animation: settle var(--dur-base) var(--ease-out); }
-@media (prefers-reduced-motion: reduce) {
-  .tabbar__icon { transition: none; }
-  .tabbar__item:active .tabbar__icon { scale: none; }
-  .tabbar__icon--pop { animation: none; }
-}
 .tabbar__item .badge { position: absolute; top: 8px; left: calc(50% + 6px); }
 
 .page { flex: 1; overflow-y: auto; padding-bottom: 24px; }
@@ -519,13 +510,21 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 /* Entrada de pantallas (features/navigation/pageTransition.ts): hacia adelante desde la derecha, al volver desde la izquierda */
 .page--forward { animation: page-forward var(--dur-page) var(--ease-out) backwards; }
 .page--back { animation: page-back var(--dur-page) var(--ease-out) backwards; }
-/* Cambiar de pestaña: sin deslizar (en las apps nativas las pestañas no se mueven), se asienta con un fundido y un
-   acercamiento mínimo. Con la curva de las hojas, que no es tan brusca al principio, para que el fundido se llegue a ver */
-.page--tab { animation: tab-in var(--dur-page) var(--ease-sheet) backwards; }
+/* Cambiar de pestaña: sin deslizar (en las apps nativas las pestañas no se mueven). El encabezado y las solapas quedan
+   quietos; el contenido se asienta con un fundido y un acercamiento mínimo, creciendo desde abajo del encabezado
+   (cada bloque con el origen arriba, así se mueven juntos). Con la curva de las hojas, que no es tan brusca al
+   principio, para que se llegue a ver. Lo que ya trae su propia entrada o va encima de la pantalla queda afuera.
+   La clase se va sola cuando termina la entrada (useTabTransition), así lo que llegue después no la repite. */
+.page--tab > :not(.topbar, .tabs, .skeleton-wait, .sheet-backdrop, .lightbox, .viewer) {
+  transform-origin: 50% 0; animation: tab-in var(--dur-sheet) var(--ease-sheet) backwards;
+}
 @keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
 /* Volver: la pantalla de antes ya estaba, así que no se funde (parpadearía): solo se desliza a su lugar, como en iOS */
 @keyframes page-back { from { transform: translateX(-32px); } }
-@keyframes tab-in { from { opacity: 0; transform: scale(0.98); } }
+/* El encabezado y las solapas no se mueven, pero su contenido (título, botones) aparece con un fundido al cambiar de
+   pestaña; la barra en sí queda fija. Entre solapas de la misma pestaña el encabezado es el mismo y no se funde. */
+.page--tab:not(.page--same-header) > :is(.topbar, .tabs) > * { animation: fade-in var(--dur-sheet) var(--ease-sheet) backwards; }
+@keyframes tab-in { from { opacity: 0; transform: scale(0.977); } }
 @keyframes tile-in { from { opacity: 0; transform: scale(0.96); } }
 /* Cambio de tema (theme.ts, con View Transitions): la pantalla vieja se funde con la nueva. Es un fundido, así que
    también vale con movimiento reducido */
@@ -535,8 +534,6 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } }
 /* Contadores que aparecen o cambian de número (.badge). Con `scale` para no pisar un transform del elemento. */
 @keyframes pop-in { from { opacity: 0; scale: 0.85; } }
-/* Un ícono que se acomoda después de un toque (.tabbar__icon--pop) */
-@keyframes settle { from { scale: 0.9; } }
 /* Pulso de los esqueletos (components/Skeleton.tsx), con `alternate` */
 @keyframes skeleton-pulse { to { opacity: 0.45; } }
 /* Lo que llega a una lista, escalonado dentro de su tanda (components/useArrival.ts) */
@@ -556,7 +553,8 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 @keyframes sheet-up { from { transform: translateY(100%); } }
 @keyframes sheet-down { to { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) {
-  .page--forward, .page--tab { animation: fade-in var(--dur-fast) var(--ease-out) backwards; }
+  .page--forward { animation: fade-in var(--dur-fast) var(--ease-out) backwards; }
+  .page--tab > :not(.topbar, .tabs, .skeleton-wait, .sheet-backdrop, .lightbox, .viewer) { animation-name: fade-in; }
   .page--back { animation: none; }
 }
 

@@ -7,7 +7,7 @@ import { useMe } from "../App";
 import { BackIcon } from "../components/Icons";
 import { useSectionBack } from "../useSectionBack";
 import { useRememberScroll } from "../features/navigation/viewMemory";
-import { usePageTransition } from "../features/navigation/pageTransition";
+import { useEntryTransition } from "../features/navigation/pageTransition";
 import { photoAppear } from "../components/photoAppear";
 import { SkeletonGrid } from "../components/Skeleton";
 import { useArrival } from "../components/useArrival";
@@ -22,7 +22,8 @@ function ago(iso: string) {
 
 function PeopleGrid({ title, people, empty, note, tabs }: { title: string; people: (Author & { sub?: string; reaction?: string; isNew?: boolean })[] | null; empty: string; note?: string; tabs?: React.ReactNode }) {
   const goBack = useSectionBack("/yo");
-  const enter = usePageTransition();
+  // Como pestaña de Gente entra como las pestañas (el encabezado quieto); abierta desde Yo, deslizándose
+  const enter = useEntryTransition(Boolean(tabs));
   const pageRef = useRef<HTMLDivElement>(null);
   useRememberScroll(pageRef, people != null);
   // Las fotos entran escalonadas cuando llegan; al volver de un perfil, no: la grilla vuelve a estar como estaba
