@@ -507,23 +507,29 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
   .blocked__row--leaving { transform: none; }
 }
 
-/* Entrada de pantallas (features/navigation/pageTransition.ts): hacia adelante desde la derecha, al volver desde la izquierda */
-.page--forward { animation: page-forward var(--dur-page) var(--ease-out) backwards; }
-.page--back { animation: page-back var(--dur-page) var(--ease-out) backwards; }
-/* Cambiar de pestaña: sin deslizar (en las apps nativas las pestañas no se mueven). El encabezado y las solapas quedan
-   quietos; el contenido se asienta con un fundido y un acercamiento mínimo, creciendo desde abajo del encabezado
-   (cada bloque con el origen arriba, así se mueven juntos). Con la curva de las hojas, que no es tan brusca al
-   principio, para que se llegue a ver. Lo que ya trae su propia entrada o va encima de la pantalla queda afuera.
-   La clase se va sola cuando termina la entrada (useTabTransition), así lo que llegue después no la repite. */
-.page--tab > :not(.topbar, .tabs, .skeleton-wait, .sheet-backdrop, .lightbox, .viewer) {
-  transform-origin: 50% 0; animation: tab-in var(--dur-sheet) var(--ease-sheet) backwards;
+/* Entrada de pantallas (features/navigation/pageTransition.ts). El encabezado (y las solapas) nunca se mueve ni se
+   funde entero: queda quieto, como en las apps nativas, y solo aparece su contenido (título, botones). Lo que
+   entra es lo de abajo: cada hijo directo de la pantalla, todos con la misma animación.
+   - Pantalla nueva (.page--forward): desde la derecha. Al volver con la flecha (.page--back): desde la izquierda.
+   - Pestaña (.page--tab): sin deslizar; se asienta con un fundido y un acercamiento mínimo, creciendo desde abajo
+     del encabezado (cada bloque con el origen arriba, así se mueven juntos) y con la curva de las hojas, que no
+     es tan brusca al principio, para que se llegue a ver.
+   Quedan afuera lo que va encima de la pantalla y lo que trae su propia entrada. La clase se va sola cuando la
+   entrada termina (useEntryClass), así lo que se monte después (una hoja, un aviso, la lista) no la repite. */
+.page--forward { --enter: page-forward; --enter-time: var(--dur-page); --enter-ease: var(--ease-out); }
+.page--back { --enter: page-back; --enter-time: var(--dur-page); --enter-ease: var(--ease-out); }
+.page--tab { --enter: tab-in; --enter-time: var(--dur-sheet); --enter-ease: var(--ease-sheet); }
+:is(.page--forward, .page--back, .page--tab) > :not(.topbar, .tabs, .skeleton-wait, .arrive, .notice, .empty--in, .sheet-backdrop, .lightbox, .viewer, dialog) {
+  transform-origin: 50% 0; animation: var(--enter) var(--enter-time) var(--enter-ease) backwards;
 }
+/* Lo que se desliza no tiene que dejar desplazar la pantalla de costado mientras entra */
+.page--forward, .page--back { overflow-x: clip; }
 @keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
 /* Volver: la pantalla de antes ya estaba, así que no se funde (parpadearía): solo se desliza a su lugar, como en iOS */
 @keyframes page-back { from { transform: translateX(-32px); } }
-/* El encabezado y las solapas no se mueven, pero su contenido (título, botones) aparece con un fundido al cambiar de
-   pestaña; la barra en sí queda fija. Entre solapas de la misma pestaña el encabezado es el mismo y no se funde. */
-.page--tab:not(.page--same-header) > :is(.topbar, .tabs) > * { animation: fade-in var(--dur-sheet) var(--ease-sheet) backwards; }
+/* El contenido del encabezado y de las solapas aparece con un fundido. Entre solapas de la misma pestaña el
+   encabezado es el mismo y no se funde; al volver tampoco: la pantalla de antes ya estaba. */
+:is(.page--forward, .page--tab:not(.page--same-header)) > :is(.topbar, .tabs) > * { animation: fade-in var(--enter-time) var(--enter-ease) backwards; }
 @keyframes tab-in { from { opacity: 0; transform: scale(0.977); } }
 @keyframes tile-in { from { opacity: 0; transform: scale(0.96); } }
 /* Cambio de tema (theme.ts, con View Transitions): la pantalla vieja se funde con la nueva. Es un fundido, así que
@@ -553,9 +559,9 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 @keyframes sheet-up { from { transform: translateY(100%); } }
 @keyframes sheet-down { to { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) {
-  .page--forward { animation: fade-in var(--dur-fast) var(--ease-out) backwards; }
-  .page--tab > :not(.topbar, .tabs, .skeleton-wait, .sheet-backdrop, .lightbox, .viewer) { animation-name: fade-in; }
-  .page--back { animation: none; }
+  /* Con movimiento reducido: solo fundidos, y al volver nada */
+  .page--forward, .page--tab { --enter: fade-in; --enter-time: var(--dur-fast); --enter-ease: var(--ease-out); }
+  .page--back { --enter: none; }
 }
 
 /* ---------- Grupos ---------- */
