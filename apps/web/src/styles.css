@@ -266,13 +266,16 @@ html:has(.pull-refresh), .page:has(> .pull-refresh) { overscroll-behavior-y: non
 
 /* ---------- Mensajes privados ---------- */
 .inbox { list-style: none; margin: 0; padding: 4px 0; }
-.inbox__row { position: relative; }
+/* La foto abre el perfil y el resto de la fila abre el chat. Mantener apretada la fila abre sus acciones. */
+.inbox__row { position: relative; display: flex; align-items: center; }
 .inbox__row:hover, .inbox__row:focus-within { background: var(--surface); }
-.inbox__item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; user-select: none; -webkit-touch-callout: none; }
+.inbox__avatar { flex: none; align-self: stretch; display: flex; align-items: center; padding: 10px 0 10px 16px; }
+.inbox__item { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 12px; user-select: none; -webkit-touch-callout: none; }
 .inbox__muted { display: flex; color: var(--muted); }
 .inbox__text { flex: 1; min-width: 0; }
 .chat-contact-name { display: inline-flex; align-items: center; align-self: center; gap: 6px; vertical-align: middle; }
 .inbox__top { display: flex; justify-content: space-between; gap: 8px; }
+.reports-inbox .inbox__top strong { min-width: 0; overflow-wrap: anywhere; }
 .inbox__top time { color: var(--muted); font-size: var(--text-xs); flex: none; }
 .inbox__preview { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-md); }
 .inbox__item--unread .inbox__preview { color: var(--text); font-weight: 500; }
@@ -280,6 +283,10 @@ html:has(.pull-refresh), .page:has(> .pull-refresh) { overscroll-behavior-y: non
 .chat__list--dm { display: flex; flex-direction: column; gap: 4px; padding: 12px; }
 .chat__date { align-self: center; margin-block: 8px; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--muted); font-size: var(--text-xs); font-weight: 600; }
 .bubble { position: relative; align-self: flex-start; max-width: min(78%, 440px); background: var(--surface-2); border-radius: var(--radius-2xl) var(--radius-2xl) var(--radius-2xl) var(--radius-xs); padding: 8px 12px 6px; }
+.send-failure { display: flex; align-items: center; gap: 4px; color: var(--muted); overflow-wrap: anywhere; }
+.chat__list--dm > .send-failure { align-self: flex-end; max-width: 85%; text-align: right; }
+.gmsg > .send-failure { grid-column: 2 / -1; }
+.send-failure .iconbtn svg { width: 16px; height: 16px; }
 .bubble p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .bubble time, .bubble__meta { display: block; text-align: right; font-size: var(--text-2xs); color: var(--muted); margin-top: 2px; }
 .bubble--mine { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius-2xl) var(--radius-2xl) var(--radius-xs) var(--radius-2xl); }
@@ -386,6 +393,11 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 .people-tabs a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 .tabs :is(button[aria-selected="true"], a[aria-current="page"]) { color: var(--text); border-bottom-color: var(--accent); }
 .searchbar { padding: 12px 16px 4px; }
+/* Atajos de filtros en Mensajes: una fila que se desliza de costado si no entra */
+.inbox-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+.inbox-filters::-webkit-scrollbar { display: none; }
+.inbox-filters .chip { flex: none; gap: 6px; height: 32px; padding: 0 12px; font-size: var(--text-sm); }
+.inbox-filters__more { padding: 0 9px; }
 .glist { list-style: none; margin: 0; padding: 6px 0; }
 .glist__more { display: flex; justify-content: center; padding: 12px 16px 20px; }
 .gcard { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
@@ -634,6 +646,13 @@ a.gcard:hover { background: var(--surface); }
 .modfilters .chips { flex-wrap: wrap; }
 .modreports__more { display: flex; justify-content: center; padding: 0 16px 16px; }
 .rcard--urgent { border-color: var(--danger-strong); }
+/* Quién reporta (features/moderation/ReportSpamAlerts.tsx), arriba de la lista de reportes */
+.spam-alerts { padding-bottom: 0; }
+.spam-alert .pill--reason { text-transform: none; background: var(--queue-soft); color: var(--queue); }
+.spam-alert__signals { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.spam-muted summary { color: var(--text); }
+.spam-muted__item { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.spam-alert .rcard__actions p { flex-basis: 100%; margin: 0; }
 .rcard__summary { color: var(--muted); }
 .rcard__notes summary { cursor: pointer; }
 .rcard__notes ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -810,6 +829,94 @@ button.quote:hover { background: var(--surface-3); }
 .req__pick { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--accent); }
 .req--picked { border-color: var(--accent); }
 
+/* Verificación de fotos desde un reporte */
+.report-dialog { overflow-y: auto; }
+.verify-photo { height: 88dvh; }
+
+.verify-photo__form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.verify-photo__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.verify-photo__body,
+.verify-photo__footer,
+.verify-photo__result {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.verify-photo__fields,
+.verify-photo__comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.verify-photo__comparison,
+.verify-photo__result > div {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+}
+
+.verify-photo__comparison figure,
+.verify-photo__result,
+.verify-photo__result dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.verify-photo__comparison figcaption,
+.verify-photo__result dt {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  margin-bottom: 6px;
+}
+
+.verify-photo__image {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.verify-photo__image canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.verify-photo__image canvas[hidden] { display: none; }
+
+.verify-photo__selection {
+  position: absolute;
+  pointer-events: none;
+  border: 2px solid var(--accent);
+}
+
+.verify-photo__result dd {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.verify-photo__form .input {
+  width: 100%;
+  min-width: 0;
+}
+
 /* ---------- Marca de agua con quién mira (features/photos/Watermark.tsx) ---------- */
 /* Se tiene que leer en una captura sin tapar la foto: texto claro, finito, con una sombra que lo separa de fondos claros */
 .watermark { position: absolute; inset: 0; z-index: var(--z-raised); overflow: hidden; pointer-events: none; user-select: none; -webkit-user-select: none; }
@@ -824,3 +931,28 @@ button.quote:hover { background: var(--surface-3); }
 }
 /* Al cambiar de app o abrir el selector de apps, las fotos privadas no quedan a la vista */
 .app-away .private-media { visibility: hidden; }
+
+/* ---------- Encuestas en grupos (features/polls) ---------- */
+.poll { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; padding: 12px; border-radius: var(--radius-xl); background: var(--surface); border: 1px solid var(--line); max-width: 420px; }
+.queued .poll { margin: 4px 0; }
+.poll__label { margin: 0; font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.poll__question { margin: 0; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
+.poll__options { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.poll__option { position: relative; overflow: hidden; width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--line); color: var(--text); text-align: start; font: inherit; }
+.poll__option:hover:not(:disabled) { border-color: var(--accent-line); }
+.poll__option:disabled { cursor: default; }
+.poll__option--mine { border-color: var(--accent); }
+.poll__bar { position: absolute; inset: 0 auto 0 0; background: var(--accent-soft); transition: width 0.25s ease; }
+.poll__text { position: relative; display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.poll__text svg { width: 16px; height: 16px; flex: none; color: var(--accent-2); }
+.poll__option-name { overflow-wrap: anywhere; }
+.poll__count { position: relative; flex: none; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.poll__footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; font-size: var(--text-xs); color: var(--muted); }
+.poll__footer .linkbtn { font-size: var(--text-xs); min-height: 32px; }
+.poll-form { max-height: 88vh; overflow-y: auto; }
+.poll-form__options { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.poll-form__options li { display: flex; align-items: center; gap: 4px; }
+.poll-form__add { align-self: flex-start; min-height: 36px; }
+@media (prefers-reduced-motion: reduce) { .poll__bar { transition: none; } }
+
+.admin-account-detail { overflow-wrap: anywhere; }

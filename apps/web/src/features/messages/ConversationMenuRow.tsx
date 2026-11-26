@@ -7,8 +7,10 @@ import { ConversationMenu } from "./ConversationMenu";
 const HOLD_MS = 500;
 const MOVE_TOLERANCE = 10;
 
-export function ConversationMenuRow({ chat, children, positionMenu, onAction }: {
+export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAction }: {
   chat: ConversationSummary;
+  /** La foto va afuera del enlace al chat: abre el perfil. */
+  avatar?: ReactNode;
   children: ReactNode;
   positionMenu: (menu: HTMLDivElement | null) => void;
   onAction: (action: ConversationAction) => void;
@@ -29,6 +31,7 @@ export function ConversationMenuRow({ chat, children, positionMenu, onAction }: 
 
   return (
     <li className="inbox__row">
+      {avatar}
       <Link
         ref={link}
         to={`/mensajes/${chat.id}`}

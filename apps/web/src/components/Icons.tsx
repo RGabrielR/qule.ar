@@ -57,6 +57,9 @@ export const InfoIcon = () => (
 export const PlusIcon = () => (
   <svg {...base}><path d="M12 5v14M5 12h14" /></svg>
 );
+export const TrashIcon = () => (
+  <svg {...base}><path d="M3 6h18M9 6V3h6v3M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14M10 10v7m4-7v7" /></svg>
+);
 export const RefreshIcon = () => (
   <svg {...base}><path d="M20 4v6h-6m6 0a8 8 0 1 0-.7 6" /></svg>
 );
@@ -85,6 +88,9 @@ export const CloseIcon = () => (
  * Frases guardadas del chat: un globo rectangular con dos renglones.
  * Rectangular para que los renglones queden centrados y no se confunda con el globo redondo de Mensajes.
  */
+export const PollIcon = () => (
+  <svg {...base}><path d="M4 4v16" /><path d="M8 7h9M8 12h12M8 17h5" /></svg>
+);
 export const PhraseIcon = () => (
   <svg {...base}><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H9l-5 4z" /><path d="M8 8.5h8M8 12.5h5" /></svg>
 );

@@ -35,7 +35,7 @@ export function MyProfileOverview() {
         </Link>
       </header>
 
-      <ProfileCover photos={publicPhotos} displayName={profile.displayName} age={profile.age} />
+      <ProfileCover photos={publicPhotos} displayName={profile.displayName} age={profile.showAge ? profile.age : null} />
 
       <div className="profile__body">
         <Link to="/yo/editar" className="btn btn--primary"><EditIcon /> Editar perfil</Link>

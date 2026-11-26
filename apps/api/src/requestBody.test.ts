@@ -22,11 +22,17 @@ test("la API limita JSON y multipart antes del handler", async () => {
   assert.equal((await request("/api/conversations/c/messages", "multipart/form-data; boundary=qule", "", 14 * 1024 ** 2)).status, 413);
   assert.equal((await request("/api/groups/g/photo", "multipart/form-data; boundary=qule", "", 14 * 1024 ** 2)).status, 413);
   assert.equal((await request("/api/me/photos", "multipart/form-data; boundary=qule", "", 82 * 1024 ** 2)).status, 413);
+  const verification = "/api/admin/reports/r/photo-verification";
+  assert.equal((await request(verification, "multipart/form-data; boundary=qule", "", 14 * 1024 ** 2)).status, 413);
   assert.equal(handled, 0);
   const normal = await request("/api/auth/test", "application/json", "{}");
   assert.deepEqual(await normal.json(), { length: 2 });
   const form = new FormData();
   form.set("file", new Blob(["foto de prueba"], { type: "image/png" }), "foto.png");
   assert.equal((await app.request("/api/groups/g/photo", { method: "POST", body: form })).status, 200);
-  assert.equal(handled, 2);
+  const capture = new FormData();
+  capture.set("file", new Blob([new Uint8Array(oversized)], { type: "image/png" }), "captura.png");
+  assert.equal((await app.request(verification, { method: "POST", body: capture })).status, 200);
+  assert.equal((await app.request("/api/reports", { method: "POST", body: capture })).status, 200);
+  assert.equal(handled, 4);
 });

@@ -94,7 +94,7 @@ for (const theme of ["oscuro", "penumbra"]) {
     const tiles = page.getByRole("link", { name: new RegExp(`^(${first.name}|${second.name})(?:,|$)`) });
     await expect(tiles).toHaveCount(2);
     const [previous, next] = await tiles.evaluateAll((links) => links.map((link) => ({
-      name: link.getAttribute("aria-label")!.split(",")[0],
+      name: link.getAttribute("aria-label")!,
       path: link.getAttribute("href")!,
     })));
     const session = await page.context().newCDPSession(page);

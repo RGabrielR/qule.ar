@@ -7,7 +7,7 @@ type CoverProps = {
   photos?: string[];
   coverPhoto?: string | null;
   displayName?: string;
-  age?: number;
+  age?: number | null;
   status?: Pick<PublicProfile, "online" | "recent" | "distance">;
   back?: ReactNode;
   /** Algo más sobre la foto, abajo a la derecha (por ejemplo, pasar al perfil siguiente). */
@@ -52,7 +52,7 @@ export function ProfileCover({ photos, coverPhoto, displayName, age, status, bac
       {displayName && <div className={aside ? "profile__name profile__name--with-aside" : "profile__name"}>
         <div className="profile__nameline">
           <h1>{displayName}</h1>
-          <span>{age}</span>
+          {age != null && <span>{age}</span>}
         </div>
         {(status && (status.online || status.recent || status.distance)) && (
           <p className="profile__status">

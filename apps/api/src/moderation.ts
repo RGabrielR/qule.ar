@@ -2,8 +2,9 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db, schema } from "./db/index.js";
 import { pushTo } from "./push.js";
 import { notifyStaff } from "./staff.js";
-import { deleteImage } from "./storage.js";
+import { deleteImage, deleteReportCapture } from "./storage.js";
 import { forgetFile } from "./fileCache.js";
+import { reportCounts } from "./reportSpam.js";
 
 const { report } = schema;
 
@@ -43,14 +44,15 @@ export async function notifyModeratorsUrgent(reason: string) {
 
 /**
  * Perfiles ocultos de la grilla por precaución: tienen reportes urgentes abiertos de AUTO_HIDE_REPORTERS
- * personas distintas. Vuelven a aparecer cuando moderación cierra esos reportes (descarta o actúa).
+ * personas distintas (cuyos reportes cuentan: ver reportSpam.ts). Vuelven a aparecer cuando moderación cierra esos reportes (descarta o actúa).
  * No es una suspensión: la cuenta sigue funcionando, solo deja de aparecer en "Cerca" y en las listas para invitar.
  */
 export async function autoHiddenUsers(): Promise<Set<string>> {
   const rows = await db
     .select({ id: report.targetUserId })
     .from(report)
-    .where(and(eq(report.status, "open"), inArray(report.reason, [...URGENT_REASONS])))
+    // Los reportes de cuentas que moderación marcó como de mala fe no cuentan (ver reportSpam.ts)
+    .where(and(eq(report.status, "open"), inArray(report.reason, [...URGENT_REASONS]), reportCounts))
     .groupBy(report.targetUserId)
     .having(sql`count(distinct ${report.reporterId}) >= ${AUTO_HIDE_REPORTERS}`);
   return new Set(rows.flatMap((r) => (r.id ? [r.id] : [])));
@@ -98,8 +100,11 @@ async function stillInUse(key: string) {
 /** Al descartar reportes: se borra la copia del texto y los archivos que ya nadie usa ni son prueba de otro reporte. */
 export async function releaseEvidence(reportIds: string[]) {
   if (!reportIds.length) return;
-  const rows = await db.select({ keys: report.evidenceKeys }).from(report).where(inArray(report.id, reportIds));
-  await db.update(report).set({ messageBody: null, evidenceKeys: [] }).where(inArray(report.id, reportIds));
+  const rows = await db.select({ keys: report.evidenceKeys, capture: report.captureKey }).from(report).where(inArray(report.id, reportIds));
+  await db.update(report).set({ messageBody: null, evidenceKeys: [], captureKey: null, photoMatch: null }).where(inArray(report.id, reportIds));
+  for (const { capture } of rows) {
+    if (capture) await deleteReportCapture(capture);
+  }
   for (const key of new Set(rows.flatMap((r) => r.keys))) {
     if (!(await isEvidence(key)) && !(await stillInUse(key))) await deleteImage(key);
   }
@@ -112,7 +117,7 @@ export async function autoHiddenGroups(): Promise<Set<string>> {
   const rows = await db
     .select({ id: report.groupId })
     .from(report)
-    .where(and(eq(report.status, "open"), inArray(report.reason, [...URGENT_REASONS]), sql`${report.groupId} is not null`))
+    .where(and(eq(report.status, "open"), inArray(report.reason, [...URGENT_REASONS]), sql`${report.groupId} is not null`, reportCounts))
     .groupBy(report.groupId)
     .having(sql`count(distinct ${report.reporterId}) >= ${AUTO_HIDE_REPORTERS}`);
   return new Set(rows.flatMap((r) => (r.id ? [r.id] : [])));
@@ -155,24 +160,47 @@ export async function purgeRemovedGroups() {
 // ---------- Alertas automáticas: señales de menores en nombres y descripciones ----------
 // No borran ni ocultan nada: crean un reporte urgente para que una persona lo revise. Ver docs/MODERACION.md.
 
-const MINOR_SIGNALS: RegExp[] = [
-  /(?:^|[^\d+])[-−]\s?18\b/, // "-18"
-  /\+\s?1[0-7]\b/, // "+14", "+16" (el "+18" de adultos no cuenta)
-  /\b1[0-7]\s?(?:anos|anitos)\b|\b1[0-7]a\b/, // "15 años", "16a" (pero no "de 15 a 18", que es un horario)
-  /\bsub\s?-?\s?1[0-8]\b/, // "sub 18", "sub-16"
-  /\bmenores\b|\bmenor de edad\b|\bmenorcit[oa]s?\b/,
-  /\bteens?\b|\bsecundari[oa]s?\b|\bliceo\b/,
+/** Una señal: el patrón y, si hace falta, cuándo no cuenta según lo que hay antes y después del fragmento. */
+type Signal = { re: RegExp; unless?: (before: string, after: string) => boolean };
+
+/** "no menores", "sin menores", "nada de menores": la palabra aparece para decir lo contrario. */
+const NEGATED = /\b(?:no|sin|ni|nada de)\s+(?:\S+\s+){0,2}$/;
+/** "menores a 40", "menor de 30": una edad adulta después. "menores de 18" sí cuenta. */
+const ADULT_AGE_AFTER = (after: string) => {
+  const m = /^\s*(?:a|de|que)\s+(\d{2})\b/.exec(after);
+  return Boolean(m && Number(m[1]) >= 19);
+};
+
+const MINOR_SIGNALS: Signal[] = [
+  { re: /(?:^|[^\d+])[-−]\s?18\b/ }, // "-18"
+  { re: /\+\s?1[0-7]\b/ }, // "+14", "+16" (el "+18" de adultos no cuenta)
+  { re: /\b1[0-7]\s?(?:anos|anitos)\b|\b1[0-7]a\b/ }, // "15 años", "16a" (pero no "de 15 a 18", que es un horario)
+  { re: /\bsub\s?-?\s?1[0-8]\b/ }, // "sub 18", "sub-16"
+  // Sin uso inocente en una app de citas: siempre cuentan
+  { re: /\bmenorcit[oa]s?\b/ },
+  { re: /\bteens?\b/ },
+  // "menores", "menor de edad": salvo negados ("no menores") o con una edad adulta ("menores a 40")
+  { re: /\bmenor(?:es)?(?:\s+de\s+edad)?\b/, unless: (before, after) => NEGATED.test(before) || ADULT_AGE_AFTER(after) },
+  // "secundaria", "liceo": solo como estudiante ("voy a la secundaria", "estoy en el liceo", "termino el secundario"),
+  // no "perfil secundario" ni "exalumnos del liceo"
+  { re: /\b(?:voy a|vamos a|estoy en|estamos en|estudio en|sigo en|ando en|curso|cursando|termino|terminando)\s+(?:\S+\s+){0,3}?(?:secundari[oa]|liceo)\b/ },
 ];
+
+/** El primer fragmento que dispara alguna señal, o null. Revisa todas las apariciones, no solo la primera. */
+function findSignal(text: string, signals: Signal[]): string | null {
+  for (const { re, unless } of signals) {
+    for (const m of text.matchAll(new RegExp(re.source, re.flags.replace("g", "") + "g"))) {
+      if (unless?.(text.slice(0, m.index), text.slice(m.index + m[0].length))) continue;
+      return m[0].trim();
+    }
+  }
+  return null;
+}
 
 /** Devuelve el fragmento que dispara la alerta, o null. Ignora mayúsculas y tildes. */
 export function minorSignal(text: string | null | undefined): string | null {
   if (!text) return null;
-  const t = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  for (const re of MINOR_SIGNALS) {
-    const m = re.exec(t);
-    if (m) return m[0].trim();
-  }
-  return null;
+  return findSignal(text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""), MINOR_SIGNALS);
 }
 
 export const AUTO_DETAILS_PREFIX = "Alerta automática";
@@ -224,7 +252,7 @@ export async function checkMinorSignals(
 
 type ForbiddenKind = "menores" | "venta" | "servicios";
 
-const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: RegExp[] }[] = [
+const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: Signal[] }[] = [
   {
     kind: "menores",
     message: "No se pueden crear grupos que sugieran menores de edad. qule.ar es solo para mayores de 18.",
@@ -233,7 +261,7 @@ const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: RegExp[
   {
     kind: "servicios",
     message: "No se pueden crear grupos para ofrecer masajes, acompañantes ni servicios sexuales.",
-    patterns: [/\bmasaj\w*/, /\bescorts?\b/, /\bacompanantes?\b/, /\bprepagos?\b/, /\btrabajo sexual\b/, /\bservicios? sexual\w*/],
+    patterns: [/\bmasaj\w*/, /\bescorts?\b/, /\bacompanantes?\b/, /\bprepagos?\b/, /\btrabajo sexual\b/, /\bservicios? sexual\w*/].map((re) => ({ re })),
   },
   {
     kind: "venta",
@@ -241,7 +269,7 @@ const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: RegExp[
     patterns: [
       /\bvend(?:o|e|emos|en|er|edor\w*)\b/, /\bventas?\b/, /\bcompr(?:o|amos|a y venta)\b/, /\bprecios?\b/,
       /\$\s?\d/, /\bofertas?\b/, /\bcobr(?:o|amos)\b/, /\bdelivery\b/, /\bstock\b/, /\bmayorista\w*/,
-    ],
+    ].map((re) => ({ re })),
   },
 ];
 
@@ -253,10 +281,8 @@ export function forbiddenGroupText(...texts: (string | null | undefined)[]) {
     if (!raw) continue;
     const t = normalize(raw);
     for (const rule of FORBIDDEN_GROUP) {
-      for (const re of rule.patterns) {
-        const m = re.exec(t) ?? re.exec(raw);
-        if (m) return { kind: rule.kind, hit: m[0].trim(), message: rule.message };
-      }
+      const hit = findSignal(t, rule.patterns) ?? findSignal(raw.toLowerCase(), rule.patterns);
+      if (hit) return { kind: rule.kind, hit, message: rule.message };
     }
   }
   return null;
