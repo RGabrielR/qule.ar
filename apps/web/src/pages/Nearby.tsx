@@ -7,6 +7,7 @@ import { CheckIcon, FilterIcon, PinIcon, RefreshIcon, StarIcon } from "../compon
 import { LOCATION_EVENT, shareLocation } from "../location";
 import { BODY_TYPES, LOOKING_FOR, POSITIONS, RELATIONSHIP, TRIBES } from "../options";
 import { DialogFocus } from "../components/DialogFocus";
+import { useSheetExit } from "../components/useSheetExit";
 import { getGridList, saveGridList, toGridPerson } from "../features/profileSwipe/gridList";
 import { HasPlaceChips, type HasPlace } from "../features/place/hasPlace";
 import { useTabTransition } from "../features/navigation/pageTransition";
@@ -443,11 +444,12 @@ function Chips({ label, options, value, onChange }: { label: string; options: st
 export function FilterSheet({ initial, onApply, onClose }: { initial: Filters; onApply: (f: Filters) => void; onClose: () => void }) {
   const [f, setF] = useState<Filters>(initial);
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setF({ ...f, [k]: v });
+  const { close, backdrop } = useSheetExit(onClose);
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
+    <div className="sheet-backdrop" {...backdrop}>
       <div className="sheet sheet--tall" role="dialog" aria-modal aria-labelledby="filters-title" onClick={(e) => e.stopPropagation()}>
-        <DialogFocus onClose={onClose} />
+        <DialogFocus onClose={close} />
         <div className="sheet__head">
           <h2 id="filters-title">Filtros</h2>
           <button className="linkbtn" onClick={() => setF(EMPTY)}>Limpiar</button>
@@ -477,8 +479,8 @@ export function FilterSheet({ initial, onApply, onClose }: { initial: Filters; o
           <p className="muted small">Los filtros de altura, peso y demás dejan afuera a quien no completó ese dato.</p>
         </div>
         <div className="row sheet__foot">
-          <button className="btn" onClick={onClose}>Cancelar</button>
-          <button className="btn btn--primary" onClick={() => onApply(f)}>Aplicar</button>
+          <button className="btn" onClick={() => close()}>Cancelar</button>
+          <button className="btn btn--primary" onClick={() => close(() => onApply(f))}>Aplicar</button>
         </div>
       </div>
     </div>

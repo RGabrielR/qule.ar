@@ -142,10 +142,12 @@ button.chip:active:not(:disabled) { scale: 0.97; }
 @media (prefers-reduced-motion: reduce) { .badge { animation-name: fade-in; } }
 .badge--inline { flex: none; }
 
-.notice { margin: 8px 12px; padding: 10px 14px; border-radius: var(--radius-lg); font-size: var(--text-md); display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+/* Los avisos dentro de la página llegan subiendo, como el contenido */
+.notice { margin: 8px 12px; padding: 10px 14px; border-radius: var(--radius-lg); font-size: var(--text-md); display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; animation: rise-in var(--dur-base) var(--ease-out) backwards; }
 .notice--info { background: var(--queue-soft); color: var(--queue); border: 1px solid var(--queue-line); }
 .notice--error { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
 .notice .linkbtn { color: inherit; }
+@media (prefers-reduced-motion: reduce) { .notice { animation-name: fade-in; } }
 /* Aviso dentro de la tarjeta de entrada (al volver de Google con un error) */
 .auth__notice { margin: 0; flex-direction: column; gap: 4px; }
 .auth__notice .linkbtn { align-self: flex-start; padding-left: 0; text-decoration: underline; }
@@ -296,9 +298,11 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .gmsg:hover .gmsg__more, .gmsg__more:focus-visible { opacity: 1; }
 @media (hover: none) { .gmsg__more { opacity: 0.6; } }
 
-.menu { position: absolute; right: 8px; top: 34px; z-index: var(--z-menu); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 6px; min-width: 180px; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); }
+/* El menú crece desde la esquina del botón que lo abrió (arriba a la derecha salvo que diga otra cosa) */
+.menu { position: absolute; right: 8px; top: 34px; z-index: var(--z-menu); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 6px; min-width: 180px; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); transform-origin: top right; animation: menu-in var(--dur-base) var(--ease-out) backwards; }
 .menu > * { text-align: left; padding: 10px 12px; border-radius: var(--radius-sm); background: none; border: 0; font-size: var(--text-md); }
 .menu > *:hover { background: var(--surface-3); }
+@media (prefers-reduced-motion: reduce) { .menu { animation-name: fade-in; } }
 
 .queued { margin: 8px 12px 0 60px; padding: 8px 12px 4px; border-inline-start: 2px solid var(--queue-strong); border-radius: var(--radius-md); background: var(--surface); }
 .queued__body { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -501,6 +505,17 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 /* Lo que llega a una lista, escalonado dentro de su tanda (components/useArrival.ts) */
 .arrive { animation: rise-in var(--dur-base) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * var(--stagger)); }
 @media (prefers-reduced-motion: reduce) { .arrive { animation-name: fade-in; animation-delay: 0s; } }
+/* Lo que se va (salida de las hojas) */
+@keyframes fade-out { to { opacity: 0; } }
+/* Avisos que llegan desde arriba de la pantalla */
+@keyframes drop-in { from { opacity: 0; transform: translateY(-8px); } }
+/* Menús flotantes: crecen desde el botón que los abrió (con transform-origin) */
+@keyframes menu-in { from { opacity: 0; transform: scale(0.95); } }
+/* Foto que se abre a pantalla completa */
+@keyframes photo-in { from { opacity: 0; transform: scale(0.96); } }
+/* Hojas de abajo, como en iOS */
+@keyframes sheet-up { from { transform: translateY(100%); } }
+@keyframes sheet-down { to { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) { .page--forward, .page--back, .page--tab { animation: fade-in var(--dur-fast) var(--ease-out) backwards; } }
 
 /* ---------- Grupos ---------- */
@@ -576,8 +591,10 @@ a.gcard:active { background: var(--surface); }
 .gcard__icon--sm { width: 36px; height: 36px; font-size: var(--text-md); border-radius: var(--radius-lg); }
 .member__actions .menu { top: 28px; right: 0; }
 .menu .danger { color: var(--danger); }
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--tabbar-h) + var(--tabbar-inset) + 12px); z-index: var(--z-toast); background: var(--surface-3); border: 1px solid var(--line); padding: 12px 16px; border-radius: var(--radius-xl); box-shadow: var(--shadow-pop); font-weight: 600; max-width: calc(100% - 32px); }
+/* Cada aviso nuevo (otra key) entra subiendo; se centra con margin y no con transform para no pisar la animación */
+.toast { position: fixed; left: 16px; right: 16px; width: fit-content; margin: 0 auto; bottom: calc(var(--tabbar-h) + var(--tabbar-inset) + 12px); z-index: var(--z-toast); background: var(--surface-3); border: 1px solid var(--line); padding: 12px 16px; border-radius: var(--radius-xl); box-shadow: var(--shadow-pop); font-weight: 600; max-width: calc(100% - 32px); animation: rise-in var(--dur-base) var(--ease-out) backwards; }
 .toast a { color: var(--accent-2); }
+@media (prefers-reduced-motion: reduce) { .toast { animation-name: fade-in; } }
 .toast--upload-error { width: max-content; overflow-wrap: anywhere; border-color: var(--danger-line); color: var(--danger); }
 
 /* ---------- Cerca (grilla) ---------- */
@@ -650,9 +667,10 @@ a.gcard:active { background: var(--surface); }
 .album-access__heading .btn { min-height: 44px; }
 .grants__who { display: flex; flex-direction: column; line-height: 1.25; }
 .grants__who a { color: var(--text); font-weight: 600; }
-.lightbox { position: fixed; inset: 0; z-index: var(--z-lightbox); background: var(--media-bg); display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+/* Al abrir: el fondo se funde y la foto crece apenas. Pasar de una foto a otra no se anima (solo el arrastre) */
+.lightbox { position: fixed; inset: 0; z-index: var(--z-lightbox); background: var(--media-bg); display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; animation: fade-in var(--dur-base) var(--ease-out) backwards; }
 .lightbox__bar { display: flex; align-items: center; justify-content: space-between; padding: calc(10px + env(safe-area-inset-top)) 12px 10px; font-weight: 600; font-size: var(--text-md); color: var(--on-media); }
-.lightbox__stage { flex: 1; min-height: 0; position: relative; overflow: hidden; touch-action: pan-y; }
+.lightbox__stage { flex: 1; min-height: 0; position: relative; overflow: hidden; touch-action: pan-y; animation: photo-in var(--dur-base) var(--ease-out) backwards; }
 .lightbox__track { position: absolute; inset: 0; }
 .lightbox__track--animate { transition: transform 190ms ease-out; }
 .lightbox__slide { position: absolute; top: 0; bottom: 0; width: 100%; display: grid; place-items: center; padding-bottom: env(safe-area-inset-bottom); }
@@ -660,6 +678,7 @@ a.gcard:active { background: var(--surface); }
 .lightbox__nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border: 0; border-radius: var(--radius-lg); background: var(--on-media-faint); color: var(--on-media); font-size: var(--title-3xl); line-height: 1; }
 .lightbox__nav--prev { left: 8px; }
 .lightbox__nav--next { right: 8px; }
+@media (prefers-reduced-motion: reduce) { .lightbox__stage { animation-name: fade-in; } }
 .chat-photo-viewer { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; }
 .chat-photo-viewer:not([open]) { display: none; }
 .chat-photo-viewer .iconbtn { color: var(--on-media); }
@@ -695,7 +714,7 @@ a.gcard:active { background: var(--surface); }
 .bubble:hover .bubble__more, .bubble__more:focus-visible { opacity: 1; }
 @media (hover: none) { .bubble__more { opacity: 0.6; } }
 .menu--bubble { top: 28px; right: 0; color: var(--text); }
-.menu--above { top: auto; bottom: 100%; }
+.menu--above { top: auto; bottom: 100%; transform-origin: bottom right; }
 .typing-label { display: block; font-size: var(--text-xs); color: var(--ok); }
 .typing { display: flex; gap: 4px; padding: 12px 14px; }
 .typing i { width: 7px; height: 7px; border-radius: var(--radius-pill); background: var(--muted); animation: blink 1.2s infinite; }
@@ -712,6 +731,9 @@ a.gcard:active { background: var(--surface); }
 .album-menu { display: flex; flex-direction: column; gap: 8px; margin: 0 0 8px; padding: 8px 12px 12px; border-radius: var(--radius-md); background: var(--surface-2); }
 .album-menu__head { display: flex; align-items: center; gap: 4px; margin-left: -8px; }
 .album-menu__head p { display: flex; align-items: center; gap: 6px; }
+/* Las opciones de foto y de álbum, arriba del composer, suben al abrirse */
+.photo-menu, .album-menu { animation: rise-in var(--dur-base) var(--ease-out) backwards; }
+@media (prefers-reduced-motion: reduce) { .photo-menu, .album-menu { animation-name: fade-in; } }
 .phrase-menu { display: flex; flex-direction: column; gap: 6px; padding: 0 0 8px; max-height: 40vh; overflow-y: auto; }
 .phrase-menu__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .phrase-menu__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -719,12 +741,14 @@ a.gcard:active { background: var(--surface); }
 .phrase-menu__pick { flex: 1; min-width: 0; text-align: left; padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface-2); border: 0; overflow-wrap: anywhere; }
 .phrase-menu__pick:hover { background: var(--surface-3); }
 .phrase-menu .linkbtn { align-self: flex-start; }
-.viewer { position: fixed; inset: 0; z-index: var(--z-viewer); background: var(--media-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
+/* Foto temporal: igual que el visor del álbum, fundido del fondo y la foto crece apenas */
+.viewer { position: fixed; inset: 0; z-index: var(--z-viewer); background: var(--media-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; animation: fade-in var(--dur-base) var(--ease-out) backwards; }
 .viewer img { max-width: 100%; max-height: 80vh; object-fit: contain; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-.viewer__photo { position: relative; display: grid; place-items: center; max-width: 100%; overflow: hidden; }
+.viewer__photo { position: relative; display: grid; place-items: center; max-width: 100%; overflow: hidden; animation: photo-in var(--dur-base) var(--ease-out) backwards; }
 .viewer__bar { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: 16px; right: 16px; height: 3px; background: var(--on-media-track); border-radius: var(--radius-hair); overflow: hidden; }
 .viewer__bar span { display: block; height: 100%; background: var(--queue); transition: width 1s linear; }
 .viewer__note { color: var(--muted); font-size: var(--text-sm); text-align: center; }
+@media (prefers-reduced-motion: reduce) { .viewer__photo { animation-name: fade-in; } }
 
 /* ---------- Notificaciones y moderación ---------- */
 .setting { display: flex; gap: 16px; align-items: center; justify-content: space-between; }
@@ -794,11 +818,23 @@ a.gcard:active { background: var(--surface); }
 .modnotices .prefs { padding: 0 12px 8px; }
 
 /* ---------- Hoja modal ---------- */
-.sheet-backdrop { position: fixed; inset: 0; background: var(--backdrop); display: flex; align-items: flex-end; justify-content: center; z-index: var(--z-sheet); }
-.sheet { width: 100%; max-width: 480px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-4xl) var(--radius-4xl) 0 0; padding: 20px 16px calc(20px + var(--safe-b)); display: flex; flex-direction: column; gap: 14px; }
+.sheet-backdrop { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; z-index: var(--z-sheet); }
+.sheet { width: 100%; max-width: 480px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-4xl) var(--radius-4xl) 0 0; padding: 20px 16px calc(20px + var(--safe-b)); display: flex; flex-direction: column; gap: 14px; position: relative; animation: sheet-up var(--dur-sheet) var(--ease-sheet) backwards; }
 .sheet h2 { font-size: var(--text-xl); }
 /* El foco que DialogFocus le da a la hoja al abrirse es solo para el lector de pantalla y el teclado: no se dibuja */
 .sheet:focus { outline: none; }
+/* Al abrir, el oscurecido se funde y la hoja sube desde abajo. Al cerrar (useSheetExit marca data-closing) baja y el
+   oscurecido se desvanece, un poco más rápido; sin toques mientras tanto, así pasan a la pantalla de abajo.
+   El oscurecido va en ::before para que la hoja no se transparente mientras sube (por eso la hoja va con position). */
+.sheet-backdrop::before { content: ""; position: absolute; inset: 0; background: var(--backdrop); animation: fade-in var(--dur-sheet) var(--ease-out) backwards; }
+.sheet-backdrop[data-closing] { pointer-events: none; }
+.sheet-backdrop[data-closing]::before { animation: fade-out var(--dur-base) var(--ease-out) forwards; }
+.sheet-backdrop[data-closing] .sheet { animation: sheet-down var(--dur-base) var(--ease-sheet) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  /* Más específico que la regla de la compu, que viene después */
+  .sheet-backdrop .sheet { animation-name: fade-in; animation-timing-function: var(--ease-out); }
+  .sheet-backdrop[data-closing] .sheet { animation-name: fade-out; animation-timing-function: var(--ease-out); }
+}
 .external-link-dialog {
   width: min(400px, calc(100% - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 20px;
   overflow-y: auto; overscroll-behavior: contain; background: var(--surface); color: var(--text);
@@ -810,7 +846,9 @@ a.gcard:active { background: var(--surface); }
 .external-link-dialog strong { overflow-wrap: anywhere; }
 @media (min-width: 600px) {
   .sheet-backdrop { align-items: center; }
-  .sheet { border-radius: var(--radius-4xl); }
+  /* En la compu la hoja va centrada: aparece creciendo un poco y al cerrar se desvanece con el fondo */
+  .sheet { border-radius: var(--radius-4xl); animation-name: menu-in; animation-timing-function: var(--ease-out); }
+  .sheet-backdrop[data-closing] .sheet { animation-name: fade-out; animation-timing-function: var(--ease-out); }
 }
 
 /* ---------- Ubicación e instalación (arriba de la grilla) ---------- */
@@ -848,11 +886,14 @@ button.quote:hover { background: var(--surface-3); }
   padding: 12px 14px; border-radius: var(--radius-xl);
   background: var(--surface-2); border: 1px solid var(--line);
   box-shadow: var(--shadow-pop);
+  /* Llega subiendo desde la barra de abajo */
+  animation: rise-in var(--dur-base) var(--ease-out) backwards;
 }
 .notify-banner__text { flex: 1; display: grid; gap: 2px; min-width: 0; }
 .notify-banner__actions { flex: none; display: grid; gap: 4px; justify-items: center; }
 /* Dentro de la página (por ejemplo, en Yo), sin flotar sobre el contenido */
 .notify-banner--inline { position: static; max-width: none; margin: 0; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .notify-banner { animation-name: fade-in; } }
 
 /* ---------- Aviso de versión nueva (arriba, para no chocar con el de notificaciones) ---------- */
 .update-banner {
@@ -863,9 +904,12 @@ button.quote:hover { background: var(--surface-3); }
   padding: 10px 12px 10px 14px; border-radius: var(--radius-xl);
   background: var(--surface-2); border: 1px solid var(--accent-line);
   box-shadow: var(--shadow-pop);
+  /* Está arriba: llega bajando */
+  animation: drop-in var(--dur-base) var(--ease-out) backwards;
 }
 .update-banner__text { min-width: 0; }
 .update-banner .row { flex: none; align-items: center; gap: 10px; }
+@media (prefers-reduced-motion: reduce) { .update-banner { animation-name: fade-in; } }
 
 /* ---------- Toques y reacciones ---------- */
 .reaction-icon { display: block; }
@@ -880,7 +924,8 @@ button.quote:hover { background: var(--surface-3); }
 /* Fondo sólido: sobre la burbuja naranja propia, un fondo translúcido se perdía */
 .reaction-chip--on { background: var(--surface); border-color: var(--accent); color: var(--accent-2); }
 .bubble:not(.bubble--mine) .bubble__more { left: auto; right: -26px; }
-.menu--bubble-theirs { right: auto; left: 0; }
+.menu--bubble-theirs { right: auto; left: 0; transform-origin: top left; }
+.menu--bubble-theirs.menu--above { transform-origin: bottom left; }
 .btn--toque { display: grid; place-items: center; }
 .btn--toque-sent { border-color: var(--accent-line); background: var(--accent-soft); }
 .toque-picker { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
