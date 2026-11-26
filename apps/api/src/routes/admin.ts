@@ -17,6 +17,7 @@ import { AUTO_SUSPENDED, pendingAutoSuspensions } from "../autoSuspend.js";
 import { keepEvidence, purgeSuspendedContent } from "../suspension.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, ownerIds, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
+import { dropPolls } from "../polls.js";
 
 const { report, profile, session, groupMessage, directMessage, conversation, pushSubscription, user, group, appeal, staffPermission, modAction } = schema;
 
@@ -273,7 +274,10 @@ adminRoutes.post("/admin/reports/:id/delete-message", requireAccess("reports"), 
   if (!r?.messageId) throw new HTTPException(400, { message: "Este reporte no tiene mensaje" });
   if (r.messageKind === "group") {
     const [m] = await db.update(groupMessage).set({ status: "deleted", body: "" }).where(eq(groupMessage.id, r.messageId)).returning();
-    if (m) await emitToGroup(m.groupId, m.userId, "group:deleted", { id: m.id, groupId: m.groupId });
+    if (m) {
+      await dropPolls([m.id]);
+      await emitToGroup(m.groupId, m.userId, "group:deleted", { id: m.id, groupId: m.groupId });
+    }
   } else {
     const [m] = await db.delete(directMessage).where(eq(directMessage.id, r.messageId)).returning();
     if (m) {

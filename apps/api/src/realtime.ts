@@ -7,6 +7,7 @@ import { auth } from "./auth.js";
 import { db, schema } from "./db/index.js";
 import { authorsFor, blockedWith, canOpenLinks, reactionsFor } from "./lib.js";
 import { notifyGroupMessage } from "./groupNotify.js";
+import { pollsFor } from "./polls.js";
 import { clustered, reserveSocket } from "./shared.js";
 import { env } from "./env.js";
 import { limit } from "./ratelimit.js";
@@ -136,6 +137,7 @@ export async function emitToGroup(groupId: string, authorId: string, event: stri
   io.to(groupRoom(groupId)).except(blocked).emit(event, payload);
 }
 
+/** viewerId: para quién es (suma su voto en las encuestas). Sin viewerId, como en los eventos en vivo, no va ningún voto. */
 export async function serializeGroupMessages(rows: (typeof groupMessage.$inferSelect)[], viewerId?: string) {
   // Mensajes citados (respuestas)
   const replyIds = [...new Set(rows.map((r) => r.replyToId).filter((x): x is string => Boolean(x)))];
@@ -145,6 +147,7 @@ export async function serializeGroupMessages(rows: (typeof groupMessage.$inferSe
   const quotedById = new Map(quoted.map((q) => [q.id, q]));
   const authors = await authorsFor([...rows.map((r) => r.userId), ...quoted.map((q) => q.userId)]);
   const reactions = await reactionsFor(rows.filter((r) => r.status === "published").map((r) => r.id));
+  const polls = await pollsFor(rows.filter((r) => r.status === "published" || r.status === "queued").map((r) => r.id), viewerId);
   // Cuándo se creó cada cuenta, para saber si sus links se pueden tocar (ver canOpenLinks en lib.ts)
   const senderIds = [...new Set(rows.map((r) => r.userId))];
   const created = senderIds.length
@@ -167,6 +170,7 @@ export async function serializeGroupMessages(rows: (typeof groupMessage.$inferSe
       scheduledAt: r.scheduledAt.toISOString(),
       author: author(r.userId),
       reactions: reactions.get(r.id) ?? [],
+      poll: polls.get(r.id) ?? null,
       canOpenLinks: created.has(r.userId) && canOpenLinks(r.scheduledAt, created.get(r.userId)!),
       replyTo: q
         ? { id: q.id, authorName: author(q.userId).name, body: q.status === "published" ? q.body.slice(0, 160) : null }

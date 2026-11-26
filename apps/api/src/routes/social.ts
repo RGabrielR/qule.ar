@@ -21,6 +21,7 @@ import { chatPeopleMatching, parseNearbyFilters } from "./nearby.js";
 import { REPORT_SPAM_TARGETS, reportSpamStatus } from "../reportSpam.js";
 import { notifyStaff } from "../staff.js";
 import { warnIfReachingAutoSuspend } from "../autoSuspend.js";
+import { pollReportText } from "../polls.js";
 
 const { profile, photo, block, report, conversation, directMessage } = schema;
 
@@ -638,7 +639,8 @@ socialRoutes.post("/reports", async (c) => {
             .where(and(eq(schema.groupMember.groupId, m.groupId), eq(schema.groupMember.userId, me.id)))
         : [];
       ok = Boolean(m && mem && m.userId === userId);
-      if (ok) messageBody = m.body;
+      // Si es una encuesta, la copia lleva la pregunta y las opciones
+      if (ok) messageBody = await pollReportText(m.id, m.body);
     }
     if (!ok) throw new HTTPException(400, { message: "Ese mensaje no corresponde a este reporte" });
   } else if (isUrgent(rest.reason)) {

@@ -814,3 +814,26 @@ button.quote:hover { background: var(--surface-3); }
 }
 /* Al cambiar de app o abrir el selector de apps, las fotos privadas no quedan a la vista */
 .app-away .private-media { visibility: hidden; }
+
+/* ---------- Encuestas en grupos (features/polls) ---------- */
+.poll { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; padding: 12px; border-radius: var(--radius-xl); background: var(--surface); border: 1px solid var(--line); max-width: 420px; }
+.queued .poll { margin: 4px 0; }
+.poll__label { margin: 0; font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.poll__question { margin: 0; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
+.poll__options { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.poll__option { position: relative; overflow: hidden; width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--line); color: var(--text); text-align: start; font: inherit; }
+.poll__option:hover:not(:disabled) { border-color: var(--accent-line); }
+.poll__option:disabled { cursor: default; }
+.poll__option--mine { border-color: var(--accent); }
+.poll__bar { position: absolute; inset: 0 auto 0 0; background: var(--accent-soft); transition: width 0.25s ease; }
+.poll__text { position: relative; display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.poll__text svg { width: 16px; height: 16px; flex: none; color: var(--accent-2); }
+.poll__option-name { overflow-wrap: anywhere; }
+.poll__count { position: relative; flex: none; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.poll__footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; font-size: var(--text-xs); color: var(--muted); }
+.poll__footer .linkbtn { font-size: var(--text-xs); min-height: 32px; }
+.poll-form { max-height: 88vh; overflow-y: auto; }
+.poll-form__options { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.poll-form__options li { display: flex; align-items: center; gap: 4px; }
+.poll-form__add { align-self: flex-start; min-height: 36px; }
+@media (prefers-reduced-motion: reduce) { .poll__bar { transition: none; } }

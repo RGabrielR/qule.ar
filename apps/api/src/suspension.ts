@@ -4,6 +4,7 @@ import { db, schema } from "./db/index.js";
 import { reactionsFor, serializeDm } from "./lib.js";
 import { deleteImageUnlessEvidence, URGENT_REASONS } from "./moderation.js";
 import { emitToGroupRoom, emitToUser } from "./realtime.js";
+import { dropPolls } from "./polls.js";
 
 const { report, photo, album, groupMessage, directMessage, conversation, reaction } = schema;
 
@@ -36,7 +37,7 @@ export async function keepEvidence(userId: string) {
 }
 
 /**
- * Al suspender: se borra lo público de la persona. Sus mensajes en grupos (también los que tenía en cola), sus
+ * Al suspender: se borra lo público de la persona. Sus mensajes y encuestas en grupos (también los que tenía en cola), sus
  * reacciones en grupos, todas sus fotos y videos (perfil y álbumes privados, con sus miniaturas) y las fotos que
  * mandó por privado. Los archivos que son prueba de un reporte quedan guardados para moderación
  * (deleteImageUnlessEvidence). Quienes tienen los grupos o las charlas abiertas lo ven desaparecer en vivo.
@@ -49,6 +50,8 @@ export async function purgeSuspendedContent(userId: string) {
     .set({ status: sql`case when ${groupMessage.status} = 'queued' then 'cancelled' else 'deleted' end`, body: "" })
     .where(and(eq(groupMessage.userId, userId), inArray(groupMessage.status, ["published", "queued"])))
     .returning({ id: groupMessage.id, groupId: groupMessage.groupId, status: groupMessage.status });
+  // Sus encuestas (publicadas o en cola) se van con sus votos, igual que el texto de sus mensajes
+  await dropPolls(msgs.map((m) => m.id));
   const deleted = msgs.filter((m) => m.status === "deleted");
   if (deleted.length) {
     await db.delete(reaction).where(inArray(reaction.messageId, deleted.map((m) => m.id)));
