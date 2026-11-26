@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { api, type Media, type PublicProfile } from "../api";
 import { BackIcon, LockIcon, StarIcon } from "../components/Icons";
 import { useMe } from "../App";
@@ -23,6 +23,7 @@ export function ProfilePage() {
 
 function ProfileView({ id }: { id: string }) {
   const nav = useNavigate();
+  const location = useLocation();
   const [p, setP] = useState<PublicProfile | null>(null);
   const [missing, setMissing] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -33,7 +34,7 @@ function ProfileView({ id }: { id: string }) {
   const { refreshAfterBlock } = useTabData();
   const [params, setParams] = useSearchParams();
   const requestedAlbum = params.get("album");
-  const [viewing, setViewing] = useState<{ items: Media[]; start: number; title: string } | null>(null);
+  const [viewing, setViewing] = useState<{ items: Media[]; start: number; title: string; fromChat?: boolean } | null>(null);
   const [toquePicker, setToquePicker] = useState(false);
   const [toqueMsg, setToqueMsg] = useState("");
   const swipe = useProfileSwipe(id, viewing == null && !reporting && !staffing);
@@ -47,12 +48,17 @@ function ProfileView({ id }: { id: string }) {
       setP(x);
       const albums = x.privateAlbum?.albums;
       const selected = requestedAlbum === "1" ? albums?.[0] : albums?.find((album) => album.id === requestedAlbum);
-      if (selected) setViewing({ items: selected.items, start: 0, title: selected.name });
+      if (selected) setViewing({ items: selected.items, start: 0, title: selected.name, fromChat: Boolean(location.state?.fromChat) });
     }).catch(() => setMissing(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   function closeViewer() {
+    // Si el álbum se abrió desde el chat, cerrarlo vuelve al chat
+    if (viewing?.fromChat) {
+      nav(-1);
+      return;
+    }
     setViewing(null);
     if (params.get("album")) setParams({}, { replace: true });
   }
