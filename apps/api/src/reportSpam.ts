@@ -60,8 +60,14 @@ const DAY = 86_400_000;
 
 // ---------- Reportes que no cuentan ----------
 
-/** Condición SQL: el reporte cuenta (lo mandó la app o una cuenta cuyos reportes no se silenciaron). */
-export const reportCounts: SQL = sql`(${report.reporterId} is null or ${report.reporterId} not in (select ${reportMute.userId} from ${reportMute}))`;
+/**
+ * Los reportes por menor de edad cuentan siempre, aunque vengan de una cuenta cuyos reportes no cuentan: con menores
+ * en juego es preferible moderar de más (interés superior de niñas, niños y adolescentes, Ley 26.061).
+ */
+export const ALWAYS_COUNTS_REASON = "menor de edad";
+
+/** Condición SQL: el reporte cuenta (lo mandó la app, es por menor de edad o viene de una cuenta no silenciada). */
+export const reportCounts: SQL = sql`(${report.reporterId} is null or ${report.reason} = ${ALWAYS_COUNTS_REASON} or ${report.reporterId} not in (select ${reportMute.userId} from ${reportMute}))`;
 
 /** Cuentas cuyos reportes dejaron de contar. */
 export async function mutedReporters(): Promise<Set<string>> {

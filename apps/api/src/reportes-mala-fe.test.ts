@@ -9,7 +9,8 @@ import type { AppEnv } from "./lib.js";
 /**
  * Reportes de mala fe (reportSpam.ts): las señales de proporción de descartados, de reportes que nunca terminan en una
  * medida y de cuentas nuevas que reportan juntas a la misma persona; y "que sus reportes no cuenten", que saca esos
- * reportes de la ocultación automática, de la cuenta de personas y de la suspensión preventiva.
+ * reportes de la ocultación automática, de la cuenta de personas y de la suspensión preventiva, salvo los reportes por
+ * menor de edad, que cuentan siempre.
  */
 test("reportes de mala fe: señales y reportes que no cuentan", async (t) => {
   const dataDir = await mkdtemp(path.join(tmpdir(), "qule-mala-fe-"));
@@ -115,9 +116,9 @@ test("reportes de mala fe: señales y reportes que no cuentan", async (t) => {
   const blanco = await account("Blanco", 500);
   const vieja = await account("Vieja", 250);
   const nuevas = await Promise.all(["N1", "N2", "N3"].map((n) => account(n)));
-  for (const n of nuevas.slice(0, 2)) assert.equal((await report(n, blanco, "menor de edad")).status, 200);
+  for (const n of nuevas.slice(0, 2)) assert.equal((await report(n, blanco, "amenazas o violencia")).status, 200);
   assert.deepEqual(await signalsOf(nuevas[0].id), [], "dos cuentas no alcanzan");
-  assert.equal((await report(vieja, blanco, "menor de edad")).status, 200);
+  assert.equal((await report(vieja, blanco, "amenazas o violencia")).status, 200);
   assert.deepEqual(await signalsOf(nuevas[0].id), ["pileOn"]);
   assert.deepEqual(await signalsOf(vieja.id), [], "quien reportó lo mismo desde una cuenta vieja no aparece");
   // Tres reportes urgentes de personas distintas: el perfil se oculta de la grilla por precaución
@@ -150,16 +151,22 @@ test("reportes de mala fe: señales y reportes que no cuentan", async (t) => {
   // A quien reporta no se le dice nada: el reporte entra como siempre
   assert.equal((await report(nuevas[0], otros[5])).status, 200);
 
-  // ---------- Suspensión preventiva ----------
-  // Ayuda (solo Reportes) no puede suspender con reportes de cuentas que no cuentan
+  // ---------- Menor de edad: cuenta siempre ----------
+  // Aunque vengan de cuentas cuyos reportes no cuentan: con menores en juego, mejor moderar de más
   const sospechado = await account("Sospechado", 600);
   for (const n of nuevas.slice(0, 2)) assert.equal((await report(n, sospechado, "menor de edad")).status, 200);
-  const sinBase = await request(`/api/admin/users/${sospechado.id}/suspend`, ayuda, json("POST", { reason: "Parece menor" }));
-  assert.equal(sinBase.status, 403);
-  // Volver a contar: ahora sí alcanza
+  assert.equal((await report(vieja, sospechado, "menor de edad")).status, 200);
+  assert.ok((await autoHiddenUsers()).has(sospechado.id), "tres reportes por menor de edad lo ocultan, aunque dos sean de cuentas silenciadas");
+  const sobreSospechado = (await (await request("/api/admin/reports", sanciones)).json() as
+    { subject: string; subjectReporters: number; reporterMuted: boolean }[]).filter((r) => r.subject === `u:${sospechado.id}`);
+  assert.ok(sobreSospechado.every((r) => r.subjectReporters === 3), "suman personas");
+  assert.equal(sobreSospechado.filter((r) => r.reporterMuted).length, 2, "se ven marcados igual");
+  // Y alcanzan para una suspensión preventiva de Ayuda (solo Reportes)
+  const preventiva = await request(`/api/admin/users/${sospechado.id}/suspend`, ayuda, json("POST", { reason: "Parece menor" }));
+  assert.equal(preventiva.status, 200);
+
+  // Volver a contar
   assert.equal((await request(`/api/admin/report-spam/${alertKey(nuevas[0].id)}/unmute`, sanciones, { method: "POST" })).status, 200);
-  const conBase = await request(`/api/admin/users/${sospechado.id}/suspend`, ayuda, json("POST", { reason: "Parece menor" }));
-  assert.equal(conBase.status, 200);
 
   // Todo queda en el registro
   const log = await db.select({ action: schema.modAction.action }).from(schema.modAction)

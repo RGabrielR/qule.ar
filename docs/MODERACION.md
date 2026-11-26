@@ -76,7 +76,7 @@ Hay quien reporta mucho y sin fundamento: para tapar los reportes de verdad, par
 
 Ninguna señal decide sola. Puede ser alguien que encontró varios problemas de verdad: mirá sus reportes antes de decidir. Las opciones son:
 
-- **Que sus reportes no cuenten.** Siguen entrando y se ven en la lista (marcados "no cuenta"), pero no ocultan perfiles ni grupos, no mandan avisos, no suman personas en las tarjetas y **no alcanzan para una suspensión preventiva ni automática**. Se puede deshacer ("Que vuelvan a contar").
+- **Que sus reportes no cuenten.** Siguen entrando y se ven en la lista (marcados "no cuenta"), pero no ocultan perfiles ni grupos, no mandan avisos, no suman personas en las tarjetas y **no alcanzan para una suspensión preventiva ni automática**. **Excepción: los reportes por menor de edad cuentan siempre** (avisan, suman y alcanzan para una suspensión preventiva): con menores en juego es preferible moderar de más. Se puede deshacer ("Que vuelvan a contar").
 - **Descartar sus reportes de la última hora** de una vez (pide confirmación). Los urgentes y los anteriores se revisan de a uno.
 - **Suspender** a quien reporta, con el diálogo de siempre.
 - **Ignorar** la tarjeta: vuelve solo cuando pasó una hora, la cuenta mandó reportes nuevos y sigue habiendo alguna señal. Si la tarjeta era por reportar a muchas personas en una hora, mientras está activa sus reportes urgentes no mandan avisos; ignorarla los devuelve.
@@ -149,7 +149,7 @@ Quien administra en general (las cuentas de `ADMIN_USER_IDS` o `ADMIN_EMAILS` en
 | Revisiones | Responder los pedidos de revisión de suspensiones (mantener o levantar) |
 | Verificar fotos | Comparar capturas con fotos de los álbumes privados de las cuentas vinculadas a un reporte. También requiere Reportes |
 
-**Suspensión preventiva por menor de edad.** Con un reporte abierto por "menor de edad" y indicios suficientes, quien tiene solo el permiso Reportes puede suspender la cuenta en el momento, sin esperar a alguien con Suspensiones. Le llega un aviso a quienes tienen Suspensiones (a la administración general, siempre) y la cuenta aparece en Suspendidas como "Preventiva, falta revisarla": otra persona la **mantiene** o **reactiva la cuenta**. Quien la hizo no la puede confirmar. Los reportes de cuentas cuyos reportes no cuentan (ver "Reportes de mala fe") no alcanzan: tiene que haber al menos uno de otra cuenta. Igual que cualquier suspensión, la persona puede pedir una revisión.
+**Suspensión preventiva por menor de edad.** Con un reporte abierto por "menor de edad" y indicios suficientes, quien tiene solo el permiso Reportes puede suspender la cuenta en el momento, sin esperar a alguien con Suspensiones. Le llega un aviso a quienes tienen Suspensiones (a la administración general, siempre) y la cuenta aparece en Suspendidas como "Preventiva, falta revisarla": otra persona la **mantiene** o **reactiva la cuenta**. Quien la hizo no la puede confirmar. Alcanza cualquier reporte por menor de edad, aunque venga de una cuenta cuyos reportes no cuentan (ver "Reportes de mala fe"). Igual que cualquier suspensión, la persona puede pedir una revisión.
 
 Solo la administración general puede dar de baja o reactivar grupos, ver quién mandó cada reporte, dar y sacar permisos, suspender a alguien del equipo y ver el **Registro**. A la administración general no la puede suspender nadie desde la app. Nadie del equipo ve mails, IPs ni datos de salud. Los permisos se chequean en el servidor, no solo escondiendo botones.
 

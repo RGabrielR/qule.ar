@@ -18,7 +18,7 @@ import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
 import { limit } from "../ratelimit.js";
 import { chatPeopleMatching, parseNearbyFilters } from "./nearby.js";
-import { isMutedReporter, REPORT_SPAM_TARGETS, reportSpamStatus } from "../reportSpam.js";
+import { ALWAYS_COUNTS_REASON, isMutedReporter, REPORT_SPAM_TARGETS, reportSpamStatus } from "../reportSpam.js";
 import { notifyStaff } from "../staff.js";
 import { warnIfReachingAutoSuspend } from "../autoSuspend.js";
 import { pollReportText } from "../polls.js";
@@ -689,10 +689,12 @@ socialRoutes.post("/reports", async (c) => {
  * moderación al instante, salvo que quien reporta esté en alerta de spam de reportes o sus reportes no cuenten (ver
  * reportSpam.ts). En ese caso el reporte queda igual en la cola, y moderación recibe un solo aviso de la alerta cuando
  * salta. Si moderación ignora la alerta, sus reportes urgentes vuelven a avisar.
+ * Los reportes por menor de edad avisan siempre, vengan de quien vengan.
  */
 async function afterReport(reporterId: string, reason: string) {
+  const minor = reason === ALWAYS_COUNTS_REASON;
   // Una cuenta cuyos reportes no cuentan (decisión de moderación) no manda avisos. Su reporte queda en la cola igual.
-  if (await isMutedReporter(reporterId).catch(() => false)) return;
+  if (!minor && await isMutedReporter(reporterId).catch(() => false)) return;
   // Si alguien ignoró la alerta (eran reportes de verdad), lo urgente vuelve a avisar al instante
   const { targets, flagged } = await reportSpamStatus(reporterId).catch(() => ({ targets: 0, flagged: false }));
   if (flagged) {
@@ -704,7 +706,7 @@ async function afterReport(reporterId: string, reason: string) {
         tag: "spam-reportes",
       }).catch((e) => console.error("notifyStaff", e));
     }
-    return;
+    if (!minor) return;
   }
   if (isUrgent(reason)) notifyModeratorsUrgent(reason).catch((e) => console.error("notifyModeratorsUrgent", e));
 }

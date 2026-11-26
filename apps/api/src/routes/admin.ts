@@ -13,7 +13,7 @@ import { deleteImage } from "../storage.js";
 import { AUTO_DETAILS_PREFIX, autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, isUrgent, releaseEvidence, REMOVED_GROUP_DAYS } from "../moderation.js";
 import { canVerifyReportPhoto, reportPhotoRoutes, requireVerifiedPhotoAction } from "./reportPhotos.js";
 import { removeGroup } from "./groups.js";
-import { alertKey, dismissableReportsBy, mutedReporterList, mutedReporters, REPORT_SPAM_IGNORED, reportCounts, REPORTS_MUTED, REPORTS_UNMUTED, reportSpamAlerts, resolveAlert, resolveMuted } from "../reportSpam.js";
+import { ALWAYS_COUNTS_REASON, alertKey, dismissableReportsBy, mutedReporterList, mutedReporters, REPORT_SPAM_IGNORED, REPORTS_MUTED, REPORTS_UNMUTED, reportSpamAlerts, resolveAlert, resolveMuted } from "../reportSpam.js";
 import { AUTO_SUSPENDED, pendingAutoSuspensions } from "../autoSuspend.js";
 import { keepEvidence, purgeSuspendedContent } from "../suspension.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
@@ -131,7 +131,7 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
   const muted = await mutedReporters();
   const reportersBySubject = new Map<string, Set<string>>();
   for (const r of rows) {
-    if (r.reporterId && muted.has(r.reporterId)) continue;
+    if (r.reporterId && muted.has(r.reporterId) && r.reason !== ALWAYS_COUNTS_REASON) continue;
     const key = subjectOf(r);
     const set = reportersBySubject.get(key) ?? new Set<string>();
     set.add(r.reporterId ?? `auto:${r.id}`);
@@ -394,10 +394,7 @@ async function suspendAccount(admin: StaffUser, target: string, reason: string, 
     const [minor] = await db.select({ id: report.id }).from(report)
       .where(and(eq(report.targetUserId, target), eq(report.status, "open"), eq(report.reason, "menor de edad"))).limit(1);
     if (!minor) throw new HTTPException(403, { message: "Con el permiso Reportes solo podés suspender ante un reporte abierto por menor de edad" });
-    // Tiene que haber al menos uno que cuente: los de cuentas cuyos reportes no cuentan (reportSpam.ts) no alcanzan
-    const [counts] = await db.select({ id: report.id }).from(report)
-      .where(and(eq(report.targetUserId, target), eq(report.status, "open"), eq(report.reason, "menor de edad"), reportCounts)).limit(1);
-    if (!counts) throw new HTTPException(403, { message: "Estos reportes vienen de cuentas cuyos reportes no cuentan. Lo decide alguien con el permiso Suspensiones." });
+    // Los reportes por menor de edad cuentan siempre, aunque vengan de cuentas cuyos reportes no cuentan (reportSpam.ts)
   }
   // Que una cuenta de moderación (o una robada) no pueda dejar afuera del panel a quien administra.
   const [t] = await db.select({ id: user.id, email: user.email, emailVerified: user.emailVerified }).from(user).where(eq(user.id, target));
