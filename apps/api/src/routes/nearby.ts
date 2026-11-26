@@ -6,7 +6,7 @@ import { NEARBY_PAGE_SIZE } from "@mortero/shared/nearby";
 import { db, schema } from "../db/index.js";
 import { HAS_PLACE } from "../db/schema.js";
 import { distanceLabel, snapToCell, visibleKm } from "../geo.js";
-import { ageFrom, firstPublicPhotoKeys, imageUrl, thumbUrl, requireProfile, requireUser, type AppEnv } from "../lib.js";
+import { ageFrom, blurFor, firstPublicPhotos, imageUrl, thumbUrl, requireProfile, requireUser, type AppEnv } from "../lib.js";
 import { autoHiddenUsers } from "../moderation.js";
 import { isOnline } from "../realtime.js";
 import { hit } from "../shared.js";
@@ -63,7 +63,11 @@ nearbyRoutes.delete("/me/location", async (c) => {
 
 nearbyRoutes.put("/me/privacy", async (c) => {
   const u = c.get("user");
-  const data = z.object({ showDistance: z.boolean().optional(), incognito: z.boolean().optional(), showAge: z.boolean().optional() }).parse(await c.req.json());
+  const data = z.object({
+    showDistance: z.boolean().optional(), incognito: z.boolean().optional(), showAge: z.boolean().optional(),
+    // Tapar las fotos explícitas de los demás (ver src/explicit/)
+    hideExplicit: z.boolean().optional(),
+  }).parse(await c.req.json());
   await db.update(profile).set(data).where(eq(profile.userId, u.id));
   return c.json({ ok: true });
 });
@@ -175,7 +179,7 @@ nearbyRoutes.get("/nearby", async (c) => {
   return c.json(await nearbyPage(c.get("profile")!, filtersSchema.parse(c.req.query())));
 });
 
-type Me = { userId: string; cellLat: number | null; cellLng: number | null; showDistance: boolean };
+type Me = { userId: string; cellLat: number | null; cellLng: number | null; showDistance: boolean; hideExplicit?: boolean };
 
 /** Una página de la grilla para `me`. Separada de la ruta para poder probarla sin sesión (ver nearby.test.ts). */
 export async function nearbyPage(me: Me, f: NearbyFilters) {
@@ -238,7 +242,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
       ? db.select({ userId: profile.userId, displayName: profile.displayName, birthdate: profile.birthdate, showAge: profile.showAge })
           .from(profile).where(inArray(profile.userId, ids))
       : [],
-    firstPublicPhotoKeys(ids),
+    firstPublicPhotos(ids),
   ]);
   const byId = new Map(details.map((d) => [d.userId, d]));
 
@@ -251,13 +255,15 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
     people: page.flatMap(({ id, km, online, recent }) => {
       const d = byId.get(id);
       if (!d) return []; // borró la cuenta entre los dos pasos
-      const photoKey = first.get(id);
+      const cover = first.get(id);
       return [{
         id,
         name: d.displayName,
         age: d.showAge ? ageFrom(d.birthdate) : null,
-        photo: thumbUrl(photoKey),
-        coverPhoto: imageUrl(photoKey),
+        photo: thumbUrl(cover?.key),
+        coverPhoto: imageUrl(cover?.key),
+        // La foto se ve borrosa (eligió tapar las explícitas). No cambia el orden ni quién aparece.
+        blur: blurFor({ userId: me.userId, hideExplicit: me.hideExplicit ?? false }, id, cover?.explicit ?? false),
         online,
         recent,
         favorite: favs.has(id),

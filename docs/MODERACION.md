@@ -118,6 +118,17 @@ Fotos o videos íntimos de alguien compartidos sin su permiso. La Ley 27.736 ("L
 - Si se repite (el panel muestra cuántos reportes tiene la cuenta en total) o es grave: suspendé.
 - Ante la duda, mirá el [Código de conducta](../CODE_OF_CONDUCT.md).
 
+## Fotos tapadas (fotos explícitas)
+
+Un modelo que corre en nuestro servidor marca las fotos del perfil con genitales o culo al descubierto, para que se vean borrosas a quien eligió taparlas (Configuración → Fotos). **No es un reporte ni una sanción**: subir fotos así está permitido, la marca no baja la foto, no cambia el orden de la grilla y no suma en el historial de nadie (discusión #255).
+
+En la pestaña **Fotos tapadas** (permiso Reportes) se corrige al modelo cuando se equivoca:
+
+- **Revisión pedida:** fotos que quien las subió pidió revisar desde Editar perfil.
+- **Marcadas por el modelo:** las últimas marcadas que nadie revisó, para corregir sin esperar un pedido.
+- **No es explícita** la destapa; **Sí, dejarla tapada** la deja como está. El modelo no vuelve a tocar lo que decidió moderación. Queda en el registro, con la foto como destino (no la cuenta).
+- Cuenta como explícito solo genitales o culo al descubierto. Torsos sin remera, malla o ropa interior, no.
+
 ## Las pruebas
 
 Al reportar, la app guarda una copia de lo reportado: el texto del mensaje y sus fotos o, si se reporta un perfil por algo urgente, sus fotos públicas. Esa copia **no se borra aunque la persona desenvíe el mensaje, borre la foto o borre su cuenta**. El reporte también queda aunque se borre alguna de las dos cuentas.

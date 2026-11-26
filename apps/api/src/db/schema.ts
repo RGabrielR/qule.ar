@@ -1,5 +1,5 @@
 import {
-  pgTable, text, timestamp, boolean, integer, date, jsonb, uniqueIndex, index, primaryKey, doublePrecision,
+  pgTable, text, timestamp, boolean, integer, date, jsonb, uniqueIndex, index, primaryKey, doublePrecision, real,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { encryptedMessageText, encryptedText } from "../crypt.js";
@@ -83,6 +83,9 @@ export const profile = pgTable("profile", {
   showDistance: boolean("show_distance").notNull().default(true),
   // Incógnito: no aparecés en la grilla, no se ve si estás en línea y tus visitas no quedan registradas
   incognito: boolean("incognito").notNull().default(false),
+  // Tapar las fotos explícitas de otras personas en la grilla y en los perfiles (ver src/explicit/). Prendido para
+  // las cuentas nuevas; la migración 0031 lo deja apagado para las que ya existían.
+  hideExplicit: boolean("hide_explicit").notNull().default(true),
   // Qué avisos quiere recibir. Lo que no está guardado cuenta como "sí" (ver NOTIFY_KINDS en push.ts).
   notifyPrefs: jsonb("notify_prefs").$type<Partial<Record<string, boolean>>>().notNull().default({}),
   // Moderación: una cuenta suspendida no puede usar la app y no aparece en ningún lado
@@ -128,12 +131,29 @@ export const photo = pgTable("photo", {
   // Miniatura del video (una foto .webp sacada del primer segundo)
   posterKey: text("poster_key"),
   seconds: integer("seconds"),
+  // Fotos explícitas (ver src/explicit/): un modelo que corre en nuestro servidor revisa las fotos del perfil.
+  // La marca sirve SOLO para tapar la foto a quien eligió no verlas: no ordena la grilla, no filtra y no
+  // cuenta en moderación. Subir fotos así sigue estando permitido.
+  // Cuándo la revisó el modelo (null: todavía no, o es privada) y qué tan seguro estaba (0 a 1).
+  explicitCheckedAt: timestamp("explicit_checked_at", { withTimezone: true }),
+  explicitScore: real("explicit_score"),
+  explicit: boolean("explicit").notNull().default(false),
+  // Quien subió la foto pidió que la revisen (si el modelo se equivocó)
+  explicitReviewRequestedAt: timestamp("explicit_review_requested_at", { withTimezone: true }),
+  // Moderación la revisó: su decisión queda en `explicit` y el modelo no la vuelve a tocar
+  explicitReviewedAt: timestamp("explicit_reviewed_at", { withTimezone: true }),
+  explicitReviewedBy: text("explicit_reviewed_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("photo_user_idx").on(t.userId, t.position),
   // /files/:key busca la foto por archivo en cada imagen que se muestra
   index("photo_key_idx").on(t.key),
   index("photo_poster_key_idx").on(t.posterKey),
+  // La cola del modelo: fotos del perfil que todavía no revisó, de la más nueva a la más vieja
+  index("photo_explicit_queue_idx").on(t.createdAt.desc())
+    .where(sql`${t.explicitCheckedAt} is null and ${t.explicitReviewedAt} is null and ${t.isPrivate} = false and ${t.kind} = 'photo'`),
+  // Pedidos de revisión para moderación
+  index("photo_explicit_review_idx").on(t.explicitReviewRequestedAt).where(sql`${t.explicitReviewRequestedAt} is not null`),
 ]);
 
 /** A quién le compartiste cada álbum privado. Se puede revocar en cualquier momento. */

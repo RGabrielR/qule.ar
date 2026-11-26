@@ -163,7 +163,7 @@ export function Settings() {
     }
   }
 
-  function updatePrivacy(json: { incognito?: boolean; showDistance?: boolean; showAge?: boolean }) {
+  function updatePrivacy(json: { incognito?: boolean; showDistance?: boolean; showAge?: boolean; hideExplicit?: boolean }) {
     return change(async () => {
       await api("/me/privacy", { method: "PUT", json });
       await reload();
@@ -204,6 +204,22 @@ export function Settings() {
       <ThemeSetting />
       <NotificationsSetting prefs={me.profile.notifyPrefs ?? {}} staff={(me.user.access ?? []).length > 0} owner={(me.user.access ?? []).includes("owner")} />
       {error && <p className="notice notice--error" role="alert">{error}</p>}
+      <section className="section">
+        <h2 className="section__title">Fotos</h2>
+        <div className="stack">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={me.profile.hideExplicit}
+              disabled={busy}
+              onChange={(e) => updatePrivacy({ hideExplicit: e.currentTarget.checked })}
+            />
+            <span><b>Tapar fotos explícitas en la grilla.</b> Las fotos con genitales o culo al descubierto se ven borrosas en la grilla y en los perfiles, con un botón para verlas igual. Tus fotos las ves siempre normales.</span>
+          </label>
+          <p className="muted small">Las reconoce un modelo que corre en nuestro servidor: ninguna foto sale a otra empresa. Puede equivocarse; no se usa para nada más que taparlas.</p>
+        </div>
+      </section>
+
       <section className="section">
         <h2 className="section__title">Privacidad y ubicación</h2>
         <div className="stack">

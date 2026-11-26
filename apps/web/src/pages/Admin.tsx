@@ -11,6 +11,7 @@ import { PeoplePanel } from "../features/moderation/PeoplePanel";
 import { ModerationNotices } from "../features/moderation/ModerationNotices";
 import { ReportSpamAlerts } from "../features/moderation/ReportSpamAlerts";
 import { ReportGroups } from "../features/moderation/ReportGroups";
+import { ExplicitReviews } from "../features/moderation/ExplicitReviews";
 import type { Report } from "../features/moderation/types";
 
 type Suspended = Author & {
@@ -24,7 +25,7 @@ type Suspended = Author & {
 };
 type RemovedGroup = { id: string; name: string; description: string | null; removedAt: string; reason: string | null; purgeAt: string };
 type Stats = { users: number; groups: number; openReports: number; suspended: number; openAppeals: number };
-type Tab = "open" | "closed" | "suspended" | "appeals" | "people" | "groups" | "team" | "log";
+type Tab = "open" | "closed" | "suspended" | "appeals" | "explicit" | "people" | "groups" | "team" | "log";
 
 type AdminAppeal = {
   id: string;
@@ -51,6 +52,7 @@ const TABS: { id: Tab; label: string; need: StaffAccess[] }[] = [
   { id: "closed", label: "Resueltos", need: ["reports", "sanctions"] },
   { id: "appeals", label: "Revisiones", need: ["appeals"] },
   { id: "suspended", label: "Suspendidas", need: ["sanctions", "appeals"] },
+  { id: "explicit", label: "Fotos tapadas", need: ["reports"] },
   { id: "people", label: "Personas", need: ["owner"] },
   { id: "groups", label: "Grupos de baja", need: ["owner"] },
   { id: "team", label: "Equipo", need: ["owner"] },
@@ -95,6 +97,7 @@ export function Admin() {
       else if (tab === "team") setTeam(await api<TeamMember[]>("/admin/team"));
       else if (tab === "log") setLog(await api<LogEntry[]>("/admin/log"));
       else if (tab === "people") { /* La pestaña Personas carga sus propios datos */ }
+      else if (tab === "explicit") { /* Fotos tapadas también */ }
       else if (tab === "groups") setRemoved(await api<RemovedGroup[]>("/admin/groups/removed"));
       else setReports(await api<Report[]>(`/admin/reports?status=${tab}`));
     } catch (e) {
@@ -323,6 +326,8 @@ export function Admin() {
           ))}
         </>
       )}
+
+      {tab === "explicit" && <ExplicitReviews />}
 
       {tab === "people" && (
         <PeoplePanel onSuspend={(p, done) => setSuspending({ url: `/admin/users/${p.id}/suspend`, name: p.name, reason: "", preventive: false, done })} />

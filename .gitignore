@@ -8,3 +8,6 @@ data/
 # Playwright
 /test-results/
 /playwright-report/
+
+# Modelo de NudeNet (se baja con npm run model --workspace api)
+apps/api/models/

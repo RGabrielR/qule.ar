@@ -10,6 +10,8 @@ import { BODY_TYPES, LOOKING_FOR, POSITIONS, RELATIONSHIP, TRIBES } from "../opt
 import { DialogFocus } from "../components/DialogFocus";
 import { getGridList, saveGridList, toGridPerson } from "../features/profileSwipe/gridList";
 import { HasPlaceChips, type HasPlace } from "../features/place/hasPlace";
+import { ExplicitTileMark } from "../features/explicit/ExplicitVeil";
+import { ExplicitNotice } from "../features/explicit/ExplicitNotice";
 
 export type Filters = {
   ageMin?: number; ageMax?: number;
@@ -323,6 +325,11 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
 
       {tabs}
       <InstallBanner />
+      {me?.profile && <ExplicitNotice hideExplicit={me.profile.hideExplicit} onChange={async () => {
+        await reload();
+        // La grilla se vuelve a pedir, con las mismas personas, ahora con las fotos explícitas tapadas
+        void load(filters, 0, 0, people.length);
+      }} />}
 
       <p className="sr-only" aria-live="polite">{updating === "done" ? "Ubicación actualizada" : ""}</p>
 
@@ -376,8 +383,9 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
           <ul className="grid">
             {people.map((p) => (
               <li key={p.id}>
-                <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
+                <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className={p.photo && p.blur ? "tile tile--blur" : "tile"} aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}${p.photo && p.blur ? ", foto tapada" : ""}`}>
                   {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
+                  {p.photo && p.blur && <ExplicitTileMark />}
                   {p.favorite && <span className="tile__fav" aria-label="Favorito"><StarIcon filled size={14} /></span>}
                   <span className="tile__info">
                     <span className="tile__name">
