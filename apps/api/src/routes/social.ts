@@ -17,6 +17,7 @@ import { pushTo } from "../push.js";
 import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
 import { limit } from "../ratelimit.js";
+import { blockedPage, blocksQuerySchema } from "../blocks.js";
 import { chatPeopleMatching, parseNearbyFilters } from "./nearby.js";
 import { ALWAYS_COUNTS_REASON, isMutedReporter, REPORT_SPAM_TARGETS, reportSpamStatus } from "../reportSpam.js";
 import { notifyStaff } from "../staff.js";
@@ -547,6 +548,12 @@ socialRoutes.get("/blocks", async (c) => {
   const rows = await db.select().from(block).where(eq(block.blockerId, me.id)).orderBy(desc(block.createdAt));
   const authors = await authorsFor(rows.map((r) => r.blockedId));
   return c.json(rows.map((r) => authors.get(r.blockedId) ?? { id: r.blockedId, name: "Cuenta borrada", age: 0, photo: null }));
+});
+
+/** Bloqueos de a una página, con búsqueda por nombre (pantalla Personas bloqueadas). */
+socialRoutes.get("/blocks/page", async (c) => {
+  const me = c.get("user");
+  return c.json(await blockedPage(me.id, blocksQuerySchema.parse(c.req.query())));
 });
 
 socialRoutes.post("/blocks", async (c) => {
