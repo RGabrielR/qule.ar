@@ -242,6 +242,7 @@ export const group = pgTable("group", {
   isGeneral: boolean("is_general").notNull().default(false),
   // Foto del grupo (la pone el dueño). El general no tiene: muestra el logo de la app.
   photoKey: text("photo_key"),
+  photoUploadsPaused: boolean("photo_uploads_paused").notNull().default(false),
   spamRules: jsonb("spam_rules").$type<SpamRules>().notNull().default(DEFAULT_SPAM_RULES),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // Dado de baja (por moderación, o por su dueño si tenía reportes): desaparece para todo el mundo pero queda
@@ -303,6 +304,8 @@ export const groupMessage = pgTable("group_message", {
   groupId: text("group_id").notNull().references(() => group.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
+  photoKey: text("photo_key"),
+  photoHiddenAt: timestamp("photo_hidden_at", { withTimezone: true }),
   // Mensaje citado al responder (del mismo grupo)
   replyToId: text("reply_to_id"),
   status: text("status").notNull(), // queued | published | cancelled | deleted
@@ -314,6 +317,7 @@ export const groupMessage = pgTable("group_message", {
   index("gm_user_idx").on(t.groupId, t.userId, t.scheduledAt),
   // Al borrar una cuenta se borran sus mensajes: sin esto había que recorrer la tabla entera
   index("gm_author_idx").on(t.userId),
+  index("gm_photo_idx").on(t.photoKey).where(sql`${t.photoKey} is not null`),
 ]);
 
 /**
@@ -344,6 +348,13 @@ export const conversation = pgTable("conversation", {
   lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("conv_pair_idx").on(t.userA, t.userB), index("conv_user_b_idx").on(t.userB)]);
+
+export const conversationSettings = pgTable("conversation_settings", {
+  conversationId: text("conversation_id").notNull().references(() => conversation.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  muted: boolean("muted").notNull().default(false),
+  clearedAt: timestamp("cleared_at", { withTimezone: true }),
+}, (t) => [primaryKey({ columns: [t.userId, t.conversationId] }), index("conv_settings_conversation_idx").on(t.conversationId)]);
 
 export const directMessage = pgTable("direct_message", {
   id: text("id").primaryKey(),

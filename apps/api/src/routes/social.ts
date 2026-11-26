@@ -1,5 +1,5 @@
-import { DM_EVENTS, INBOX_LIMIT, READ_RECEIPT_LIMIT, type DmReadReceipt } from "@mortero/shared/realtime";
-import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { DM_EVENTS, INBOX_LIMIT, READ_RECEIPT_LIMIT, type DmReadReceipt, type DmSettingsChange } from "@mortero/shared/realtime";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, notExists, or, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -8,22 +8,24 @@ import { db, schema } from "../db/index.js";
 import {
   ageFrom, authorsFor, canOpenLinks, messageKey, imageUrl, isBlocked, mediaOut, newId, reactionsFor, requireProfile, requireUser, serializeDm, type AppEnv, type ReactionSummary,
 } from "../lib.js";
-import { emitToUser, isOnline } from "../realtime.js";
+import { emitToGroupRoom, emitToUser, isOnline } from "../realtime.js";
 import { distanceLabel, visibleKm } from "../geo.js";
 import { deleteImage, deleteReportCapture, InvalidImageError, MAX_UPLOAD_BYTES, saveImage, saveReportCapture } from "../storage.js";
 import { albumAccess, markAlbumNoticesRevoked, recordView } from "./premium.js";
 import { myRecentToque } from "./toques.js";
-import { pushTo } from "../push.js";
+import { pushDm } from "../push.js";
 import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
+import { reportGroupPhoto } from "../groupPhotos.js";
 import { limit } from "../ratelimit.js";
+import { blockedPage, blocksQuerySchema } from "../blocks.js";
 import { chatPeopleMatching, parseNearbyFilters } from "./nearby.js";
 import { ALWAYS_COUNTS_REASON, isMutedReporter, REPORT_SPAM_TARGETS, reportSpamStatus } from "../reportSpam.js";
 import { notifyStaff } from "../staff.js";
 import { warnIfReachingAutoSuspend } from "../autoSuspend.js";
 import { pollReportText } from "../polls.js";
 
-const { profile, photo, block, report, conversation, directMessage } = schema;
+const { profile, photo, block, report, conversation, conversationSettings, directMessage } = schema;
 
 export const socialRoutes = new Hono<AppEnv>();
 for (const p of ["/users/*", "/conversations", "/conversations/*", "/blocks", "/blocks/*", "/reports"]) {
@@ -166,6 +168,17 @@ async function replyToIdFor(replyToId: string | undefined, conversationId: strin
   return orig.id;
 }
 
+function settingsFor(userId: string, conversationId: string | SQLWrapper) {
+  return and(eq(conversationSettings.userId, userId), eq(conversationSettings.conversationId, conversationId));
+}
+
+function visibleDm(userId: string, message: { conversationId: SQLWrapper; createdAt: SQLWrapper } = directMessage) {
+  return notExists(db.select({ visible: sql`1` }).from(conversationSettings).where(and(
+    settingsFor(userId, message.conversationId),
+    gte(conversationSettings.clearedAt, message.createdAt),
+  )));
+}
+
 /** El acceso vigente determina el estado visible. Consultarlo nunca modifica el aviso. */
 async function albumNoticeStates(
   meId: string,
@@ -208,53 +221,61 @@ async function albumNoticeStates(
   return states;
 }
 
+/**
+ * La bandeja, de a INBOX_LIMIT chats, del más reciente al más viejo. Con `before` y `beforeId` (la fecha y el id del
+ * último chat de la página anterior) trae los que siguen. Los bloqueos y los chats sin mensajes se filtran en la
+ * consulta, así una página corta quiere decir que no hay más.
+ */
 socialRoutes.get("/conversations", async (c) => {
   const me = c.get("user");
-  const convs = await db
+  const cursor = z.object({ before: z.iso.datetime({ offset: true }), beforeId: z.string().min(1).max(64) })
+    .safeParse({ before: c.req.query("before"), beforeId: c.req.query("beforeId") });
+  if (!cursor.success && (c.req.query("before") || c.req.query("beforeId"))) {
+    throw new HTTPException(400, { message: "Página inválida" });
+  }
+  // Los ms alcanzan: la fecha viaja en ISO y se compara redondeada igual que en la consulta.
+  const at = sql`date_trunc('milliseconds', ${conversation.lastMessageAt})`;
+  const before = cursor.success ? new Date(cursor.data.before).toISOString() : null;
+  const otherId = sql<string>`case when ${conversation.userA} = ${me.id} then ${conversation.userB} else ${conversation.userA} end`;
+  const blocked = db.select({ blocked: sql`1` }).from(block).where(or(
+    and(eq(block.blockerId, me.id), eq(block.blockedId, otherId)),
+    and(eq(block.blockedId, me.id), eq(block.blockerId, otherId)),
+  ));
+  // El índice por conversación y fecha permite buscar solo el último mensaje visible de cada chat.
+  const lastMessage = db.select().from(directMessage)
+    .where(and(eq(directMessage.conversationId, conversation.id), visibleDm(me.id)))
+    .orderBy(desc(directMessage.createdAt), desc(directMessage.id)).limit(1).as("last_message");
+  // Bloqueos y chats sin mensajes visibles (vacíos o vaciados) se filtran acá: una página corta quiere decir que no hay más.
+  const rows = await db
     .select()
-    .from(conversation)
-    .where(or(eq(conversation.userA, me.id), eq(conversation.userB, me.id)))
-    .orderBy(desc(conversation.lastMessageAt), desc(conversation.id))
+    .from(conversation).innerJoinLateral(lastMessage, sql`true`)
+    .leftJoin(conversationSettings, settingsFor(me.id, conversation.id))
+    .where(and(
+      or(eq(conversation.userA, me.id), eq(conversation.userB, me.id)),
+      notExists(blocked),
+      before && cursor.success
+        ? sql`(${at} < ${before}::timestamptz or (${at} = ${before}::timestamptz and ${conversation.id} < ${cursor.data.beforeId}))`
+        : undefined,
+    ))
+    .orderBy(desc(at), desc(conversation.id))
     .limit(INBOX_LIMIT);
-  if (!convs.length) return c.json([]);
-  const otherIdFor = (cv: typeof conversation.$inferSelect) => cv.userA === me.id ? cv.userB : cv.userA;
-  const others = convs.map(otherIdFor);
-  const blockedRows = await db
-    .select()
-    .from(block)
-    .where(or(
-      and(eq(block.blockerId, me.id), inArray(block.blockedId, others)),
-      and(eq(block.blockedId, me.id), inArray(block.blockerId, others)),
-    ));
-  const blocked = new Set(blockedRows.map((r) => (r.blockerId === me.id ? r.blockedId : r.blockerId)));
-
-  const visible = convs.filter((cv) => !blocked.has(otherIdFor(cv)));
+  const visible = rows.map(({ conversation: cv, last_message: last, conversation_settings: settings }) => ({
+    id: cv.id, lastMessageAt: cv.lastMessageAt, otherId: cv.userA === me.id ? cv.userB : cv.userA, last, muted: settings?.muted ?? false,
+  }));
   if (!visible.length) return c.json([]);
   const ids = visible.map((cv) => cv.id);
-  // El índice por conversación y fecha permite buscar solo el último mensaje de cada chat.
-  const lastMessage = db.select().from(directMessage)
-    .where(eq(directMessage.conversationId, conversation.id))
-    .orderBy(desc(directMessage.createdAt), desc(directMessage.id)).limit(1).as("last_message");
-  const [authors, latest, unreadCounts] = await Promise.all([
-    authorsFor(visible.map(otherIdFor), { presence: true }),
-    db.select().from(conversation).innerJoinLateral(lastMessage, sql`true`).where(inArray(conversation.id, ids)),
+  const [authors, unreadCounts] = await Promise.all([
+    authorsFor(visible.map((cv) => cv.otherId), { presence: true }),
     db.select({ id: directMessage.conversationId, unread: sql<number>`count(*)::int` }).from(directMessage)
-      .where(and(inArray(directMessage.conversationId, ids), ne(directMessage.senderId, me.id), isNull(directMessage.readAt)))
+      .where(and(inArray(directMessage.conversationId, ids), ne(directMessage.senderId, me.id), isNull(directMessage.readAt), visibleDm(me.id)))
       .groupBy(directMessage.conversationId),
   ]);
-  const latestById = new Map(latest.map(({ last_message }) => [last_message.conversationId, last_message]));
-  const states = await albumNoticeStates(me.id, visible.flatMap((cv) => {
-    const message = latestById.get(cv.id);
-    return message ? [{ message, otherId: otherIdFor(cv) }] : [];
-  }));
   const unreadById = new Map(unreadCounts.map((r) => [r.id, r.unread]));
-  return c.json(visible.flatMap((cv) => {
-    const last = latestById.get(cv.id);
-    return last ? [{
-      id: cv.id, lastMessageAt: cv.lastMessageAt.toISOString(),
-      other: authors.get(otherIdFor(cv)), last: { ...serializeDm(last), ...states.get(last.id) }, unread: unreadById.get(cv.id) ?? 0,
-    }] : [];
-  }));
+  const states = await albumNoticeStates(me.id, visible.map((cv) => ({ message: cv.last, otherId: cv.otherId })));
+  return c.json(visible.map((cv) => ({
+    id: cv.id, lastMessageAt: cv.lastMessageAt.toISOString(), muted: cv.muted,
+    other: authors.get(cv.otherId), last: { ...serializeDm(cv.last), ...states.get(cv.last.id) }, unread: unreadById.get(cv.id) ?? 0,
+  })));
 });
 
 /**
@@ -293,8 +314,37 @@ socialRoutes.get("/conversations/:id", async (c) => {
   const me = c.get("user");
   const { conv, otherId } = await myConversation(c.req.param("id"), me.id);
   if (await isBlocked(me.id, otherId)) return c.notFound();
-  const authors = await authorsFor([otherId], { presence: true });
-  return c.json({ id: conv.id, other: authors.get(otherId) });
+  const [authors, [settings]] = await Promise.all([
+    authorsFor([otherId], { presence: true }),
+    db.select({ muted: conversationSettings.muted }).from(conversationSettings).where(settingsFor(me.id, conv.id)),
+  ]);
+  return c.json({ id: conv.id, other: authors.get(otherId), muted: settings?.muted ?? false });
+});
+
+socialRoutes.put("/conversations/:id/notifications", async (c) => {
+  const { id: userId } = c.get("user");
+  const { conv, otherId } = await myConversation(c.req.param("id"), userId);
+  if (await isBlocked(userId, otherId)) return c.notFound();
+  const input = z.object({ muted: z.boolean() }).safeParse(await c.req.json().catch(() => null));
+  if (!input.success) throw new HTTPException(400, { message: "Elegí si querés recibir avisos de este chat" });
+  const { muted } = input.data;
+  await db.insert(conversationSettings).values({ conversationId: conv.id, userId, muted })
+    .onConflictDoUpdate({ target: [conversationSettings.userId, conversationSettings.conversationId], set: { muted } });
+  emitToUser(userId, DM_EVENTS.settings, { conversationId: conv.id, change: "muted", muted } satisfies DmSettingsChange);
+  return c.json({ muted });
+});
+
+socialRoutes.delete("/conversations/:id", async (c) => {
+  const { id: userId } = c.get("user");
+  const { conv } = await myConversation(c.req.param("id"), userId);
+  const clearedAt = new Date();
+  await db.insert(conversationSettings).values({ conversationId: conv.id, userId, clearedAt })
+    .onConflictDoUpdate({
+      target: [conversationSettings.userId, conversationSettings.conversationId],
+      set: { clearedAt: sql`greatest(${conversationSettings.clearedAt}, ${clearedAt.toISOString()})` },
+    });
+  emitToUser(userId, DM_EVENTS.settings, { conversationId: conv.id, change: "cleared" } satisfies DmSettingsChange);
+  return c.json({ ok: true });
 });
 
 socialRoutes.get("/conversations/:id/summary", async (c) => {
@@ -304,12 +354,14 @@ socialRoutes.get("/conversations/:id/summary", async (c) => {
 
   const unread = alias(directMessage, "unread");
   const unreadCount = db.select({ count: sql<number>`count(*)::int` }).from(unread)
-    .where(and(eq(unread.conversationId, conv.id), eq(unread.senderId, otherId), isNull(unread.readAt)));
+    .where(and(eq(unread.conversationId, conv.id), eq(unread.senderId, otherId), isNull(unread.readAt), visibleDm(me.id, unread)));
   const [last] = await db.select({
     message: directMessage,
     unread: sql<number>`(${unreadCount})`.as("unread_count"),
+    muted: conversationSettings.muted,
   }).from(directMessage)
-    .where(eq(directMessage.conversationId, conv.id))
+    .leftJoin(conversationSettings, settingsFor(me.id, conv.id))
+    .where(and(eq(directMessage.conversationId, conv.id), visibleDm(me.id)))
     .orderBy(desc(directMessage.createdAt), desc(directMessage.id))
     .limit(1);
   if (!last) return c.json(null);
@@ -319,7 +371,7 @@ socialRoutes.get("/conversations/:id/summary", async (c) => {
   ]);
   return c.json({
     id: conv.id, lastMessageAt: new Date(Math.max(conv.lastMessageAt.getTime(), last.message.createdAt.getTime())).toISOString(),
-    other: authors.get(otherId), last: { ...serializeDm(last.message), ...states.get(last.message.id) }, unread: last.unread,
+    other: authors.get(otherId), last: { ...serializeDm(last.message), ...states.get(last.message.id) }, unread: last.unread, muted: last.muted ?? false,
   });
 });
 
@@ -327,9 +379,17 @@ socialRoutes.get("/conversations/:id/messages", async (c) => {
   const me = c.get("user");
   const { conv, otherId } = await myConversation(c.req.param("id"), me.id);
   if (await isBlocked(me.id, otherId)) return c.notFound();
+  // Página anterior: `before` (fecha del mensaje más viejo que ya tenés) y, si la mandás, `beforeId` para desempatar.
   const before = c.req.query("before");
-  const conds = [eq(directMessage.conversationId, conv.id)];
-  if (before) conds.push(lt(directMessage.createdAt, new Date(before)));
+  const beforeId = c.req.query("beforeId");
+  const conds = [eq(directMessage.conversationId, conv.id), visibleDm(me.id)];
+  if (before) {
+    const at = new Date(before);
+    if (Number.isNaN(at.getTime())) throw new HTTPException(400, { message: "Página inválida" });
+    conds.push(beforeId
+      ? or(lt(directMessage.createdAt, at), and(eq(directMessage.createdAt, at), lt(directMessage.id, beforeId)))!
+      : lt(directMessage.createdAt, at));
+  }
   const rows = await db
     .select({ message: directMessage, senderCreatedAt: schema.user.createdAt })
     .from(directMessage)
@@ -432,10 +492,8 @@ socialRoutes.post("/conversations/:id/messages", async (c) => {
   if (!fresh) return c.json(msg);
   emitToUser(me.id, DM_EVENTS.message, msg);
   emitToUser(otherId, DM_EVENTS.message, publicMessage);
-  // Notificación discreta (sin nombre ni contenido). Se manda siempre: si la app está abierta y a la vista,
-  // el service worker no la muestra. Antes se salteaba si "estaba en línea", y en el celu con la app
-  // minimizada la conexión queda abierta un rato y el aviso nunca llegaba.
-  pushTo(otherId, { title: "Te llegó un mensaje", body: "Abrí el chat para leerlo.", url: `/mensajes/${conv.id}`, tag: `dm-${conv.id}`, kind: "mensajes" }).catch(() => {});
+  // Notificación discreta (sin nombre ni contenido). Respeta si silenciaste ese chat (ver pushDm).
+  pushDm(otherId, conv.id).catch(() => {});
   return c.json(msg);
 });
 
@@ -456,6 +514,7 @@ socialRoutes.post("/conversations/:id/messages/:mid/open", async (c) => {
       eq(directMessage.expiring, true),
       ne(directMessage.senderId, me.id),
       isNull(directMessage.openedAt),
+      visibleDm(me.id),
     ))
     .returning();
   if (!row?.photoKey) throw new HTTPException(410, { message: "Esta foto ya se vio" });
@@ -515,7 +574,7 @@ socialRoutes.post("/conversations/:id/read", async (c) => {
         .where(and(eq(oldest.id, beforeId), eq(oldest.conversationId, conv.id)))
     : undefined;
   const now = new Date();
-  const unreadFromOther = and(eq(directMessage.conversationId, conv.id), eq(directMessage.senderId, otherId), isNull(directMessage.readAt));
+  const unreadFromOther = and(eq(directMessage.conversationId, conv.id), eq(directMessage.senderId, otherId), isNull(directMessage.readAt), visibleDm(me.id));
   const receipt = await db.transaction(async (tx) => {
     const explicit = messageIds.length ? await tx.update(directMessage).set({ readAt: now })
       .where(and(unreadFromOther, inArray(directMessage.id, messageIds))).returning({ id: directMessage.id }) : [];
@@ -547,6 +606,12 @@ socialRoutes.get("/blocks", async (c) => {
   const rows = await db.select().from(block).where(eq(block.blockerId, me.id)).orderBy(desc(block.createdAt));
   const authors = await authorsFor(rows.map((r) => r.blockedId));
   return c.json(rows.map((r) => authors.get(r.blockedId) ?? { id: r.blockedId, name: "Cuenta borrada", age: 0, photo: null }));
+});
+
+/** Bloqueos de a una página, con búsqueda por nombre (pantalla Personas bloqueadas). */
+socialRoutes.get("/blocks/page", async (c) => {
+  const me = c.get("user");
+  return c.json(await blockedPage(me.id, blocksQuerySchema.parse(c.req.query())));
 });
 
 socialRoutes.post("/blocks", async (c) => {
@@ -651,6 +716,25 @@ socialRoutes.post("/reports", async (c) => {
             .where(and(eq(schema.groupMember.groupId, m.groupId), eq(schema.groupMember.userId, me.id)))
         : [];
       ok = Boolean(m && mem && m.userId === userId);
+      if (ok && m.photoKey) {
+        if (me.id === userId || m.status !== "published" || (await isBlocked(me.id, userId))) {
+          throw new HTTPException(400, { message: "Esa foto no está disponible para reportar" });
+        }
+        const outcome = await reportGroupPhoto({
+          messageId: m.id, groupId: m.groupId, reporterId: me.id, targetUserId: userId, reason: rest.reason, details: rest.details,
+        });
+        if (!outcome) throw new HTTPException(400, { message: "Esa foto ya no está disponible" });
+        if (outcome.hidden) {
+          emitToGroupRoom(m.groupId, "group:photo-visibility", { id: m.id, groupId: m.groupId, hidden: true });
+          const notice = { title: "Foto grupal para revisar", body: "Abrí Moderación para revisarla.", url: "/admin", tag: "foto-grupal-" + m.id };
+          // La tarjeta permite que el equipo con Suspensiones decida sobre la cuenta.
+          void notifyStaff("sanctions", notice).catch(console.error);
+          void notifyStaff("reports", notice).catch(console.error);
+        }
+        // Pasa por la alerta de spam de reportes igual que el resto (ver afterReport)
+        if (outcome.fresh) await afterReport(me.id, rest.reason);
+        return c.json({ ok: true });
+      }
       // Si es una encuesta, la copia lleva la pregunta y las opciones
       if (ok) messageBody = await pollReportText(m.id, m.body);
     }

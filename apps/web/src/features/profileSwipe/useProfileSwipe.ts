@@ -66,7 +66,7 @@ export function useProfileSwipe(id: string, enabled: boolean) {
   const current = active ? list!.people[index] : undefined;
   const prev = active && index > 0 ? list!.people[index - 1] : undefined;
   const next = active ? list!.people[index + 1] : undefined;
-  const hasMore = Boolean(active && list!.hasMore);
+  const hasMore = active && list!.nextOffset !== null;
 
   const loadMore = useCallback(async () => {
     if (!entry) return undefined;

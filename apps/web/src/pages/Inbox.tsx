@@ -3,12 +3,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api";
 import { useMe } from "../App";
-import { FilterIcon } from "../components/Icons";
+import { BellOffIcon, FilterIcon } from "../components/Icons";
 import { countFilters, EMPTY, FilterSheet, toQuery, type Filters } from "./Nearby";
 import { albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { Avatar } from "../components/Avatar";
+import { useConversationActions } from "../features/messages/ConversationActions";
+import { ConversationMenuRow } from "../features/messages/ConversationMenuRow";
+import { usePullToRefresh } from "../features/navigation/pullToRefresh";
 import { useTabData } from "../features/navigation/tabData";
+import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { useRememberScroll } from "../features/navigation/viewMemory";
+import { useOlderChats } from "../features/messages/useOlderChats";
 
 function ago(iso: string) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -36,7 +41,7 @@ function loadInboxFilters(): InboxFilters {
  * "en línea" y "no leídos" se miran acá. `null`: no hay filtros de perfil. `undefined`: todavía no llegó.
  */
 function useMatchingPeople(filters: Filters, people: string) {
-  const query = toQuery({ ...filters, online: false }, 0);
+  const query = toQuery({ ...filters, online: false });
   const [result, setResult] = useState<{ query: string; ids: Set<string> | null } | null>(null);
   useEffect(() => {
     if (!query) return;
@@ -53,7 +58,9 @@ function useMatchingPeople(filters: Filters, people: string) {
 
 export function Inbox() {
   const { me } = useMe();
-  const { conversations: list } = useTabData();
+  const { conversations: live, refreshConversations } = useTabData();
+  // Los 100 más recientes vienen en vivo; los anteriores se cargan a pedido
+  const { chats: list, hasMore, loading: loadingMore, error: moreError, loadMore } = useOlderChats(live);
   const albumNoticeTime = useAlbumNoticeTime(list?.map(({ last }) => last) ?? []);
   const [query, setQuery] = useState("");
   const [{ unread, filters }, setView] = useState(loadInboxFilters);
@@ -77,12 +84,17 @@ export function Inbox() {
     && (!filters.online || chat.other?.presence === "online")
     && (!matching || (chat.other != null && matching.has(chat.other.id)))
     && words.every((word) => normalize(chat.other?.name ?? "").includes(word)));
+  const { act, dialog, errorNotice } = useConversationActions();
   const pageRef = useRef<HTMLDivElement>(null);
+  const positionMenu = useMessageMenuPosition(pageRef);
   useRememberScroll(pageRef, list != null);
+  const pullRefresh = usePullToRefresh(pageRef, () => refreshConversations("refresh"));
 
   return (
     <div className="page" ref={pageRef}>
       <header className="topbar"><h1 className="topbar__title">Mensajes</h1></header>
+      {errorNotice}
+      {pullRefresh}
       {!!list?.length && (
         <div className="searchbar form">
           <label className="field">
@@ -126,33 +138,42 @@ export function Inbox() {
               : kind === "photo" || c.last.photo ? "📷 Foto"
               : c.last.body;
             return (
-              <li key={c.id} className="inbox__row">
-                {c.other ? (
+              <ConversationMenuRow key={c.id} chat={c} positionMenu={positionMenu} onAction={(action) => void act(action, c)}
+                avatar={c.other ? (
                   <Link to={`/perfil/${c.other.id}`} className="inbox__avatar" aria-label={`Ver perfil de ${c.other.name}`}>
                     <Avatar src={c.other.photo ?? null} name={c.other.name} size={52} />
                   </Link>
                 ) : (
                   <span className="inbox__avatar"><Avatar src={null} name="?" size={52} /></span>
-                )}
-                <Link to={`/mensajes/${c.id}`} className={`inbox__item ${c.unread ? "inbox__item--unread" : ""}`}>
-                  <div className="inbox__text">
-                    <div className="inbox__top">
-                      <b className="chat-contact-name"><ChatPresenceDot state={c.other?.presence} /><span>{c.other?.name ?? "Cuenta borrada"}</span></b>
-                      <time>{ago(c.last.createdAt)}</time>
-                    </div>
-                    <p className="inbox__preview">{mine && "Vos: "}{preview}</p>
+                )}>
+                <div className="inbox__text">
+                  <div className="inbox__top">
+                    <b className="chat-contact-name"><ChatPresenceDot state={c.other?.presence} /><span>{c.other?.name ?? "Cuenta borrada"}</span></b>
+                    <time>{ago(c.last.createdAt)}</time>
                   </div>
-                  {c.unread > 0 && <span className="badge badge--inline">{c.unread}</span>}
-                </Link>
-              </li>
+                  <p className="inbox__preview">{mine && "Vos: "}{preview}</p>
+                </div>
+                {c.muted && <span className="inbox__muted" role="img" aria-label="Chat silenciado"><BellOffIcon /></span>}
+                {c.unread > 0 && <span className="badge badge--inline">{c.unread}</span>}
+              </ConversationMenuRow>
             );
           })}
         </ul>
+      )}
+      {hasMore && (
+        <div className="inbox__more">
+          {moreError && <p className="muted small" role="status">No se pudieron cargar. Probá de nuevo.</p>}
+          {(query.trim() || anyFilter) && <p className="muted small">Buscás entre los chats cargados. Puede haber más abajo.</p>}
+          <button className="btn" disabled={loadingMore} onClick={() => void loadMore()}>
+            {loadingMore ? "Cargando…" : "Cargar chats anteriores"}
+          </button>
+        </div>
       )}
       {sheet && <FilterSheet initial={filters} onClose={() => setSheet(false)} onApply={(f) => {
         setFilters(f);
         setSheet(false);
       }} />}
+      {dialog}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   filterGroups, groupReports, NO_FILTERS, type ReportedMessage, type ReportFilters, type ReportGroup, type ReportSort, type ReportType,
 } from "./groupReports";
 import { VerifyReportPhoto } from "./VerifyReportPhoto";
+import { URGENT_REASONS } from "../../options";
 import type { Report } from "./types";
 
 const PAGE = 30;
@@ -247,6 +248,8 @@ function MessageBlock({ m, has, act }: { m: ReportedMessage; has: (...need: Staf
     const r = m.reports.find((x) => x.messageId === id && x.status === "open");
     return r ? [r.id] : [];
   });
+  // Restaurar una foto con un reporte urgente abierto pide Suspensiones (lo controla también el servidor)
+  const urgentOpen = m.reports.some((r) => r.status === "open" && URGENT_REASONS.includes(r.reason));
   const remove = () => act(async () => {
     for (const id of toDelete) await api(`/admin/reports/${id}/delete-message`, { method: "POST" });
   });
@@ -259,10 +262,15 @@ function MessageBlock({ m, has, act }: { m: ReportedMessage; has: (...need: Staf
         {m.reports.length > 1 && ` · ${plural(m.reports.length, "reporte", "reportes")}`}
       </span>
       {m.message.body && <p>{m.message.body}</p>}
-      {m.message.photo && <p className="muted">[foto]</p>}
+      {m.message.photo && <p className="muted">{m.message.hidden ? "Foto oculta. Revisá si corresponde suspender la cuenta." : "[foto]"}</p>}
       {m.message.deleted && m.message.body && <span className="muted small">Copia guardada al reportarlo</span>}
       {has("reports") && !m.message.deleted && toDelete.length > 0 && (
         <div className="rcard__actions">
+          {m.message.hidden && toDelete.length === 1 && (urgentOpen && !has("sanctions") ? (
+            <p className="muted small">Tiene un reporte urgente: la puede restaurar alguien con Suspensiones.</p>
+          ) : (
+            <button className="btn btn--small" onClick={() => act(() => api(`/admin/reports/${toDelete[0]}/restore-group-photo`, { method: "POST" }))}>Restaurar foto</button>
+          ))}
           <button className="btn btn--small" onClick={remove}>{toDelete.length > 1 ? `Borrar los ${toDelete.length} mensajes` : "Borrar este mensaje"}</button>
         </div>
       )}

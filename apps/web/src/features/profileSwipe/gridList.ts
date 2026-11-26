@@ -8,10 +8,10 @@ export type GridList = {
   /** Los filtros de la grilla, tal como van en `/api/nearby` (sin `offset`). */
   query: string;
   people: GridPerson[];
-  hasMore: boolean;
+  nextOffset: number | null;
 };
 
-type NearbyPage = { people: NearbyPerson[]; hasMore: boolean };
+type NearbyPage = { people: NearbyPerson[]; nextOffset: number | null };
 
 // Una lista por entrada del historial de la grilla, en memoria: no se guarda en el teléfono.
 const lists = new Map<string, GridList>();
@@ -41,9 +41,9 @@ export function loadMoreGrid(entry: string): Promise<GridList | undefined> {
   const running = pending.get(entry);
   if (running) return running;
   const list = lists.get(entry);
-  if (!list?.hasMore) return Promise.resolve(list);
+  if (list?.nextOffset == null) return Promise.resolve(list);
   const query = new URLSearchParams(list.query);
-  query.set("offset", String(list.people.length));
+  query.set("offset", String(list.nextOffset));
   const request = api<NearbyPage>(`/nearby?${query}`)
     .then((page) => {
       const current = lists.get(entry);
@@ -51,7 +51,7 @@ export function loadMoreGrid(entry: string): Promise<GridList | undefined> {
       if (current !== list) return current;
       const seen = new Set(list.people.map((p) => p.id));
       const fresh = page.people.filter((p) => !seen.has(p.id)).map(toGridPerson);
-      const next = { ...list, people: [...list.people, ...fresh], hasMore: page.hasMore && page.people.length > 0 };
+      const next = { ...list, people: [...list.people, ...fresh], nextOffset: page.nextOffset };
       saveGridList(entry, next);
       return next;
     })

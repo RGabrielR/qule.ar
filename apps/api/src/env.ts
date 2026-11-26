@@ -34,6 +34,8 @@ export const env = {
   // Encabezado del que sale la IP real de cada persona (límite de intentos y sesiones). Tiene que ser uno que el
   // proxy de adelante pise siempre: cf-connecting-ip con el túnel de Cloudflare, x-real-ip con el nginx de deploy/.
   CLIENT_IP_HEADER: (process.env.CLIENT_IP_HEADER ?? "cf-connecting-ip").toLowerCase(),
+  // Solo grupos incluidos explícitamente en el piloto. Vacío lo deja apagado.
+  GROUP_PHOTO_PILOT_IDS: (process.env.GROUP_PHOTO_PILOT_IDS ?? "").split(",").map((id) => id.trim()).filter(Boolean),
   // Dónde se guardan fotos y videos: "disk" (por defecto, en DATA_DIR/uploads) o "s3" (Cloudflare R2 u otro
   // compatible con S3). Con s3 hacen falta los cinco S3_*. Ver docs/DEPLOY.md, "Fotos en R2".
   STORAGE: process.env.STORAGE === "s3" ? "s3" : "disk",

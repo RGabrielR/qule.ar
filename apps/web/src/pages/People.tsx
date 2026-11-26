@@ -16,16 +16,17 @@ function ago(iso: string) {
   return d === 1 ? "ayer" : `hace ${d} días`;
 }
 
-function PeopleGrid({ title, people, empty, note }: { title: string; people: (Author & { sub?: string; reaction?: string; isNew?: boolean })[] | null; empty: string; note?: string }) {
+function PeopleGrid({ title, people, empty, note, tabs }: { title: string; people: (Author & { sub?: string; reaction?: string; isNew?: boolean })[] | null; empty: string; note?: string; tabs?: React.ReactNode }) {
   const goBack = useSectionBack("/yo");
   const pageRef = useRef<HTMLDivElement>(null);
   useRememberScroll(pageRef, people != null);
   return (
     <div className="page" ref={pageRef}>
-      <header className="topbar topbar--thread">
-        <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
-        <h1 className="topbar__title topbar__title--sm">{title}</h1>
+      <header className={tabs ? "topbar" : "topbar topbar--thread"}>
+        {!tabs && <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>}
+        <h1 className="topbar__title topbar__title--sm">{tabs ? "Gente" : title}</h1>
       </header>
+      {tabs}
       {note && <p className="muted small page-note">{note}</p>}
       {people && people.length === 0 && <div className="empty"><p className="muted">{empty}</p></div>}
       {people && people.length > 0 && (
@@ -77,7 +78,7 @@ export function Favorites() {
 }
 
 /** Los toques que te mandaron en los últimos 30 días (el último de cada persona). Al entrar se marcan como vistos. */
-export function Toques() {
+export function Toques({ tabs }: { tabs?: React.ReactNode }) {
   const [list, setList] = useState<Toque[] | null>(null);
   useEffect(() => {
     api<Toque[]>("/toques").then((t) => {
@@ -90,6 +91,7 @@ export function Toques() {
   return (
     <PeopleGrid
       title="Toques"
+      tabs={tabs}
       people={list?.map((t) => ({ ...t, sub: `${reactionLabel(t.kind)} · ${ago(t.at)}`, reaction: t.kind, isNew: t.unseen })) ?? null}
       empty="Todavía nadie te mandó un toque. Cuando alguien lo haga, aparece acá."
       note="Toques de los últimos 30 días. Devolvé uno desde su perfil o escribile."
