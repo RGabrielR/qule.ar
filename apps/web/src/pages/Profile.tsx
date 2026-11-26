@@ -113,7 +113,8 @@ function ProfileView({ id }: { id: string }) {
   }
   const content = p && (
     <>
-      <div className="profile__body">
+      {/* El perfil siempre llega después de la espera: el contenido sube suave en vez de reemplazar al esqueleto de golpe */}
+      <div className="profile__body arrive">
         {!p.isMe && (
           <div className="row">
             <button className="btn btn--primary btn--grow" onClick={message}>Mandar mensaje</button>

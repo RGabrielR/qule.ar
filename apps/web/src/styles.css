@@ -382,7 +382,8 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .profile__photo::after { content: ""; position: absolute; inset: auto 0 0; height: 45%; background: linear-gradient(transparent, var(--scrim-strong)); pointer-events: none; }
 .profile__photo > .iconbtn--float { z-index: var(--z-sticky); }
 .profile__nophoto { width: 100%; height: 100%; display: grid; place-items: center; font-family: var(--display); font-size: var(--display-xl); color: var(--accent); background: var(--accent-soft); }
-.profile__name { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: var(--z-raised); display: flex; flex-direction: column; pointer-events: none; }
+/* El nombre aparece con un fundido cuando llega (al pasar de un perfil a otro no se vuelve a animar) */
+.profile__name { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: var(--z-raised); display: flex; flex-direction: column; pointer-events: none; animation: fade-in var(--dur-base) var(--ease-out) backwards; }
 .profile__name h1 { font-family: var(--display); font-size: var(--title-3xl); font-weight: 800; letter-spacing: -0.02em; min-width: 0; overflow-wrap: anywhere; }
 .profile__name span { font-size: var(--title-sm); color: var(--muted); flex: none; }
 .profile__dots { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); left: 16px; right: 16px; display: flex; gap: 4px; z-index: var(--z-sticky); }
@@ -489,10 +490,12 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 /* Entrada de pantallas (features/navigation/pageTransition.ts): hacia adelante desde la derecha, al volver desde la izquierda */
 .page--forward { animation: page-forward var(--dur-page) var(--ease-out) backwards; }
 .page--back { animation: page-back var(--dur-page) var(--ease-out) backwards; }
-/* Cambiar de pestaña: fundido corto, sin deslizar (en las apps nativas las pestañas no se mueven) */
-.page--tab { animation: fade-in var(--dur-fast) var(--ease-out) backwards; }
+/* Cambiar de pestaña: sin deslizar (en las apps nativas las pestañas no se mueven), se asienta con un fundido y un
+   acercamiento mínimo. Con la curva de las hojas, que no es tan brusca al principio, para que el fundido se llegue a ver */
+.page--tab { animation: tab-in var(--dur-page) var(--ease-sheet) backwards; }
 @keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
 @keyframes page-back { from { opacity: 0; transform: translateX(-32px); } }
+@keyframes tab-in { from { opacity: 0; transform: scale(0.98); } }
 /* Animaciones compartidas: usar estas antes de crear otras (ver "Movimiento" en docs/LOOK.md) */
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } }
