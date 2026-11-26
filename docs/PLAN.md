@@ -9,6 +9,7 @@
 
 ### Grilla de gente cerca
 - Perfiles ordenados por distancia, con filtros (edad, altura, peso, rol, tribus, qué busca, online ahora, con foto).
+- La edad se muestra en el perfil si elegís compartirla. Si la ocultás, tu perfil queda fuera de los resultados cuando alguien usa un filtro por edad.
 - **La ubicación nunca se muestra exacta:** se guarda redondeada (celda de unos 500 m) y la distancia que se muestra se redondea y lleva ruido, para que nadie pueda triangular a otra persona.
 - Favoritos y "taps".
 

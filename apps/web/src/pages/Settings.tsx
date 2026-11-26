@@ -10,6 +10,7 @@ import { getTheme, setTheme } from "../theme";
 import { staffNotices } from "../features/moderation/notices";
 
 const NOTICES: { kind: NotifyKind; label: string; hint?: string }[] = [
+  { kind: "reportes", label: "Respuestas de Moderación" },
   { kind: "mensajes", label: "Mensajes privados" },
   { kind: "toques", label: "Toques" },
   { kind: "respuestas", label: "Respuestas en grupos", hint: "Cuando alguien responde un mensaje tuyo." },
@@ -158,7 +159,7 @@ export function Settings() {
     }
   }
 
-  function updatePrivacy(json: { incognito?: boolean; showDistance?: boolean }) {
+  function updatePrivacy(json: { incognito?: boolean; showDistance?: boolean; showAge?: boolean }) {
     return change(async () => {
       await api("/me/privacy", { method: "PUT", json });
       await reload();
@@ -232,6 +233,15 @@ export function Settings() {
             />
             <span>Mostrar a qué distancia estoy. Si lo apagás, tampoco vas a ver la distancia de los demás.</span>
           </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={me.profile.showAge}
+              disabled={busy}
+              onChange={(e) => updatePrivacy({ showAge: e.currentTarget.checked })}
+            />
+            <span><b>Mostrar mi edad.</b> Si lo apagás, tu edad queda oculta y tu perfil aparece solo en búsquedas sin filtro de edad.</span>
+          </label>
           {me.profile.hasLocation && (
             <button
               className="btn btn--ghost settings__clear-location"
@@ -267,8 +277,8 @@ export function Settings() {
         <h2 className="section__title">Cuenta</h2>
         <p className="muted small">{me.user.email}</p>
         <div className="stack settings__account-actions">
+          <Link to="/yo/reportes" className="btn btn--ghost">Mis reportes</Link>
           <button className="btn" onClick={logout} disabled={busy}>Cerrar sesión</button>
-          {me.user.isAdmin && <Link to="/admin" className="btn btn--ghost">Moderación</Link>}
           {deleting ? (
             <div className="confirm confirm--danger">
               <p>Se borran tu perfil, tus fotos y tus mensajes. <b>No se puede deshacer.</b> Escribí <b>borrar</b> para confirmar.</p>

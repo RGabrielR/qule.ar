@@ -31,7 +31,7 @@ test("compartir el álbum avisa en vivo, cambiar el plazo actualiza y revocar ma
     await page.getByRole("button", { name: "Mandar", exact: true }).click();
     await signIn(guestPage, guest);
     await guestPage.goto("/mensajes");
-    await guestPage.getByRole("link", { name: new RegExp(owner.name) }).click();
+    await guestPage.locator(".inbox__item").filter({ hasText: owner.name }).click();
     await expect(guestPage.getByText("Hola, te comparto mi álbum.", { exact: true })).toBeVisible();
 
     // Compartir por 1 hora desde el menú de fotos del chat.
@@ -47,8 +47,9 @@ test("compartir el álbum avisa en vivo, cambiar el plazo actualiza y revocar ma
     // El acceso es real: el link abre el álbum con la foto.
     await guestPage.getByRole("link", { name: /Te compartió su álbum privado/ }).click();
     await expect(guestPage.getByRole("dialog")).toBeVisible();
+    // Cerrar el álbum abierto desde el chat vuelve al chat (#252)
     await guestPage.getByRole("button", { name: "Cerrar" }).click();
-    await guestPage.goBack();
+    await expect(guestPage).toHaveURL(/\/mensajes\//);
     await expect(guestPage.getByText(/Te compartió su álbum privado por 1 hora/)).toBeVisible();
 
     // Cambiar el plazo actualiza el mismo aviso en vivo, sin duplicar.
@@ -77,7 +78,7 @@ test("compartir el álbum avisa en vivo, cambiar el plazo actualiza y revocar ma
 
     // La bandeja muestra el estado final.
     await guestPage.goBack();
-    const conversation = guestPage.getByRole("link", { name: new RegExp(owner.name) });
+    const conversation = guestPage.locator(".inbox__item").filter({ hasText: owner.name });
     await expect(conversation.getByText("Dejó de compartir el álbum", { exact: true })).toBeVisible();
 
     // Reactivar con los dos chats abiertos tiene que emitir una lectura nueva.
@@ -136,21 +137,22 @@ for (const theme of ["oscuro", "penumbra"]) {
       }
 
       await page.goto("/mensajes");
-      await page.getByRole("link", { name: new RegExp(guest.name) }).click();
+      await page.locator(".inbox__item").filter({ hasText: guest.name }).click();
       await page.getByRole("button", { name: "Mandar foto" }).click();
       await page.getByRole("menuitem", { name: /Álbum privado/ }).click();
       await expect(page.locator(".album-menu__head").getByText("Álbumes privados", { exact: true })).toBeVisible();
 
       await guestPage.goto("/mensajes");
-      await guestPage.getByRole("link", { name: new RegExp(owner.name) }).click();
+      await guestPage.locator(".inbox__item").filter({ hasText: owner.name }).click();
       const secondNotice = guestPage.locator(".bubble--album").filter({ hasText: /por 1 hora/ });
       const noticeLink = secondNotice.getByRole("link");
       await expect(noticeLink).toBeVisible();
       expect(await secondNotice.locator(".bubble__meta").innerText()).toMatch(/^Vence en \d+ min · \d{1,2}:\d{2}/);
       await noticeLink.click();
       await expect(guestPage.getByRole("dialog").getByText("Segundo álbum", { exact: true })).toBeVisible();
+      // Cerrar el álbum abierto desde el chat vuelve al chat (#252)
       await guestPage.getByRole("button", { name: "Cerrar" }).click();
-      await guestPage.goBack();
+      await expect(guestPage).toHaveURL(/\/mensajes\//);
       await secondNotice.getByRole("button", { name: "Reaccionar u opciones del mensaje" }).click();
       await secondNotice.getByRole("group", { name: "Reaccionar" }).getByRole("button", { name: "Fuego" }).click();
       await expect(secondNotice.getByRole("button", { name: /Fuego: 1/ })).toBeVisible();

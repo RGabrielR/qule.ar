@@ -267,7 +267,7 @@ export function JoinRequests({ groupId, onChanged }: { groupId: string; onChange
                 <Link to={`/perfil/${r.user.id}`} className="req__who">
                   <Avatar src={r.user.photo} name={r.user.name} size={44} />
                   <span className="req__name">
-                    <span><b>{r.user.name}</b> <span className="muted">{r.user.age}</span></span>
+                    <span><b>{r.user.name}</b></span>
                     <span className="muted small">{since(r.createdAt)}{r.newAccount ? " · cuenta nueva" : ""}</span>
                   </span>
                 </Link>

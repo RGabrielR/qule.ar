@@ -71,7 +71,7 @@ Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, m
   - **Cloudflare** (Estados Unidos): por ahí pasa el tráfico entre tu celu y el servidor, para que la conexión sea segura y para proteger la app de ataques. Técnicamente, el contenido pasa por sus equipos.
   - **Cloudflare R2:** guarda los backups, cifrados antes de salir del servidor. Sin la contraseña, que no tiene Cloudflare, no se pueden leer.
   - **Notificaciones:** las entrega el servicio de tu navegador o teléfono (Google, Apple o Mozilla). Solo reciben un texto genérico como "Tenés un mensaje nuevo", sin nombres ni contenido.
-  - **Mails:** si la app te manda mails, los envía un proveedor de correo, que recibe tu dirección y el texto del mail.
+  - **Amazon SES** (Amazon Web Services, Estados Unidos): envía los mails de la cuenta (confirmar tu mail, cambiar la contraseña y avisos como una suspensión). Recibe tu dirección y el texto de cada mail.
   - **Google**, solo si elegís entrar con Google.
 - **Autoridades:** solo si una orden judicial nos obliga.
 
