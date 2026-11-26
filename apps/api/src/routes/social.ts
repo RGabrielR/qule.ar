@@ -20,6 +20,7 @@ import { limit } from "../ratelimit.js";
 import { chatPeopleMatching, parseNearbyFilters } from "./nearby.js";
 import { REPORT_SPAM_TARGETS, reportSpamStatus } from "../reportSpam.js";
 import { notifyStaff } from "../staff.js";
+import { warnIfReachingAutoSuspend } from "../autoSuspend.js";
 
 const { profile, photo, block, report, conversation, directMessage } = schema;
 
@@ -651,6 +652,8 @@ socialRoutes.post("/reports", async (c) => {
     targetName: target?.name ?? null, messageBody, evidenceKeys,
   });
   await afterReport(me.id, rest.reason);
+  // Si con este reporte ya son varias personas por lo mismo, moderación tiene un día para revisarlo (ver autoSuspend.ts)
+  warnIfReachingAutoSuspend(userId, rest.reason, me.id).catch((e) => console.error("warnIfReachingAutoSuspend", e));
   return c.json({ ok: true });
 });
 

@@ -169,6 +169,7 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup }: {
               {plural(r.targetReportCount, "reporte", "reportes")} en total
               {r.targetSuspendedAt && " · suspendida"}
               {r.targetAutoHidden && !r.targetSuspendedAt && " · oculta de la grilla hasta revisar"}
+              {r.targetAutoSuspendAt && !r.targetSuspendedAt && <b>{` · se suspende sola el ${fmt(r.targetAutoSuspendAt)} si nadie lo revisa`}</b>}
             </span>
           </span>
         </Link>
