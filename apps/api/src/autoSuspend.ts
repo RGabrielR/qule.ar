@@ -2,6 +2,7 @@ import { and, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from "drizzle-
 import { db, schema } from "./db/index.js";
 import { sendMail, suspendedMail } from "./mail.js";
 import { disconnectUser } from "./realtime.js";
+import { reportCounts } from "./reportSpam.js";
 import { keepEvidence } from "./suspension.js";
 import { accessFor, isOwner, notifyStaff } from "./staff.js";
 
@@ -15,6 +16,7 @@ import { accessFor, isOwner, notifyStaff } from "./staff.js";
  * - No cuenta el motivo "otro" (es demasiado vago para decir que es "lo mismo").
  * - Para que no sirva para atacar a alguien con cuentas recién creadas, solo cuentan las personas cuya cuenta tenía
  *   al menos AUTO_SUSPEND_REPORTER_MIN_AGE_HOURS horas al reportar y que no están suspendidas.
+ * - Tampoco cuentan las personas cuyos reportes moderación marcó para que no cuenten (reportSpam.ts).
  * - Al llegar al número, moderación recibe un aviso y tiene AUTO_SUSPEND_GRACE_HOURS horas para revisarlo.
  *   Si nadie descarta los reportes ni actúa, la cuenta se suspende sola.
  * - A la administración general y al equipo no se los suspende solos: se avisa a la administración general.
@@ -56,6 +58,7 @@ export async function autoSuspendCandidates(now = new Date(), until?: Date): Pro
       gte(report.createdAt, since),
       until ? lte(report.createdAt, until) : undefined,
       isNull(profile.suspendedAt),
+      reportCounts,
       sql`${user.createdAt} <= ${report.createdAt} - make_interval(hours => ${AUTO_SUSPEND_REPORTER_MIN_AGE_HOURS})`,
       sql`${report.targetUserId} is not null`,
       sql`${report.targetUserId} <> ${report.reporterId}`,

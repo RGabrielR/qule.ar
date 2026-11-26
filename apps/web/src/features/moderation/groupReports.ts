@@ -25,6 +25,8 @@ export type ReportGroup = {
   /** Motivos con cuántas veces aparece cada uno, del más repetido al menos. */
   reasons: [string, number][];
   reporters: number;
+  /** Reportes de cuentas cuyos reportes no cuentan. */
+  muted: number;
   messages: ReportedMessage[];
   evidenceFiles: number;
   /** Para buscar: nombre, descripción, mensajes y comentarios, en minúsculas. */
@@ -74,6 +76,7 @@ export function groupReports(reports: Report[]): ReportGroup[] {
       automatic: sorted.every((r) => r.automatic),
       reasons: [...reasonCount.entries()].sort((a, b) => b[1] - a[1]),
       reporters: Math.max(...sorted.map((r) => r.subjectReporters)),
+      muted: sorted.filter((r) => r.reporterMuted).length,
       messages: [...messages.values()],
       evidenceFiles: sorted.reduce((n, r) => n + r.evidenceFiles, 0),
       haystack: norm([name, first.group?.description ?? "", ...sorted.flatMap((r) => [r.details ?? "", r.message?.body ?? ""])].join(" ")),

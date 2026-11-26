@@ -18,7 +18,7 @@ import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
 import { limit } from "../ratelimit.js";
 import { chatPeopleMatching, parseNearbyFilters } from "./nearby.js";
-import { REPORT_SPAM_TARGETS, reportSpamStatus } from "../reportSpam.js";
+import { isMutedReporter, REPORT_SPAM_TARGETS, reportSpamStatus } from "../reportSpam.js";
 import { notifyStaff } from "../staff.js";
 import { warnIfReachingAutoSuspend } from "../autoSuspend.js";
 import { pollReportText } from "../polls.js";
@@ -590,6 +590,7 @@ export { REPORT_REASONS } from "../moderation.js";
 socialRoutes.post("/reports", async (c) => {
   const me = c.get("user");
   await limit(me.id, "report");
+  await limit(me.id, "reportDay");
   const r = z
     .object({
       userId: z.string().optional(),
@@ -661,11 +662,13 @@ socialRoutes.post("/reports", async (c) => {
 
 /**
  * Después de guardar un reporte: lo urgente (menores, contenido íntimo sin consentimiento, amenazas) le avisa a
- * moderación al instante, salvo que quien reporta esté en alerta de spam de reportes (ver reportSpam.ts). En ese caso
- * el reporte queda igual en la cola, y moderación recibe un solo aviso de la alerta cuando salta. Si moderación ignora
- * la alerta, sus reportes urgentes vuelven a avisar.
+ * moderación al instante, salvo que quien reporta esté en alerta de spam de reportes o sus reportes no cuenten (ver
+ * reportSpam.ts). En ese caso el reporte queda igual en la cola, y moderación recibe un solo aviso de la alerta cuando
+ * salta. Si moderación ignora la alerta, sus reportes urgentes vuelven a avisar.
  */
 async function afterReport(reporterId: string, reason: string) {
+  // Una cuenta cuyos reportes no cuentan (decisión de moderación) no manda avisos. Su reporte queda en la cola igual.
+  if (await isMutedReporter(reporterId).catch(() => false)) return;
   // Si alguien ignoró la alerta (eran reportes de verdad), lo urgente vuelve a avisar al instante
   const { targets, flagged } = await reportSpamStatus(reporterId).catch(() => ({ targets: 0, flagged: false }));
   if (flagged) {

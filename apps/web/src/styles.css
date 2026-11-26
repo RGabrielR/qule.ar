@@ -620,9 +620,12 @@ a.gcard:hover { background: var(--surface); }
 .modfilters .chips { flex-wrap: wrap; }
 .modreports__more { display: flex; justify-content: center; padding: 0 16px 16px; }
 .rcard--urgent { border-color: var(--danger-strong); }
-/* Alertas de spam de reportes (features/moderation/ReportSpamAlerts.tsx), arriba de la lista de reportes */
+/* Quién reporta (features/moderation/ReportSpamAlerts.tsx), arriba de la lista de reportes */
 .spam-alerts { padding-bottom: 0; }
-.spam-alert .pill--reason { text-transform: none; }
+.spam-alert .pill--reason { text-transform: none; background: var(--queue-soft); color: var(--queue); }
+.spam-alert__signals { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.spam-muted summary { color: var(--text); }
+.spam-muted__item { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
 .spam-alert .rcard__actions p { flex-basis: 100%; margin: 0; }
 .rcard__summary { color: var(--muted); }
 .rcard__notes summary { cursor: pointer; }

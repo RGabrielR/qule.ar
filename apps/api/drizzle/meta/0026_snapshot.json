@@ -1,5 +1,5 @@
 {
-  "id": "1a35e767-c024-4f08-896b-725ca10f4818",
+  "id": "89673089-32e7-448f-bda3-d00725e6a4ec",
   "prevId": "3cf70868-6b4e-4b3c-b94f-cc424ad0fcc1",
   "version": "7",
   "dialect": "postgresql",
@@ -2151,13 +2151,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "show_age": {
-          "name": "show_age",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
         "about": {
           "name": "about",
           "type": "text",
@@ -2836,6 +2829,71 @@
           "tableTo": "user",
           "columnsFrom": [
             "resolved_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.report_mute": {
+      "name": "report_mute",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "muted_by": {
+          "name": "muted_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "report_mute_user_id_user_id_fk": {
+          "name": "report_mute_user_id_user_id_fk",
+          "tableFrom": "report_mute",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "report_mute_muted_by_user_id_fk": {
+          "name": "report_mute_muted_by_user_id_fk",
+          "tableFrom": "report_mute",
+          "tableTo": "user",
+          "columnsFrom": [
+            "muted_by"
           ],
           "columnsTo": [
             "id"

@@ -180,6 +180,7 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup }: {
         {g.automatic ? " automáticos de la app" : ` de ${plural(g.reporters, "persona", "personas")}`}
         {g.reports.length > 1 && ` · el primero el ${fmt(g.oldest)}`}
         {g.reports.length === 1 && !r.automatic && !r.reporterHidden && ` · ${r.reporter?.name ?? "una cuenta borrada"}`}
+        {g.muted > 0 && (g.reports.length === 1 ? " · no cuenta" : ` · ${g.muted} no ${g.muted === 1 ? "cuenta" : "cuentan"}`)}
       </p>
 
       {g.messages.slice(0, MESSAGES_SHOWN).map((m) => <MessageBlock key={m.key} m={m} has={has} act={act} />)}
