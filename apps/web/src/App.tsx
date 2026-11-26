@@ -190,6 +190,15 @@ function ShellContent() {
   const inMyProfile = /^\/yo(?:\/|$)/.test(loc.pathname);
   const nearbyEntry = loc.pathname.startsWith("/perfil/") ? loc.state?.nearbyEntry : undefined;
 
+  // Al tocar una pestaña, su ícono rebota (cada toque lo vuelve a montar con otra key); los contadores hacen "pop" al cambiar
+  const [tabPop, setTabPop] = useState<{ tab: number; n: number } | null>(null);
+  const popTab = (tab: number) => setTabPop((p) => ({ tab, n: (p?.n ?? 0) + 1 }));
+  const tabIcon = (tab: number, icon: React.ReactNode) => (tabPop?.tab === tab
+    ? <span className="tabbar__icon tabbar__icon--pop" key={tabPop.n} onAnimationEnd={() => setTabPop(null)}>{icon}</span>
+    : <span className="tabbar__icon">{icon}</span>);
+  const pendingLabel = pending > 99 ? "99+" : String(pending);
+  const unreadLabel = unread > 99 ? "99+" : String(unread);
+
   return (
     <div ref={chatShell} className={`shell${inThread ? " shell--thread" : ""}${canSwipeTabs ? " shell--swipe" : ""}`}>
       <main className="shell__main" ref={main} {...swipeHandlers}>
@@ -205,19 +214,19 @@ function ShellContent() {
       )}
       {!inThread && (
         <nav className="tabbar" aria-label="Secciones">
-          <NavLink to={TAB_PATHS[0]} state={nearbyEntry ? { nearbyEntry } : undefined} className="tabbar__item">
-            <GridIcon /> <span>Gente</span>
+          <NavLink to={TAB_PATHS[0]} state={nearbyEntry ? { nearbyEntry } : undefined} className="tabbar__item" onClick={() => popTab(0)}>
+            {tabIcon(0, <GridIcon />)} <span>Gente</span>
           </NavLink>
-          <NavLink to={TAB_PATHS[1]} className="tabbar__item">
-            <GroupIcon /> <span>Grupos</span>
-            {pending > 0 && <b className="badge">{pending > 99 ? "99+" : pending}</b>}
+          <NavLink to={TAB_PATHS[1]} className="tabbar__item" onClick={() => popTab(1)}>
+            {tabIcon(1, <GroupIcon />)} <span>Grupos</span>
+            {pending > 0 && <b className="badge" key={pendingLabel}>{pendingLabel}</b>}
           </NavLink>
-          <NavLink to={TAB_PATHS[2]} className="tabbar__item">
-            <ChatIcon /> <span>Mensajes</span>
-            {unread > 0 && <b className="badge">{unread > 99 ? "99+" : unread}</b>}
+          <NavLink to={TAB_PATHS[2]} className="tabbar__item" onClick={() => popTab(2)}>
+            {tabIcon(2, <ChatIcon />)} <span>Mensajes</span>
+            {unread > 0 && <b className="badge" key={unreadLabel}>{unreadLabel}</b>}
           </NavLink>
-          <NavLink to={TAB_PATHS[3]} className="tabbar__item">
-            <UserIcon /> <span>Yo</span>
+          <NavLink to={TAB_PATHS[3]} className="tabbar__item" onClick={() => popTab(3)}>
+            {tabIcon(3, <UserIcon />)} <span>Yo</span>
           </NavLink>
         </nav>
       )}

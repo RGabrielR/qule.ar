@@ -142,7 +142,7 @@ export function Inbox() {
                     </div>
                     <p className="inbox__preview">{mine && "Vos: "}{preview}</p>
                   </div>
-                  {c.unread > 0 && <span className="badge badge--inline">{c.unread}</span>}
+                  {c.unread > 0 && <span className="badge badge--inline" key={c.unread}>{c.unread}</span>}
                 </Link>
               </li>
             );

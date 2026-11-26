@@ -19,6 +19,7 @@ import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../featur
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
 import { Watermark } from "../features/photos/Watermark";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
+import { useNewArrivals } from "../features/messages/useNewArrivals";
 
 /** Texto corto para la cita en el composer y en la burbuja. */
 function replyPreview(m: Dm) {
@@ -63,6 +64,9 @@ function ConversationThread({ id }: { id: string }) {
   const typingTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const myId = me?.user.id;
   const albumNoticeTime = useAlbumNoticeTime(messages);
+  // Los mensajes que llegan después de abrir el chat entran animados (el historial no)
+  const [historyReady, setHistoryReady] = useState(false);
+  const { arrivals, settle } = useNewArrivals(messages.map((m) => m.idempotencyKey ?? m.id), historyReady, id);
 
   useEffect(() => {
     setPhotoMessageId(null);
@@ -87,6 +91,7 @@ function ConversationThread({ id }: { id: string }) {
       const loaded = [...history].sort(compareDmOrder);
       beforeHistory = null;
       setMessages(loaded);
+      setHistoryReady(true);
       // Al abrir el chat, marcá también los mensajes anteriores a la página de historial.
       const oldestLoaded = d.messages[0];
       if (oldestLoaded && d.hasMore) receipts.includeOlderMessages(oldestLoaded.id);
@@ -320,8 +325,14 @@ function ConversationThread({ id }: { id: string }) {
           const albumText = <><LockIcon /> {mine ? "Le compartiste tu álbum privado" : "Te compartió su álbum privado"}{m.body ? ` por ${m.body}` : ""}</>;
           const expiry = albumExpiryLabel(m, albumNoticeTime);
           const quoted = m.replyTo;
+          const key = m.idempotencyKey ?? m.id;
+          const arrived = arrivals.has(key);
           return (
-            <div id={`dm-${m.id}`} key={m.idempotencyKey ?? m.id} className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""}`}>
+            <div
+              id={`dm-${m.id}`} key={key}
+              className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""} ${arrived ? "bubble--new" : ""}`}
+              onAnimationEnd={arrived ? (e) => e.target === e.currentTarget && settle(key) : undefined}
+            >
               {quoted && (quoted.authorName && loadedMessageIds.has(quoted.id) ? (
                 <button
                   type="button"

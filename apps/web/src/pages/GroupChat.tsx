@@ -21,6 +21,7 @@ import { applyMyVote, applyPollTotals } from "../features/polls/polls";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { useSectionBack } from "../useSectionBack";
 import { markBack, usePageTransition } from "../features/navigation/pageTransition";
+import { useNewArrivals } from "../features/messages/useNewArrivals";
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
@@ -53,6 +54,8 @@ function GroupChatThread({ id }: { id: string }) {
   const visibleMessages = quoteWindow?.messages ?? messages;
   const [queued, setQueued] = useState<GroupMessage[]>([]);
   const [historyReady, setHistoryReady] = useState(false);
+  // Los mensajes que llegan después de abrir el chat entran animados (el historial y las páginas cargadas no)
+  const { arrivals, settle } = useNewArrivals(visibleMessages.map((m) => m.idempotencyKey ?? m.id), historyReady, id);
   const [hasMore, setHasMore] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [text, setText] = useDraft(`group:${me?.user.id ?? ""}:${id}`, editing === null);
@@ -597,8 +600,14 @@ function GroupChatThread({ id }: { id: string }) {
             prev && prev.author.id === m.author.id &&
             new Date(m.scheduledAt).getTime() - new Date(prev.scheduledAt).getTime() < 5 * 60_000;
           const mine = m.author.id === me?.user.id;
+          const key = m.idempotencyKey ?? m.id;
+          const arrived = arrivals.has(key);
           return (
-            <div key={m.idempotencyKey ?? m.id} id={`gm-${m.id}`} className={`gmsg ${grouped && !m.replyTo ? "gmsg--grouped" : ""}`}>
+            <div
+              key={key} id={`gm-${m.id}`}
+              className={`gmsg ${grouped && !m.replyTo ? "gmsg--grouped" : ""} ${arrived ? "gmsg--new" : ""}`}
+              onAnimationEnd={arrived ? (e) => e.target === e.currentTarget && settle(key) : undefined}
+            >
               <div className="gmsg__avatar">
                 {!(grouped && !m.replyTo) && (
                   <Link to={`/perfil/${m.author.id}`} aria-label={`Ver perfil de ${m.author.name}`}>

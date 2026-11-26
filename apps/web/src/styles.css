@@ -58,33 +58,45 @@ p { margin: 0; }
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   height: 46px; padding: 0 18px; border-radius: var(--radius-pill);
   background: var(--surface-2); border: 1px solid var(--line); font-weight: 600;
-  transition: background 0.15s, transform 0.05s;
+  transition: background-color var(--dur-fast) var(--ease-out), scale var(--dur-press) var(--ease-out);
 }
-.btn:active:not(:disabled) { transform: scale(0.98); }
-.btn:hover:not(:disabled) { background: var(--surface-3); }
+/* Respuesta al toque: se hunde apenas y vuelve al soltar. Con `scale` y no `transform`, para no pisar
+   los transform que ya tienen algunos botones (el ojito de la contraseña). Deshabilitado no reacciona. */
+.btn:active:not(:disabled) { scale: 0.97; }
 .btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.btn--primary:hover:not(:disabled) { background: var(--accent-2); }
 .btn--danger { background: var(--danger); border-color: var(--danger); color: var(--danger-ink); }
-.btn--danger:hover:not(:disabled) { background: var(--danger-2); }
 .btn--ghost { background: transparent; }
 .btn--dangertext { color: var(--danger); }
 .btn--google { background: var(--google-bg); color: var(--google-ink); border-color: var(--google-bg); width: 100%; }
-.btn--google:hover:not(:disabled) { background: var(--google-bg-hover); }
+/* El hover solo en compu: en el celu un toque lo deja prendido como en una web */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover:not(:disabled) { background: var(--surface-3); }
+  .btn--primary:hover:not(:disabled) { background: var(--accent-2); }
+  .btn--danger:hover:not(:disabled) { background: var(--danger-2); }
+  .btn--google:hover:not(:disabled) { background: var(--google-bg-hover); }
+  .iconbtn:hover { background: var(--surface-2); color: var(--text); }
+}
 .btn--small { height: 34px; font-size: var(--text-sm); padding: 0 14px; }
 .btn--grow { flex: 1; }
-.linkbtn { background: none; border: 0; padding: 4px 2px; color: var(--accent); font-weight: 600; font-size: var(--text-md); }
+.linkbtn { background: none; border: 0; padding: 4px 2px; color: var(--accent); font-weight: 600; font-size: var(--text-md); transition: opacity var(--dur-press) var(--ease-out); }
+/* Los links de texto se atenúan al tocar, como .settings-link */
+.linkbtn:active:not(:disabled) { opacity: 0.6; }
 .linkbtn--danger { color: var(--danger); }
 .iconbtn {
   width: 40px; height: 40px; border-radius: var(--radius-pill); display: grid; place-items: center;
   background: transparent; border: 0; color: var(--muted); flex: none;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), scale var(--dur-press) var(--ease-out);
 }
-.iconbtn:hover { background: var(--surface-2); color: var(--text); }
+/* Los íconos son chicos: se hunden un poco más que un botón para que el toque se note */
+.iconbtn:active:not(:disabled) { scale: 0.9; }
 .iconbtn--float { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: 12px; background: var(--scrim-light); color: var(--text); backdrop-filter: blur(8px); }
 
 .input {
   width: 100%; min-height: 46px; padding: 11px 14px; border-radius: var(--radius-lg);
   background: var(--surface-2); border: 1px solid var(--line); color: var(--text); font: inherit; font-size: var(--text-input);
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
+/* El borde de foco se enciende con una transición corta */
 .input:focus { outline: none; border-color: var(--accent); }
 .password-input { position: relative; }
 .password-input .input { padding-inline-end: 48px; }
@@ -99,19 +111,35 @@ input[type="date"].input { width: auto; min-width: 0; height: 48px; appearance: 
 .field { display: flex; flex-direction: column; gap: 6px; border: 0; padding: 0; margin: 0; min-width: 0; }
 .field > span, .field > label, .field > legend { font-size: var(--text-sm); color: var(--muted); font-weight: 500; padding: 0; }
 .field > legend { margin-bottom: 6px; }
-.check { display: flex; gap: 10px; align-items: flex-start; font-size: var(--text-md); }
-.check input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; flex: none; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: var(--text-md); transition: color var(--dur-fast) var(--ease-out); }
+/* La casilla nativa no se puede animar por dentro: al tocarla se hunde apenas */
+.check input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; flex: none; transition: scale var(--dur-press) var(--ease-out); }
+.check input:active:not(:disabled) { scale: 0.9; }
 .row { display: flex; gap: 10px; }
 .row > .btn { flex: 1; }
 .stack { display: flex; flex-direction: column; gap: 10px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { height: 34px; padding: 0 14px; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--line); font-size: var(--text-md); display: inline-flex; align-items: center; }
+.chip {
+  height: 34px; padding: 0 14px; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--line); font-size: var(--text-md); display: inline-flex; align-items: center;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), scale var(--dur-press) var(--ease-out);
+}
+/* Prender o apagar un chip: el color cambia con transición (desde donde esté, si se toca seguido) y se hunde al tocar */
+button.chip:active:not(:disabled) { scale: 0.97; }
 .chip--on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-2); }
 .chip--static { cursor: default; }
+/* Con movimiento reducido, el toque atenúa en vez de achicar */
+@media (prefers-reduced-motion: reduce) {
+  .btn:active:not(:disabled), .iconbtn:active:not(:disabled), button.chip:active:not(:disabled), .check input:active:not(:disabled) { scale: none; opacity: 0.7; }
+}
 
-.badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font-size: var(--text-2xs); font-weight: 700; display: inline-grid; place-items: center; }
+/* Los contadores hacen "pop" al aparecer; donde el número cambia en vivo llevan key={número} para repetirlo */
+.badge {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font-size: var(--text-2xs); font-weight: 700; display: inline-grid; place-items: center;
+  animation: pop-in var(--dur-fast) var(--ease-out) backwards;
+}
+@media (prefers-reduced-motion: reduce) { .badge { animation-name: fade-in; } }
 .badge--inline { flex: none; }
 
 .notice { margin: 8px 12px; padding: 10px 14px; border-radius: var(--radius-lg); font-size: var(--text-md); display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
@@ -147,7 +175,7 @@ input[type="date"].input { width: auto; min-width: 0; height: 48px; appearance: 
 .auth__tag { color: var(--muted); margin-top: 10px; max-width: 30ch; font-size: var(--text-lg); }
 .auth__card { width: 100%; max-width: 400px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-4xl); padding: 22px; display: flex; flex-direction: column; gap: 16px; }
 .segmented { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: var(--radius-pill); padding: 4px; }
-.segmented button { height: 38px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--muted); font-weight: 600; }
+.segmented button { height: 38px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--muted); font-weight: 600; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .segmented button[aria-selected="true"], .segmented button[aria-checked="true"] { background: var(--surface-3); color: var(--text); }
 
 /* ---------- Layout con barra de pestañas ---------- */
@@ -159,8 +187,18 @@ html:has(.shell--thread), body:has(.shell--thread) { overflow: hidden; overscrol
 .shell--swipe .shell__main > .page { touch-action: pan-y pinch-zoom; }
 .tabbar { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); background: var(--surface); padding-bottom: var(--tabbar-inset); flex: none; }
 .shell:has(.profile-editor[data-keyboard-open]) > .tabbar { display: none; }
-.tabbar__item { height: var(--tabbar-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: var(--text-2xs); font-weight: 600; position: relative; }
+/* La pestaña activa cambia de color con transición */
+.tabbar__item { height: var(--tabbar-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: var(--text-2xs); font-weight: 600; position: relative; transition: color var(--dur-fast) var(--ease-out); }
 .tabbar__item.active { color: var(--accent); }
+/* El ícono de la pestaña se hunde al apretar y rebota al tocarlo (App.tsx) */
+.tabbar__icon { display: grid; transition: scale var(--dur-press) var(--ease-out); }
+.tabbar__item:active .tabbar__icon { scale: 0.9; }
+.tabbar__icon--pop { animation: settle var(--dur-base) var(--ease-out); }
+@media (prefers-reduced-motion: reduce) {
+  .tabbar__icon { transition: none; }
+  .tabbar__item:active .tabbar__icon { scale: none; }
+  .tabbar__icon--pop { animation: none; }
+}
 .tabbar__item .badge { position: absolute; top: 8px; left: calc(50% + 6px); }
 
 .page { flex: 1; overflow-y: auto; padding-bottom: 24px; }
@@ -207,8 +245,11 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .chat__jump-button:is(:hover, :focus-visible, :active) svg { background: var(--surface-2); border-color: var(--accent); }
 .chat__older { display: block; margin: 0 auto 12px; }
 .gmsg { display: grid; grid-template-columns: 44px 1fr auto; gap: 0 8px; padding: 6px 8px 2px; border-radius: var(--radius-md); position: relative; }
-.gmsg:hover { background: var(--surface); }
+@media (hover: hover) and (pointer: fine) { .gmsg:hover { background: var(--surface); } }
 .gmsg--grouped { padding-top: 0; }
+/* Mensaje que llegó (o mandaste) con el chat abierto: sube y aparece. El historial no (features/messages/useNewArrivals.ts) */
+.gmsg--new { animation: rise-in var(--dur-base) var(--ease-out) backwards; }
+@media (prefers-reduced-motion: reduce) { .gmsg--new { animation-name: fade-in; } }
 .gmsg__avatar { padding-top: 2px; display: flex; justify-content: center; }
 .gmsg__content { min-width: 0; }
 .gmsg__meta { display: flex; align-items: baseline; gap: 6px; }
@@ -239,18 +280,24 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .shell:not(.shell--thread) .composer { padding-bottom: 8px; }
 .composer__row { --composer-action-height: 48px; display: flex; gap: 8px; align-items: flex-end; }
 .composer__action { display: grid; place-items: center; height: var(--composer-action-height); flex: none; }
-.composer__input { translate: var(--chat-focus-translate, none); flex: 1; resize: none; max-height: 140px; min-height: var(--composer-action-height); padding: 11px 14px; border-radius: var(--radius-4xl); background: var(--surface-2); border: 1px solid var(--line); color: var(--text); font: inherit; font-size: var(--text-input); field-sizing: content; }
+.composer__input { translate: var(--chat-focus-translate, none); flex: 1; resize: none; max-height: 140px; min-height: var(--composer-action-height); padding: 11px 14px; border-radius: var(--radius-4xl); background: var(--surface-2); border: 1px solid var(--line); color: var(--text); font: inherit; font-size: var(--text-input); field-sizing: content; transition: border-color var(--dur-fast) var(--ease-out); }
 .composer__input::placeholder { white-space: nowrap; text-overflow: ellipsis; }
+/* El borde de foco del composer, con la misma transición que .input (solo el color: el translate es del teclado) */
 .composer__input:focus { outline: none; border-color: var(--accent); }
 .composer__editing { font-size: var(--text-xs); color: var(--queue); display: flex; justify-content: space-between; align-items: center; padding: 0 6px 6px; }
-.sendbtn { width: 44px; height: 44px; border-radius: var(--radius-pill); border: 0; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; flex: none; }
+.sendbtn { width: 44px; height: 44px; border-radius: var(--radius-pill); border: 0; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; flex: none; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), scale var(--dur-press) var(--ease-out); }
+/* Enviar se hunde al tocar, como los botones; se prende con transición cuando hay algo escrito */
+.sendbtn:active:not(:disabled) { scale: 0.9; }
+@media (prefers-reduced-motion: reduce) { .sendbtn:active:not(:disabled) { scale: none; opacity: 0.7; } }
 .sendbtn:disabled { background: var(--surface-3); color: var(--muted); opacity: 1; }
 
 /* ---------- Mensajes privados ---------- */
 .inbox { list-style: none; margin: 0; padding: 4px 0; }
 /* La foto abre el perfil y el resto de la fila abre el chat */
-.inbox__row { display: flex; align-items: center; }
-.inbox__row:hover { background: var(--surface); }
+.inbox__row { display: flex; align-items: center; transition: background-color var(--dur-fast) var(--ease-out); }
+/* Fila ancha: al tocarla se ilumina el fondo en vez de achicarse (achicar una fila entera se ve raro) */
+.inbox__row:active { background: var(--surface); }
+@media (hover: hover) and (pointer: fine) { .inbox__row:hover { background: var(--surface); } }
 .inbox__avatar { flex: none; align-self: stretch; display: flex; align-items: center; padding: 10px 0 10px 16px; }
 .inbox__item { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 12px; }
 .inbox__text { flex: 1; min-width: 0; }
@@ -271,6 +318,9 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .bubble time, .bubble__meta { display: block; text-align: right; font-size: var(--text-2xs); color: var(--muted); margin-top: 2px; }
 .bubble--mine { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius-2xl) var(--radius-2xl) var(--radius-xs) var(--radius-2xl); }
 .bubble--mine time { color: var(--accent-ink-muted); }
+/* Mensaje que llegó (o mandaste) con el chat abierto: sube y aparece. El historial no (features/messages/useNewArrivals.ts) */
+.bubble--new { animation: rise-in var(--dur-base) var(--ease-out) backwards; }
+@media (prefers-reduced-motion: reduce) { .bubble--new { animation-name: fade-in; } }
 .bubble--flash { outline: 2px solid transparent; outline-offset: 2px; animation: bubble-flash 1.4s ease; }
 @keyframes bubble-flash { 0%, 40% { outline-color: var(--accent); } 100% { outline-color: transparent; } }
 @media (prefers-reduced-motion: reduce) { .bubble--flash { animation: none; outline-color: var(--accent); } }
@@ -400,11 +450,15 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 /* Animaciones compartidas: usar estas antes de crear otras (ver "Movimiento" en docs/LOOK.md) */
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } }
+/* Contadores que aparecen o cambian de número (.badge). Con `scale` para no pisar un transform del elemento. */
+@keyframes pop-in { from { opacity: 0; scale: 0.85; } }
+/* Un ícono que se acomoda después de un toque (.tabbar__icon--pop) */
+@keyframes settle { from { scale: 0.9; } }
 @media (prefers-reduced-motion: reduce) { .page--forward, .page--back, .page--tab { animation: fade-in var(--dur-fast) var(--ease-out) backwards; } }
 
 /* ---------- Grupos ---------- */
 .tabs { display: flex; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--line); }
-.tabs button { background: none; border: 0; padding: 10px 4px; margin-right: 14px; color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button { background: none; border: 0; padding: 10px 4px; margin-right: 14px; color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
 .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
 .searchbar { padding: 12px 16px 4px; }
 /* Atajos de filtros en Mensajes: una fila que se desliza de costado si no entra */
@@ -415,7 +469,10 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 .glist { list-style: none; margin: 0; padding: 6px 0; }
 .glist__more { display: flex; justify-content: center; padding: 12px 16px 20px; }
 .gcard { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
-a.gcard:hover { background: var(--surface); }
+/* Fila ancha: al tocarla se ilumina el fondo, como en Mensajes */
+a.gcard { transition: background-color var(--dur-fast) var(--ease-out); }
+a.gcard:active { background: var(--surface); }
+@media (hover: hover) and (pointer: fine) { a.gcard:hover { background: var(--surface); } }
 .gcard__icon { width: 48px; height: 48px; border-radius: var(--radius-xl); flex: none; display: grid; place-items: center; font-family: var(--display); font-weight: 800; font-size: var(--title-xs); background: var(--surface-3); color: var(--text); }
 .gcard__icon--photo { object-fit: cover; }
 .gcard__icon--logo { display: flex; align-items: center; justify-content: center; background: var(--surface-3); }
@@ -475,7 +532,10 @@ a.gcard:hover { background: var(--surface); }
 /* ---------- Cerca (grilla) ---------- */
 .grid { list-style: none; margin: 0; padding: 2px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
 @media (min-width: 560px) { .grid { grid-template-columns: repeat(4, 1fr); } }
-.tile { display: block; position: relative; aspect-ratio: 1; overflow: hidden; background: var(--surface-2); }
+.tile { display: block; position: relative; aspect-ratio: 1; overflow: hidden; background: var(--surface-2); transition: scale var(--dur-press) var(--ease-out); }
+/* La foto de la grilla se hunde apenas al tocarla */
+.tile:active { scale: 0.97; }
+@media (prefers-reduced-motion: reduce) { .tile:active { scale: none; opacity: 0.7; } }
 .tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.2s; }
 .tile:hover img { transform: scale(1.03); }
 .tile__empty { width: 100%; height: 100%; display: grid; place-items: center; font-family: var(--display); font-size: var(--display-md); font-weight: 800; color: var(--accent); background: var(--accent-soft); }
@@ -559,8 +619,12 @@ a.gcard:hover { background: var(--surface); }
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
   min-height: 64px; gap: 3px; padding: 8px 4px; text-align: center;
   border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); font-weight: 600; font-size: var(--text-sm);
+  transition: background-color var(--dur-fast) var(--ease-out), scale var(--dur-press) var(--ease-out);
 }
-.quicklink:hover { background: var(--surface-2); }
+/* Los atajos de Yo se hunden al tocar, como los botones */
+.quicklink:active { scale: 0.97; }
+@media (hover: hover) and (pointer: fine) { .quicklink:hover { background: var(--surface-2); } }
+@media (prefers-reduced-motion: reduce) { .quicklink:active { scale: none; opacity: 0.7; } }
 .quicklink .badge { position: absolute; top: 5px; inset-inline-end: 5px; }
 .my-profile__album { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .my-profile__album .album__title { margin-bottom: 2px; }
@@ -612,10 +676,12 @@ a.gcard:hover { background: var(--surface); }
 
 /* ---------- Notificaciones y moderación ---------- */
 .setting { display: flex; gap: 16px; align-items: center; justify-content: space-between; }
-.switch { flex: none; width: 52px; height: 30px; border-radius: var(--radius-pill); border: 0; padding: 3px; background: var(--surface-3); display: flex; transition: background 0.15s; }
-.switch span { width: 24px; height: 24px; border-radius: var(--radius-pill); background: var(--text); transition: transform 0.15s; }
+.switch { flex: none; width: 52px; height: 30px; border-radius: var(--radius-pill); border: 0; padding: 3px; background: var(--surface-3); display: flex; transition: background-color var(--dur-fast) var(--ease-out); }
+/* La perilla se desliza desde donde esté, así tocarla seguido no salta */
+.switch span { width: 24px; height: 24px; border-radius: var(--radius-pill); background: var(--text); transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
 .switch--on { background: var(--accent); }
 .switch--on span { transform: translateX(22px); background: var(--accent-ink); }
+@media (prefers-reduced-motion: reduce) { .switch span { transition: background-color var(--dur-fast) var(--ease-out); } }
 .prefs__lead { margin-top: 16px; }
 .prefs { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
 .quicklink--wide { grid-column: 1 / -1; min-height: 46px; color: var(--accent-2); }
