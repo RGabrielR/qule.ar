@@ -2,6 +2,7 @@ import { eq, inArray, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { NEARBY_PAGE_SIZE } from "@mortero/shared/nearby";
 import { db, schema } from "../db/index.js";
 import { HAS_PLACE } from "../db/schema.js";
 import { distanceLabel, snapToCell, visibleKm } from "../geo.js";
@@ -14,8 +15,7 @@ import { limit } from "../ratelimit.js";
 
 const { profile } = schema;
 
-/** Radio máximo de búsqueda de la grilla. */
-const PAGE = 60;
+const MAX_OFFSET = 2000;
 /** Cuánto tiempo después de cerrar la app se te sigue mostrando como "hace un rato". */
 const RECENT_MS = 15 * 60_000;
 
@@ -105,7 +105,8 @@ const filtersSchema = z.object({
   online: z.enum(["1"]).optional(),
   withPhoto: z.enum(["1"]).optional(),
   favorites: z.enum(["1"]).optional(),
-  offset: z.coerce.number().int().min(0).max(2000).default(0),
+  offset: z.coerce.number().int().min(0).max(MAX_OFFSET).default(0),
+  limit: z.coerce.number().int().min(1).max(NEARBY_PAGE_SIZE).default(NEARBY_PAGE_SIZE),
 }).transform((f) => ordered(ordered(ordered(f, "ageMin", "ageMax"), "heightMin", "heightMax"), "weightMin", "weightMax"));
 
 export type NearbyFilters = z.infer<typeof filtersSchema>;
@@ -228,7 +229,9 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
     Number(b.online) - Number(a.online) ||
     b.seen - a.seen);
 
-  const page = candidates.slice(f.offset, f.offset + PAGE);
+  const page = candidates.slice(f.offset, f.offset + f.limit);
+  const end = f.offset + page.length;
+  const nextOffset = end < candidates.length && end <= MAX_OFFSET ? end : null;
   const ids = page.map((x) => x.id);
   const [details, first] = await Promise.all([
     ids.length
@@ -242,7 +245,8 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
   return {
     needLocation: false,
     hasLocation: meHasLoc,
-    hasMore: candidates.length > f.offset + PAGE,
+    hasMore: nextOffset !== null,
+    nextOffset,
     total: candidates.length,
     people: page.flatMap(({ id, km, online, recent }) => {
       const d = byId.get(id);

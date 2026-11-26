@@ -91,7 +91,7 @@ for (const theme of ["oscuro", "penumbra"]) {
     await signIn(page, viewer);
     expect(await page.locator("html").getAttribute("data-theme")).toBe(theme === "penumbra" ? theme : null);
 
-    const tiles = page.getByRole("link", { name: new RegExp(`^(${first.name}|${second.name})$`) });
+    const tiles = page.getByRole("link", { name: new RegExp(`^(${first.name}|${second.name})(?:,|$)`) });
     await expect(tiles).toHaveCount(2);
     const [previous, next] = await tiles.evaluateAll((links) => links.map((link) => ({
       name: link.getAttribute("aria-label")!,

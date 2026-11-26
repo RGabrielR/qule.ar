@@ -167,13 +167,14 @@ export async function serializeGroupMessages(rows: (typeof groupMessage.$inferSe
       groupId: r.groupId,
       body: r.status === "deleted" ? null : r.body,
       status: r.status,
+      photo: r.photoKey ? (r.photoHiddenAt ? "hidden" : "available") : null,
       scheduledAt: r.scheduledAt.toISOString(),
       author: author(r.userId),
       reactions: reactions.get(r.id) ?? [],
       poll: polls.get(r.id) ?? null,
       canOpenLinks: created.has(r.userId) && canOpenLinks(r.scheduledAt, created.get(r.userId)!),
       replyTo: q
-        ? { id: q.id, authorName: author(q.userId).name, body: q.status === "published" ? q.body.slice(0, 160) : null }
+        ? { id: q.id, authorName: author(q.userId).name, body: q.status === "published" ? (q.photoKey ? "Foto" : q.body.slice(0, 160)) : null }
         : null,
     };
   });

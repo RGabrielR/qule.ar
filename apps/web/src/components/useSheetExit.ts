@@ -26,5 +26,6 @@ export function useSheetExit(onClose: () => void) {
     }, motionMs("--dur-base")); // igual que `.sheet-backdrop[data-closing]` en styles.css
   }, []);
 
-  return { closing, close, backdrop: { "data-closing": closing ? "" : undefined, onClick: () => close() } };
+  // Mientras sale, la hoja ya no cuenta: ni para el lector de pantalla ni para el teclado o los toques
+  return { closing, close, backdrop: { "data-closing": closing ? "" : undefined, "aria-hidden": closing || undefined, inert: closing, onClick: () => close() } };
 }

@@ -178,6 +178,7 @@ export type GroupMessage = {
   body: string | null;
   status: "queued" | "published" | "cancelled" | "deleted";
   scheduledAt: string;
+  photo?: "available" | "hidden" | null;
   // En los grupos solo se muestra nombre y foto, sin la edad
   author: Pick<Author, "id" | "name" | "photo">;
   replyTo: { id: string; authorName: string; body: string | null } | null;
@@ -243,6 +244,8 @@ export type GroupListing = {
 };
 
 export type GroupInfo = GroupListing & {
+  photoPilot?: boolean;
+  photoUploadsPaused?: boolean;
   isGeneral: boolean;
   pendingMessage: string | null;
   muted: boolean;
@@ -275,6 +278,6 @@ export type MyInvite = {
 export const ROLE_LABEL: Record<Role, string> = { owner: "Dueño", moderator: "Moderador", member: "Miembro" };
 
 export type ChatContact = Author & { presence?: "online" | "recent" };
-export type ConversationSummary = { id: string; lastMessageAt: string; other: ChatContact; last: Dm; unread: number };
+export type ConversationSummary = { id: string; lastMessageAt: string; other?: ChatContact; last: Dm; unread: number; muted: boolean };
 
 export type Viewer = Author & { viewedAt: string };

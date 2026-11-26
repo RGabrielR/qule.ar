@@ -1,6 +1,6 @@
 import { useCallback, type RefObject } from "react";
 
-export function useMessageMenuPosition(listRef: RefObject<HTMLDivElement | null>, setMenu: (id: null) => void) {
+export function useMessageMenuPosition(listRef: RefObject<HTMLDivElement | null>, setMenu?: (id: null) => void) {
   return useCallback((menu: HTMLDivElement | null) => {
     const list = listRef.current;
     if (!menu || !list) return;
@@ -15,7 +15,7 @@ export function useMessageMenuPosition(listRef: RefObject<HTMLDivElement | null>
       const target = event.target;
       if (!(target instanceof Element) || menu?.contains(target)) return;
       if (target.closest("[aria-controls]")?.getAttribute("aria-controls") === menu?.id) return;
-      setMenu(null);
+      setMenu?.(null);
     }
     document.addEventListener("click", closeOnOutsideClick, true);
     return () => document.removeEventListener("click", closeOnOutsideClick, true);

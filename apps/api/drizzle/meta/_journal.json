@@ -204,6 +204,20 @@
       "when": 1795700735179,
       "tag": "0028_privacidad_edad",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1795713797332,
+      "tag": "0029_acciones_chats_privados",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1795713797710,
+      "tag": "0030_fotos_grupos_piloto",
+      "breakpoints": true
     }
   ]
 }

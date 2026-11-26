@@ -10,7 +10,7 @@ import { EyeIcon, EyeOffIcon } from "../components/Icons";
 import { botCheckHeaders } from "../features/auth/botCheck";
 import { GoogleSignInError } from "../features/auth/GoogleSignInError";
 
-export function Login() {
+export function Login({ callbackURL }: { callbackURL: string }) {
   const { reload } = useMe();
   const [mode, setMode] = useState<"in" | "up">("in");
   const [name, setName] = useState("");
@@ -91,7 +91,7 @@ export function Login() {
           <>
             <button
               className="btn btn--google"
-              onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/", errorCallbackURL: "/entrar" })}
+              onClick={() => authClient.signIn.social({ provider: "google", callbackURL, errorCallbackURL: "/entrar" })}
             >
               <GoogleMark /> Seguir con Google
             </button>

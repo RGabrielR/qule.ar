@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
-import { api, getSocket, ROLE_LABEL, type GroupInfo as Info, type Member, type MemberPage, type SentInvite, type SpamRules } from "../api";
+import { api, getSocket, ROLE_LABEL, type GroupInfo as Info, type Member, type MemberPage } from "../api";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
-import { BackIcon, PlusIcon } from "../components/Icons";
-import { InvitePeopleSheet } from "../components/Invite";
+import { BackIcon } from "../components/Icons";
+import { GroupActionMenu } from "../features/groups/GroupActionMenu";
 import { setGroupMuted } from "../features/groups/groupNotifications";
 import { ReportDialog } from "../components/ReportDialog";
 import { slowModeText } from "../features/groups/groupRules";
 import { useTabData } from "../features/navigation/tabData";
 import { markBack, usePageTransition } from "../features/navigation/pageTransition";
-import { GroupPhotoSetting } from "../components/GroupPhoto";
 import { GroupAvatar } from "../components/GroupAvatar";
 import { Skeleton, SkeletonRows, SkeletonText, SkeletonWait } from "../components/Skeleton";
+import { useInstalledAndroidBack } from "../useSectionBack";
 
 export function GroupInfo() {
   const { id = "" } = useParams();
@@ -25,15 +25,13 @@ export function GroupInfo() {
   const [members, setMembers] = useState<Member[]>([]);
   // Los miembros llegan después que la info: mientras tanto, su esqueleto
   const [membersReady, setMembersReady] = useState(false);
-  // Las recargas por socket o invitaciones llaman a load() sin cantidad: el ref conserva lo que se ve.
+  // Las recargas por socket llaman a load() sin cantidad: el ref conserva lo que se ve.
   const visibleMembers = useRef(0);
   const [memberNext, setMemberNext] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [invites, setInvites] = useState<SentInvite[]>([]);
-  const [inviting, setInviting] = useState(false);
   const [error, setError] = useState("");
   const [memberMenu, setMemberMenu] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<null | "leave" | "delete">(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const [reporting, setReporting] = useState(false);
 
   const isMod = info?.role === "owner" || info?.role === "moderator";
@@ -57,11 +55,6 @@ export function GroupInfo() {
       setMembers(list);
       setMembersReady(true);
       setMemberNext(next);
-      if ((g.role === "owner" || g.role === "moderator") && !g.isGeneral) {
-        setInvites(await api<SentInvite[]>(`/groups/${id}/invites`));
-      } else {
-        setInvites([]);
-      }
     } catch {
       nav("/grupos", { replace: true });
     }
@@ -114,39 +107,53 @@ export function GroupInfo() {
     }
   }
 
+  function goBack() {
+    markBack();
+    // Volvé al origen. Si Detalles se abrió directo, volvé al chat.
+    if (location.key === "default" || window.history.state?.idx === 0) nav(`/grupos/${id}`, { replace: true });
+    else nav(-1);
+  }
+
+  useInstalledAndroidBack(Boolean(location.state?.fromDirectInvitations && !reporting), goBack);
+
   if (location.hash === "#solicitudes") return <Navigate to={`/grupos/${id}/solicitudes`} replace />;
   if (!info) return <div className={`page ${enter}`}><GroupInfoSkeleton /></div>;
   const showChatLink = Boolean(info.role && !location.state?.fromGroupChat);
-  const showRequestsLink = isMod && !info.isGeneral;
+  const canManageGroup = isMod && !info.isGeneral;
+  const hasPendingRequests = canManageGroup && info.pendingCount > 0;
 
   return (
     <div className={`page ${enter}`}>
       <header className="topbar topbar--thread">
-        {/* Volver al lugar desde donde se abrió: si no, el gesto de atrás vuelve a entrar a la info.
-            Si se entró directo (una notificación, o recargando), no hay a dónde volver: va al chat del grupo. */}
-        <button className="iconbtn" onClick={() => { markBack(); if (location.key === "default") nav(`/grupos/${id}`, { replace: true }); else nav(-1); }} aria-label="Volver"><BackIcon /></button>
+        <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
         <h1 className="topbar__grow topbar__title topbar__title--sm">{info.isGeneral ? "# " : ""}{info.name}</h1>
-        {(showChatLink || showRequestsLink) && (
-          <div className="topbar__actions">
-            {showRequestsLink && (
-              <Link className="btn btn--small group-info__requests" to={`/grupos/${id}/solicitudes`} state={{ groupRequestsFrom: "details" }}>
-                Solicitudes
-                {info.pendingCount > 0 && <span className="badge">{info.pendingCount}</span>}
-              </Link>
+        {(canManageGroup || showChatLink) && (
+          <GroupActionMenu hasPendingRequests={hasPendingRequests}>
+            {(close) => (
+              <>
+                {canManageGroup && (
+                  <Link className="group-actions__requests" to={`/grupos/${id}/solicitudes`} state={{ groupRequestsFrom: "details" }} onClick={close}>
+                    Solicitudes
+                    {hasPendingRequests && <span className="badge">{info.pendingCount}</span>}
+                  </Link>
+                )}
+                {canManageGroup && isOwner && (
+                  <Link to={`/grupos/${id}/editar`} state={{ fromGroupDetails: true }} onClick={close}>Editar grupo</Link>
+                )}
+                {canManageGroup && (
+                  <Link to={`/grupos/${id}/invitaciones`} state={{ fromGroupDetails: true }} onClick={close}>Invitaciones</Link>
+                )}
+                {showChatLink && (
+                  <Link to={`/grupos/${id}`} aria-label="Ver chat del grupo" onClick={close}>Ver</Link>
+                )}
+              </>
             )}
-            {showChatLink && (
-              <Link className="btn btn--small" to={`/grupos/${id}`} aria-label="Ver chat del grupo">Ver</Link>
-            )}
-          </div>
+          </GroupActionMenu>
         )}
       </header>
 
       <section className="section group-head">
         <GroupAvatar name={info.name} photo={info.photo} general={info.isGeneral} size="big" />
-        {isOwner && !info.isGeneral && <GroupPhotoSetting groupId={id} photo={info.photo} onChange={(photo) => {
-          setInfo({ ...info, photo });
-          refreshGroups("refresh");
-        }} />}
       </section>
 
       <section className="section">
@@ -158,54 +165,7 @@ export function GroupInfo() {
         <p className="muted small">{slowModeText(info.rules)}</p>
       </section>
 
-      <section className="section">
-        <div className="setting">
-          <div>
-            <h2 className="section__title section__title--tight">Avisos de este grupo</h2>
-            <p className="muted small">
-              {info.muted
-                ? "Silenciado: solo te avisamos si alguien te responde."
-                : "Te avisamos cuando hay mensajes nuevos (como mucho cada 10 minutos) y cuando te responden."}
-            </p>
-          </div>
-          <button
-            className={`switch ${!info.muted ? "switch--on" : ""}`}
-            role="switch"
-            aria-checked={!info.muted}
-            aria-label="Avisos de este grupo"
-            onClick={async () => {
-              const muted = !info.muted;
-              setInfo({ ...info, muted });
-              await setGroupMuted(id, muted).catch(() => setInfo({ ...info }));
-            }}
-          >
-            <span />
-          </button>
-        </div>
-      </section>
-
       {error && <div className="notice notice--error" role="alert">{error}</div>}
-
-      {isMod && !info.isGeneral && (
-        <section className="section">
-          <h2 className="section__title">Invitaciones <span className="muted">{invites.length}</span></h2>
-          <button className="btn btn--primary" onClick={() => setInviting(true)}><PlusIcon /> Invitar gente</button>
-          {invites.length > 0 && (
-            <ul className="members invite-sent">
-              {invites.map((inv) => (
-                <li key={inv.id} className="member">
-                  <Link to={`/perfil/${inv.user.id}`} className="member__who">
-                    <Avatar src={inv.user.photo} name={inv.user.name} size={40} />
-                    <span><b>{inv.user.name}</b> <span className="muted small">· sin responder</span></span>
-                  </Link>
-                  <button className="linkbtn small" onClick={() => act(() => api(`/groups/${id}/invites/${inv.id}`, { method: "DELETE" }))}>Cancelar</button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-      {inviting && <InvitePeopleSheet groupId={id} groupName={info.name} onClose={() => setInviting(false)} onChange={load} />}
 
       {!info.isGeneral && (
         <section className="section">
@@ -258,19 +218,40 @@ export function GroupInfo() {
         </section>
       )}
 
-      {isOwner && !info.isGeneral && <GroupSettings info={info} onSaved={async () => {
-        refreshGroups("refresh");
-        await load();
-      }} />}
+      <section className="section">
+        <div className="setting">
+          <div>
+            <h2 className="section__title section__title--tight">Avisos de este grupo</h2>
+            <p className="muted small">
+              {info.muted
+                ? "Silenciado: solo te avisamos si alguien te responde."
+                : "Te avisamos cuando hay mensajes nuevos (como mucho cada 10 minutos) y cuando te responden."}
+            </p>
+          </div>
+          <button
+            className={`switch ${!info.muted ? "switch--on" : ""}`}
+            role="switch"
+            aria-checked={!info.muted}
+            aria-label="Avisos de este grupo"
+            onClick={async () => {
+              const muted = !info.muted;
+              setInfo({ ...info, muted });
+              await setGroupMuted(id, muted).catch(() => setInfo({ ...info }));
+            }}
+          >
+            <span />
+          </button>
+        </div>
+      </section>
 
       {!info.isGeneral && (
         <section className="section">
           <div className="stack">
-            {confirm === "leave" ? (
+            {confirmLeave ? (
               <div className="confirm">
                 <p>¿Salir de {info.name}? Para volver vas a tener que pedir ingreso de nuevo.{isOwner && " Como sos el dueño, el grupo pasa a un moderador o al miembro más antiguo. Si no queda nadie, se cierra."}</p>
                 <div className="row">
-                  <button className="btn" onClick={() => setConfirm(null)}>Cancelar</button>
+                  <button className="btn" onClick={() => setConfirmLeave(false)}>Cancelar</button>
                   <button className="btn btn--danger" onClick={() => act(async () => {
                     await api(`/groups/${id}/leave`, { method: "POST" });
                     refreshGroups("clear");
@@ -278,18 +259,9 @@ export function GroupInfo() {
                   })}>Salir</button>
                 </div>
               </div>
-            ) : confirm === "delete" ? (
-              <div className="confirm confirm--danger">
-                <p>¿Borrar {info.name} para todos? Se pierden todos los mensajes. <b>No se puede deshacer.</b></p>
-                <div className="row">
-                  <button className="btn" onClick={() => setConfirm(null)}>Cancelar</button>
-                  <button className="btn btn--danger" onClick={() => act(async () => { await api(`/groups/${id}`, { method: "DELETE" }); nav("/grupos"); })}>Borrar grupo</button>
-                </div>
-              </div>
             ) : (
               <>
-                <button className="btn" onClick={() => setConfirm("leave")}>Salir del grupo</button>
-                {isOwner && <button className="btn btn--ghost btn--dangertext" onClick={() => setConfirm("delete")}>Borrar grupo</button>}
+                <button className="btn" onClick={() => setConfirmLeave(true)}>Salir del grupo</button>
                 <button type="button" className="btn btn--ghost btn--dangertext" onClick={() => setReporting(true)}>Reportar este grupo</button>
               </>
             )}
@@ -324,87 +296,4 @@ function GroupInfoSkeleton() {
       <section className="section"><SkeletonText lines={2} /></section>
     </SkeletonWait>
   );
-}
-
-function GroupSettings({ info, onSaved }: { info: Info; onSaved: () => void }) {
-  const [name, setName] = useState(info.name);
-  const [description, setDescription] = useState(info.description ?? "");
-  const [rules, setRules] = useState<SpamRules>(info.rules);
-  const [state, setState] = useState<"idle" | "saving" | "ok">("idle");
-  const [error, setError] = useState("");
-
-  const setRule = (k: keyof SpamRules, v: string) => {
-    setRules({ ...rules, [k]: Number(v) });
-    setState("idle");
-  };
-
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    setState("saving");
-    setError("");
-    try {
-      await api(`/groups/${info.id}`, { method: "PATCH", json: { name, description: description || null, rules } });
-      setState("ok");
-      onSaved();
-    } catch (err) {
-      setError((err as Error).message);
-      setState("idle");
-    }
-  }
-
-  return (
-    <form className="section form" onSubmit={save}>
-      <h2 className="section__title">Ajustes del grupo</h2>
-      <label className="field">
-        <span>Nombre</span>
-        <input className="input" required minLength={3} maxLength={40} value={name} onChange={(e) => { setName(e.target.value); setState("idle"); }} />
-      </label>
-      <label className="field">
-        <span>Descripción</span>
-        <textarea className="input" rows={3} maxLength={300} value={description} onChange={(e) => { setDescription(e.target.value); setState("idle"); }} />
-      </label>
-
-      <h3 className="subhead">Antispam</h3>
-      <p className="muted small">
-        Cada persona puede mandar <b>{rules.burst}</b> {rules.burst === 1 ? "mensaje" : "mensajes"} cada <b>{fmtSecs(rules.burst * rules.intervalSeconds)}</b>.
-        Lo que mande de más queda en cola. Si tiene {rules.rotationMax} o más de los últimos {rules.rotationWindow} mensajes, espera el doble.
-      </p>
-      <div className="grid2">
-        <label className="field">
-          <span>Segundos por mensaje</span>
-          <input className="input" type="number" min={5} max={3600} value={rules.intervalSeconds} onChange={(e) => setRule("intervalSeconds", e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Ráfaga (mensajes seguidos)</span>
-          <input className="input" type="number" min={1} max={10} value={rules.burst} onChange={(e) => setRule("burst", e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Rotación: mirar los últimos</span>
-          <input className="input" type="number" min={5} max={100} value={rules.rotationWindow} onChange={(e) => setRule("rotationWindow", e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Rotación: máximo tuyos</span>
-          <input className="input" type="number" min={1} max={50} value={rules.rotationMax} onChange={(e) => setRule("rotationMax", e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Horas de cuenta nueva</span>
-          <input className="input" type="number" min={0} max={720} value={rules.newAccountHours} onChange={(e) => setRule("newAccountHours", e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Máximo en cola</span>
-          <input className="input" type="number" min={1} max={10} value={rules.maxQueued} onChange={(e) => setRule("maxQueued", e.target.value)} />
-        </label>
-      </div>
-      {error && <p className="error" role="alert">{error}</p>}
-      <button className="btn btn--primary" disabled={state === "saving"}>
-        {state === "saving" ? "Guardando…" : state === "ok" ? "Guardado ✓" : "Guardar ajustes"}
-      </button>
-    </form>
-  );
-}
-
-function fmtSecs(s: number) {
-  if (s < 60) return `${s} s`;
-  const m = Math.round((s / 60) * 10) / 10;
-  return `${m} min`;
 }

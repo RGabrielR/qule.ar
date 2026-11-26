@@ -188,7 +188,8 @@ button.chip:active:not(:disabled) { scale: 0.97; }
 .segmented button[aria-selected="true"], .segmented button[aria-checked="true"] { color: var(--text); }
 
 /* ---------- Layout con barra de pestañas ---------- */
-.shell { height: 100%; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; border-inline: 1px solid var(--line); }
+.shell { --people-grid-columns: 3; height: 100%; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; border-inline: 1px solid var(--line); }
+@media (min-width: 560px) { .shell { --people-grid-columns: 4; } }
 html:has(.shell--thread), body:has(.shell--thread) { overflow: hidden; overscroll-behavior: none; }
 .shell--thread { position: fixed; inset-inline: 0; top: var(--chat-top, 0px); height: var(--chat-height, 100dvh); overflow: clip; }
 .shell__main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -225,12 +226,32 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
   .nearby-refresh { transition: none; }
   .nearby-refresh__spin { animation: none; }
 }
+/* Tirar para actualizar en Mensajes y Grupos (features/navigation/pullToRefresh.tsx). Sin rebote: el encabezado
+   y la barra de pestañas quedan quietos al arrastrar de más. */
+html:has(.pull-refresh), .page:has(> .pull-refresh) { overscroll-behavior-y: none; }
+.pull-refresh {
+  display: flex; align-items: center; justify-content: center; overflow: clip; flex: none;
+  color: var(--muted); transition: height 180ms ease-out;
+}
+.pull-refresh--pulling { transition: none; }
+.pull-refresh--ready { color: var(--accent); }
+.pull-refresh span { display: grid; place-items: center; }
+.pull-refresh__spin { animation: nearby-refresh-spin 0.8s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .pull-refresh { transition: none; }
+  .pull-refresh__spin { animation: none; }
+}
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px; border-bottom: 1px solid var(--line); background: var(--bg); flex: none; position: sticky; top: 0; z-index: var(--z-sticky); }
 .topbar--thread { justify-content: flex-start; padding-left: 8px; }
 .topbar__title { font-family: var(--display); font-size: var(--title-sm); font-weight: 800; letter-spacing: -0.02em; }
 .topbar__sub { color: var(--muted); font-size: var(--text-xs); display: flex; align-items: center; gap: 5px; margin-top: 2px; }
 .topbar__who { display: flex; align-items: center; gap: 10px; }
 .topbar__actions { display: flex; align-items: center; gap: 4px; }
+.conversation-header-menu { position: relative; margin-left: auto; z-index: var(--z-raised); }
+.topbar__link::after { content: ""; position: absolute; inset: 0; }
+.topbar__link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Los botones quedan por encima del enlace que cubre la barra. */
+.topbar--linked > .iconbtn, .topbar--linked .group-actions > .iconbtn { position: relative; z-index: var(--z-raised); }
 .iconbtn--busy { animation: blink 1.2s infinite; }
 .iconbtn--done { color: var(--accent); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -287,7 +308,10 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .chat__jump-button:hover { background: transparent; }
 .chat__jump-button:is(:hover, :focus-visible, :active) svg { background: var(--surface-2); border-color: var(--accent); }
 .chat__older { display: block; margin: 0 auto 12px; }
-.gmsg { display: grid; grid-template-columns: 44px 1fr auto; gap: 0 8px; padding: 6px 8px 2px; border-radius: var(--radius-md); position: relative; }
+.gmsg { display: grid; grid-template-columns: 44px 1fr; gap: 0 8px; padding: 6px 8px 2px; border-radius: var(--radius-md); position: relative; }
+.message-gesture { -webkit-touch-callout: none; }
+.bubble > p, .bubble time, .gmsg__body, .gmsg__time,
+.message-gesture > .menu, .message-gesture > .menu * { user-select: none; -webkit-user-select: none; }
 @media (hover: hover) and (pointer: fine) { .gmsg:hover { background: var(--surface); } }
 .gmsg--grouped { padding-top: 0; }
 /* Mensaje que llegó (o mandaste) con el chat abierto: sube y aparece. El historial no (features/messages/useNewArrivals.ts) */
@@ -300,10 +324,6 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .gmsg__name:hover { text-decoration: underline; }
 .gmsg__time { color: var(--muted); font-size: var(--text-xs); margin-left: auto; padding-left: 6px; }
 .gmsg__body { white-space: pre-wrap; overflow-wrap: anywhere; }
-.gmsg__more, .bubble__more { padding: 0; }
-.gmsg__more { width: 30px; height: 30px; opacity: 0; }
-.gmsg:hover .gmsg__more, .gmsg__more:focus-visible { opacity: 1; }
-@media (hover: none) { .gmsg__more { opacity: 0.6; } }
 
 /* El menú crece desde la esquina del botón que lo abrió (arriba a la derecha salvo que diga otra cosa) */
 .menu { position: absolute; right: 8px; top: 34px; z-index: var(--z-menu); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 6px; min-width: 180px; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); transform-origin: top right; animation: menu-in var(--dur-base) var(--ease-out) backwards; }
@@ -338,13 +358,14 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 
 /* ---------- Mensajes privados ---------- */
 .inbox { list-style: none; margin: 0; padding: 4px 0; }
-/* La foto abre el perfil y el resto de la fila abre el chat */
-.inbox__row { display: flex; align-items: center; transition: background-color var(--dur-fast) var(--ease-out); }
+/* La foto abre el perfil y el resto de la fila abre el chat. Mantener apretada la fila abre sus acciones. */
+.inbox__row { position: relative; display: flex; align-items: center; transition: background-color var(--dur-fast) var(--ease-out); }
 /* Fila ancha: al tocarla se ilumina el fondo en vez de achicarse (achicar una fila entera se ve raro) */
-.inbox__row:active { background: var(--surface); }
+.inbox__row:active, .inbox__row:focus-within { background: var(--surface); }
 @media (hover: hover) and (pointer: fine) { .inbox__row:hover { background: var(--surface); } }
 .inbox__avatar { flex: none; align-self: stretch; display: flex; align-items: center; padding: 10px 0 10px 16px; }
-.inbox__item { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 12px; }
+.inbox__item { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 12px; user-select: none; -webkit-touch-callout: none; }
+.inbox__muted { display: flex; color: var(--muted); }
 .inbox__text { flex: 1; min-width: 0; }
 .chat-contact-name { display: inline-flex; align-items: center; align-self: center; gap: 6px; vertical-align: middle; }
 .inbox__top { display: flex; justify-content: space-between; gap: 8px; }
@@ -354,6 +375,7 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .inbox__item--unread .inbox__preview { color: var(--text); font-weight: 500; }
 
 .chat__list--dm { display: flex; flex-direction: column; gap: 4px; padding: 12px; }
+.chat__date { align-self: center; margin-block: 8px; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--muted); font-size: var(--text-xs); font-weight: 600; }
 .bubble { position: relative; align-self: flex-start; max-width: min(78%, 440px); background: var(--surface-2); border-radius: var(--radius-2xl) var(--radius-2xl) var(--radius-2xl) var(--radius-xs); padding: 8px 12px 6px; }
 .send-failure { display: flex; align-items: center; gap: 4px; color: var(--muted); overflow-wrap: anywhere; }
 .chat__list--dm > .send-failure { align-self: flex-end; max-width: 85%; text-align: right; }
@@ -540,14 +562,16 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 
 /* ---------- Grupos ---------- */
 .tabs { display: flex; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--line); }
-.tabs button { background: none; border: 0; padding: 10px 4px; margin-right: 14px; color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
-.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.tabs :is(button, a) { background: none; border: 0; padding: 10px 4px; margin-right: 14px; color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.people-tabs a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.tabs :is(button[aria-selected="true"], a[aria-current="page"]) { color: var(--text); border-bottom-color: var(--accent); }
 .searchbar { padding: 12px 16px 4px; }
 /* Atajos de filtros en Mensajes: una fila que se desliza de costado si no entra */
 .inbox-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
 .inbox-filters::-webkit-scrollbar { display: none; }
 .inbox-filters .chip { flex: none; gap: 6px; height: 32px; padding: 0 12px; font-size: var(--text-sm); }
 .inbox-filters__more { padding: 0 9px; }
+.inbox__more { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 16px 20px; text-align: center; }
 .glist { list-style: none; margin: 0; padding: 6px 0; }
 .glist__more { display: flex; justify-content: center; padding: 12px 16px 20px; }
 .gcard { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
@@ -573,7 +597,7 @@ a.gcard:active { background: var(--surface); }
 .gcard__details { display: block; }
 .gcard__details:hover b { text-decoration: underline; }
 .group-description { overflow-wrap: anywhere; white-space: pre-wrap; }
-.group-actions, .group-info__requests { flex: none; }
+.group-actions { flex: none; }
 .group-actions__menu { top: 100%; right: 16px; width: max-content; }
 .group-actions__dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--accent); }
 .group-actions__menu .group-actions__requests { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -606,6 +630,7 @@ a.gcard:active { background: var(--surface); }
 .member { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .member__actions { position: relative; flex: none; }
 .sheet--list { max-height: 88vh; }
+.group-invitations__add { color: var(--text); }
 .invite-list { overflow-y: auto; min-height: 0; flex: 1; }
 .invite-list .member > :last-child { flex: none; }
 .gcard__icon--sm { width: 36px; height: 36px; font-size: var(--text-md); border-radius: var(--radius-lg); }
@@ -618,8 +643,7 @@ a.gcard:active { background: var(--surface); }
 .toast--upload-error { width: max-content; overflow-wrap: anywhere; border-color: var(--danger-line); color: var(--danger); }
 
 /* ---------- Cerca (grilla) ---------- */
-.grid { list-style: none; margin: 0; padding: 2px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
-@media (min-width: 560px) { .grid { grid-template-columns: repeat(4, 1fr); } }
+.grid { list-style: none; margin: 0; padding: 2px; display: grid; grid-template-columns: repeat(var(--people-grid-columns), 1fr); gap: 2px; }
 .tile { display: block; position: relative; aspect-ratio: 1; overflow: hidden; background: var(--surface-2); transition: scale var(--dur-press) var(--ease-out); }
 /* La foto de la grilla se hunde apenas al tocarla */
 .tile:active { scale: 0.97; }
@@ -734,6 +758,8 @@ a.gcard:active { background: var(--surface); }
 .bubble:hover .bubble__more, .bubble__more:focus-visible { opacity: 1; }
 @media (hover: none) { .bubble__more { opacity: 0.6; } }
 .menu--bubble { top: 28px; right: 0; color: var(--text); }
+.menu--inbox { top: 100%; }
+.menu--conversation-header { top: 100%; right: 0; }
 .menu--above { top: auto; bottom: 100%; transform-origin: bottom right; }
 .typing-label { display: block; font-size: var(--text-xs); color: var(--ok); }
 .typing { display: flex; gap: 4px; padding: 12px 14px; }
@@ -909,6 +935,7 @@ button.quote:hover { background: var(--surface-3); }
   /* Llega subiendo desde la barra de abajo */
   animation: rise-in var(--dur-base) var(--ease-out) backwards;
 }
+.shell:has(.invite-sheet) > .notify-banner { visibility: hidden; }
 .notify-banner__text { flex: 1; display: grid; gap: 2px; min-width: 0; }
 .notify-banner__actions { flex: none; display: grid; gap: 4px; justify-items: center; }
 /* Dentro de la página (por ejemplo, en Yo), sin flotar sobre el contenido */

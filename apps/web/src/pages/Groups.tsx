@@ -6,9 +6,12 @@ import { GroupAvatar } from "../components/GroupAvatar";
 import { PhotoPicker } from "../components/GroupPhoto";
 import { preparePhotoForUpload } from "../features/photos/preparePhoto";
 import { GROUP_EVENTS, useTabData } from "../features/navigation/tabData";
+import { usePullToRefresh } from "../features/navigation/pullToRefresh";
 import { PlusIcon } from "../components/Icons";
 import { MyInvites } from "../components/Invite";
 import { JoinButton } from "../components/JoinButton";
+import { useGroupOrder } from "../features/groups/useGroupOrder";
+import { useMe } from "../App";
 import { DialogFocus } from "../components/DialogFocus";
 import { useTabTransition } from "../features/navigation/pageTransition";
 import { SkeletonRows } from "../components/Skeleton";
@@ -22,6 +25,9 @@ export function Groups() {
   const [params, setParams] = useSearchParams();
   const tab = params.get("ver") === "todos" ? "all" : "mine";
   const { groups: mine, invites, refreshGroups } = useTabData();
+  const { me } = useMe();
+  const { ordered, move, reset } = useGroupOrder(me?.user.id ?? "", mine);
+  const [ordering, setOrdering] = useState(false);
   const [all, setAll] = useState<GroupListing[] | null>(null);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -67,6 +73,10 @@ export function Groups() {
     setLoadingMore(false);
   }
 
+  const pullRefresh = usePullToRefresh(pageRef, () =>
+    Promise.all([refreshGroups("refresh"), tab === "all" ? loadAll(q, shown) : undefined]),
+  );
+
   useEffect(() => {
     if (tab !== "all") return;
     const s = getSocket();
@@ -94,6 +104,7 @@ export function Groups() {
         <h1 className="topbar__title">Grupos</h1>
         <button className="btn btn--small btn--primary" onClick={() => setCreating(true)}><PlusIcon /> Crear</button>
       </header>
+      {pullRefresh}
 
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === "mine"} onClick={() => setParams({})}>Mis grupos</button>
@@ -104,8 +115,17 @@ export function Groups() {
         <>
         <MyInvites invites={invites ?? []} onChange={() => refreshGroups("refresh")} />
         {mine == null ? <GroupsSkeleton /> : (
+        <>
+        {(ordered?.length ?? 0) > 1 && (
+          <div className="row searchbar">
+            <button type="button" className="btn btn--small" aria-pressed={ordering} onClick={() => setOrdering(!ordering)}>
+              {ordering ? "Listo" : "Reordenar mis grupos"}
+            </button>
+            {ordering && <button type="button" className="btn btn--small" onClick={reset}>Restablecer orden</button>}
+          </div>
+        )}
         <ul className="glist">
-          {mine.map((g) => (
+          {ordered?.map((g, index) => (
             <li key={g.id} {...arriveMine(g.id)}>
               <Link to={`/grupos/${g.id}`} className="gcard">
                 <GroupAvatar name={g.name} photo={g.photo} general={g.isGeneral} appear />
@@ -119,6 +139,12 @@ export function Groups() {
                 </div>
                 {g.pendingCount > 0 && <span className="badge badge--inline" title="Solicitudes pendientes">{g.pendingCount}</span>}
               </Link>
+              {ordering && (
+                <div className="row searchbar">
+                  <button type="button" className="btn btn--small" aria-label={`Subir ${g.name}`} disabled={index === 0} onClick={() => move(index, -1)}>Subir</button>
+                  <button type="button" className="btn btn--small" aria-label={`Bajar ${g.name}`} disabled={index === ordered.length - 1} onClick={() => move(index, 1)}>Bajar</button>
+                </div>
+              )}
             </li>
           ))}
           {mine.length <= 1 && (
@@ -127,6 +153,7 @@ export function Groups() {
             </li>
           )}
         </ul>
+        </>
         )}
         </>
       ) : (

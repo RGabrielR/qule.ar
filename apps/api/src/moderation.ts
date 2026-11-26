@@ -87,6 +87,9 @@ async function stillInUse(key: string) {
   const [m] = await db.select({ id: schema.directMessage.id }).from(schema.directMessage)
     .where(eq(schema.directMessage.photoKey, key)).limit(1);
   if (m) return true;
+  const [gm] = await db.select({ id: schema.groupMessage.id }).from(schema.groupMessage)
+    .where(eq(schema.groupMessage.photoKey, key)).limit(1);
+  if (gm) return true;
   const [p] = await db.select({ id: schema.photo.id }).from(schema.photo)
     .where(or(eq(schema.photo.key, key), eq(schema.photo.posterKey, key))).limit(1);
   if (p) return true;
@@ -140,11 +143,18 @@ export const REMOVED_GROUP_DAYS = 90;
 
 /** Borra del todo los grupos dados de baja hace más de REMOVED_GROUP_DAYS (sus reportes conservan la copia). */
 export async function purgeRemovedGroups() {
-  const gone = await db.delete(schema.group)
-    .where(sql`${schema.group.removedAt} < now() - make_interval(days => ${REMOVED_GROUP_DAYS})`)
-    .returning({ photoKey: schema.group.photoKey });
-  // La foto del grupo se guardó con él como prueba; ahora se borra, salvo que sea prueba de un reporte
-  for (const g of gone) if (g.photoKey) await deleteImageUnlessEvidence(g.photoKey);
+  const { group, groupMessage } = schema;
+  const gone = await db.transaction(async (tx) => {
+    const groups = await tx.select({ id: group.id, photoKey: group.photoKey }).from(group)
+      .where(sql`${group.removedAt} < now() - make_interval(days => ${REMOVED_GROUP_DAYS})`).for("update");
+    if (!groups.length) return { groups, photos: [] };
+    const ids = groups.map(({ id }) => id);
+    const photos = await tx.select({ key: groupMessage.photoKey }).from(groupMessage).where(inArray(groupMessage.groupId, ids));
+    await tx.delete(group).where(inArray(group.id, ids));
+    return { groups, photos };
+  });
+  for (const { key } of gone.photos) if (key) await deleteImageUnlessEvidence(key);
+  for (const g of gone.groups) if (g.photoKey) await deleteImageUnlessEvidence(g.photoKey);
 }
 
 // ---------- Alertas automáticas: señales de menores en nombres y descripciones ----------
@@ -240,7 +250,7 @@ export async function checkMinorSignals(
 // Las drogas no se filtran por palabras: hablar de consumo cuidado y de reducción de daños está permitido.
 // Vender u ofrecer drogas se reporta a mano ("venta o drogas").
 
-type ForbiddenKind = "menores" | "venta" | "servicios";
+type ForbiddenKind = "menores" | "venta" | "servicios" | "cruising";
 
 const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: Signal[] }[] = [
   {
@@ -259,6 +269,16 @@ const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: Signal[
     patterns: [
       /\bvend(?:o|e|emos|en|er|edor\w*)\b/, /\bventas?\b/, /\bcompr(?:o|amos|a y venta)\b/, /\bprecios?\b/,
       /\$\s?\d/, /\bofertas?\b/, /\bcobr(?:o|amos)\b/, /\bdelivery\b/, /\bstock\b/, /\bmayorista\w*/,
+    ].map((re) => ({ re })),
+  },
+  {
+    // Convocatorias explícitas a sexo en lugares donde terceros lo pueden ver sin querer (Código Penal, art. 129: más
+    // grave si lo pueden ver menores). Se mira la conducta, no la palabra: "cruising" solo no bloquea, porque también
+    // puede ser ir a un sauna o a un bar. Ver docs/MODERACION.md y la discusión #270.
+    kind: "cruising",
+    message: "No se pueden crear grupos para organizar encuentros sexuales en lugares donde otras personas los puedan ver sin querer (vía pública, plazas, baños públicos, transporte).",
+    patterns: [
+      /\b(?:sexo|garch\w*|coger|cogida\w*)\s+en\s+(?:la\s+|el\s+|los\s+|las\s+)?(?:via publica|calle|plazas?|parques?|playas?|banos? publicos?|estaciones?|trenes?|bosques?)\b/,
     ].map((re) => ({ re })),
   },
 ];
@@ -321,7 +341,7 @@ export async function scanExistingGroups() {
       id: crypto.randomUUID(),
       reporterId: null,
       groupId: g.id,
-      reason: bad.kind === "menores" ? "menor de edad" : "venta o drogas",
+      reason: bad.kind === "menores" ? "menor de edad" : bad.kind === "cruising" ? "otro" : "venta o drogas",
       details: `${AUTO_DETAILS_PREFIX}: «${bad.hit}» en un grupo creado antes de las reglas nuevas.`,
       targetName: g.name,
       messageBody: text,

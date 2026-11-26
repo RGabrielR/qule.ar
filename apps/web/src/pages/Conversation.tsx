@@ -1,7 +1,8 @@
 import { ChatPresenceDot } from "../features/messages/chatPresence";
-import { compareDmOrder, DM_EVENTS, type DmReadReceipt } from "@mortero/shared/realtime";
+import { compareDmOrder, DM_EVENTS, type DmReadReceipt, type DmSettingsChange } from "@mortero/shared/realtime";
 import { privateOutbox, newMessageKey, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, getSocket, upload, type ChatContact, type Dm, type ReactionEvent } from "../api";
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
@@ -10,9 +11,11 @@ import { Avatar } from "../components/Avatar";
 import { BackIcon, DotsIcon, ImageIcon, LockIcon, SendIcon, TimerIcon } from "../components/Icons";
 import { useSectionBack } from "../useSectionBack";
 import { usePageTransition } from "../features/navigation/pageTransition";
+import { useMessageActions } from "../features/chat/useMessageActions";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
+import { useKeyboardAfterSend } from "../features/chat/useKeyboardAfterSend";
 import { MessageText } from "../features/chat/MessageText";
 import { batchReadReceipts } from "../features/messages/readReceipts";
 import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
@@ -20,6 +23,13 @@ import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
 import { Watermark } from "../features/photos/Watermark";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
 import { useNewArrivals } from "../features/messages/useNewArrivals";
+import { useConversationActions } from "../features/messages/ConversationActions";
+import { ConversationHeaderMenu } from "../features/messages/ConversationHeaderMenu";
+import { chatDateFormat, chatDay, useChatToday } from "../features/messages/chatDates";
+
+function addMessage(list: Dm[], message: Dm) {
+  return list.some((m) => m.id === message.id) ? list : [...list, message].sort(compareDmOrder);
+}
 
 /** Texto corto para la cita en el composer y en la burbuja. */
 function replyPreview(m: Dm) {
@@ -42,8 +52,14 @@ function ConversationThread({ id }: { id: string }) {
   const nav = useNavigate();
   const goBack = useSectionBack("/mensajes");
   const enter = usePageTransition();
-  const [other, setOther] = useState<ChatContact | null>(null);
+  const [details, setDetails] = useState<{ id: string; other?: ChatContact; muted: boolean }>();
+  const other = details?.id === id ? details.other : undefined;
+  const muted = details?.id === id && details.muted;
+  const { act, dialog, errorNotice } = useConversationActions(() => nav("/mensajes", { replace: true }));
   const [confirmed, setMessages] = useState<Dm[]>([]);
+  /** Si hay mensajes más viejos que los cargados (se piden con "Ver mensajes anteriores"). */
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const { messages, pendingByMessage, remember } = useTimeline(confirmed, pending, me?.user.id);
   const [seen, setSeen] = useState<{ conversationId: string; readAtById: Map<string, string>; through?: Pick<Dm, "createdAt" | "id"> }>();
   const [text, setText] = useDraft(`dm:${me?.user.id ?? ""}:${id}`);
@@ -56,10 +72,12 @@ function ConversationThread({ id }: { id: string }) {
   const [photoMessageId, setPhotoMessageId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ src: string; seconds: number } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const messageActions = useMessageActions(msgMenu, setMsgMenu);
   const positionMessageMenu = useMessageMenuPosition(listRef, setMsgMenu);
   const stickToBottom = useRef(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const keyboard = useKeyboardAfterSend(inputRef);
   const expiringNext = useRef(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const myId = me?.user.id;
@@ -67,6 +85,7 @@ function ConversationThread({ id }: { id: string }) {
   // Los mensajes que llegan después de abrir el chat entran animados (el historial no)
   const [historyReady, setHistoryReady] = useState(false);
   const { arrivals, settle } = useNewArrivals(messages.map((m) => m.idempotencyKey ?? m.id), historyReady, id);
+  const today = useChatToday();
 
   useEffect(() => {
     setPhotoMessageId(null);
@@ -79,8 +98,8 @@ function ConversationThread({ id }: { id: string }) {
       beforeHistory?.push(update);
       setMessages(update);
     };
-    api<{ other: ChatContact }>(`/conversations/${id}`)
-      .then((c) => alive && setOther(c.other))
+    api<{ id: string; other?: ChatContact; muted: boolean }>(`/conversations/${id}`)
+      .then((c) => alive && setDetails(c))
       .catch(() => nav("/mensajes", { replace: true }));
     api<{ messages: Dm[]; hasMore: boolean }>(`/conversations/${id}/messages`).then((d) => {
       if (!alive) return;
@@ -92,6 +111,7 @@ function ConversationThread({ id }: { id: string }) {
       beforeHistory = null;
       setMessages(loaded);
       setHistoryReady(true);
+      setHasMore(d.hasMore);
       // Al abrir el chat, marcá también los mensajes anteriores a la página de historial.
       const oldestLoaded = d.messages[0];
       if (oldestLoaded && d.hasMore) receipts.includeOlderMessages(oldestLoaded.id);
@@ -102,7 +122,7 @@ function ConversationThread({ id }: { id: string }) {
       if (m.conversationId !== id) return;
       if (m.senderId === myId) privateOutbox.acknowledge(scope, m);
       setTyping(false);
-      applyMessageUpdate((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
+      applyMessageUpdate((list) => addMessage(list, m));
       if (m.senderId !== myId && !m.readAt) receipts.schedule(m.id);
     };
     // Un mensaje que cambió (el aviso de álbum muestra siempre el estado actual; al reactivarse sube al final).
@@ -133,6 +153,11 @@ function ConversationThread({ id }: { id: string }) {
         .filter((m) => m.id !== p.id)
         .map((m) => (m.replyTo?.id === p.id ? { ...m, replyTo: { ...m.replyTo, authorName: null, body: null } } : m)));
     };
+    const onSettings = (event: DmSettingsChange) => {
+      if (event.conversationId !== id) return;
+      if (event.change === "cleared") nav("/mensajes", { replace: true });
+      else setDetails((current) => current?.id === id ? { ...current, muted: event.muted } : current);
+    };
     const onOpened = (p: { conversationId: string; id: string }) => {
       if (p.conversationId === id) applyMessageUpdate((list) => list.map((m) => (m.id === p.id ? { ...m, opened: true } : m)));
     };
@@ -152,6 +177,7 @@ function ConversationThread({ id }: { id: string }) {
     s.on(DM_EVENTS.updated, onUpdated);
     s.on(DM_EVENTS.read, onRead);
     s.on(DM_EVENTS.deleted, onDeleted);
+    s.on(DM_EVENTS.settings, onSettings);
     s.on(DM_EVENTS.opened, onOpened);
     s.on(DM_EVENTS.typing, onTyping);
     return () => {
@@ -163,6 +189,7 @@ function ConversationThread({ id }: { id: string }) {
       s.off(DM_EVENTS.updated, onUpdated);
       s.off(DM_EVENTS.read, onRead);
       s.off(DM_EVENTS.deleted, onDeleted);
+      s.off(DM_EVENTS.settings, onSettings);
       s.off(DM_EVENTS.opened, onOpened);
       s.off(DM_EVENTS.typing, onTyping);
       clearTimeout(typingTimer.current);
@@ -177,6 +204,33 @@ function ConversationThread({ id }: { id: string }) {
       setMessages((list) => list.map((x) => (x.id === m.id ? { ...x, reactions } : x)));
     } catch (err) {
       setError((err as Error).message);
+    }
+  }
+
+  /** Trae la página anterior y deja a la vista el mismo mensaje que estabas mirando. */
+  async function loadOlder() {
+    const oldest = confirmed[0];
+    if (!oldest || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const query = new URLSearchParams({ before: oldest.createdAt, beforeId: oldest.id });
+      const page = await api<{ messages: Dm[]; hasMore: boolean }>(`/conversations/${id}/messages?${query}`);
+      const list = listRef.current;
+      const anchor = document.getElementById(`dm-${oldest.id}`);
+      const top = anchor?.getBoundingClientRect().top;
+      stickToBottom.current = false;
+      flushSync(() => {
+        setMessages((current) => {
+          const known = new Set(current.map((m) => m.id));
+          return [...page.messages.filter((m) => !known.has(m.id)), ...current].sort(compareDmOrder);
+        });
+        setHasMore(page.hasMore);
+      });
+      if (list && anchor && top !== undefined) list.scrollTop += anchor.getBoundingClientRect().top - top;
+    } catch {
+      setError("No se pudieron cargar los mensajes anteriores.");
+    } finally {
+      setLoadingOlder(false);
     }
   }
 
@@ -226,7 +280,7 @@ function ConversationThread({ id }: { id: string }) {
     const body = text.trim();
     if (!body) return;
     // Mandar con el botón le saca el foco al campo y cierra el teclado. Se lo devolvemos.
-    inputRef.current?.focus({ preventScroll: true });
+    keyboard.restore();
     setError("");
     setText("");
     enqueue(body);
@@ -294,16 +348,17 @@ function ConversationThread({ id }: { id: string }) {
   const lastMine = [...messages].reverse().find((m) => m.senderId === myId && !pendingByMessage.has(m));
   const openPhotoMessage = messages.find((m) => m.id === photoMessageId && m.conversationId === id);
   const openPhoto = openPhotoMessage?.photo;
+  let previousDay: string | undefined;
 
   const lastSeen = lastMine && (lastMine.readAt || (seen?.conversationId === id &&
     ((seen.readAtById.get(lastMine.id) ?? "") >= lastMine.createdAt || (seen.through && compareDmOrder(lastMine, seen.through) <= 0))));
 
   return (
     <div className={`chat ${enter}`}>
-      <header className="topbar topbar--thread">
+      <header className="topbar topbar--thread topbar--linked">
         <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
         {other && (
-          <Link to={`/perfil/${other.id}`} className="topbar__who">
+          <Link to={`/perfil/${other.id}`} className="topbar__who topbar__link">
             <Avatar src={other.photo} name={other.name} size={36} />
             <span>
               <span className="chat-contact-name">
@@ -314,11 +369,27 @@ function ConversationThread({ id }: { id: string }) {
             </span>
           </Link>
         )}
+        {other && (
+          <ConversationHeaderMenu key={id} muted={muted} onAction={(action) => void act(action, { id, other, muted }, (next) => {
+            setDetails((current) => current?.id === id ? { ...current, muted: next } : current);
+          })} />
+        )}
       </header>
 
+      {errorNotice}
+
       <div className="chat__list chat__list--dm" role="log" aria-label="Mensajes" ref={listRef} onScroll={onListScroll}>
+        {hasMore && (
+          <button className="btn btn--ghost btn--small chat__older" disabled={loadingOlder} onClick={() => void loadOlder()}>
+            {loadingOlder ? "Cargando…" : "Ver mensajes anteriores"}
+          </button>
+        )}
         {messages.map((m) => {
           const entry = pendingByMessage.get(m);
+          const sentAt = new Date(m.createdAt);
+          const day = chatDay(sentAt);
+          const startsDay = day !== previousDay;
+          previousDay = day;
           const mine = m.senderId === myId;
           const kind = albumNoticeKind(m, albumNoticeTime);
           const albumNotice = kind === "album" || kind === "album_revoked" || kind === "album_expired";
@@ -327,11 +398,14 @@ function ConversationThread({ id }: { id: string }) {
           const quoted = m.replyTo;
           const key = m.idempotencyKey ?? m.id;
           const arrived = arrivals.has(key);
-          return (
+          // Mantener apretado (o clic derecho) abre las acciones. Los avisos de álbum y lo que todavía se está mandando no.
+          const gesture = !albumNotice && !entry;
+          const bubble = (
             <div
-              id={`dm-${m.id}`} key={key}
-              className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""} ${arrived ? "bubble--new" : ""}`}
+              id={`dm-${m.id}`}
+              className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""} ${gesture ? "message-gesture" : ""} ${arrived ? "bubble--new" : ""}`}
               onAnimationEnd={arrived ? (e) => e.target === e.currentTarget && settle(key) : undefined}
+              {...(gesture && messageActions(m.id))}
             >
               {quoted && (quoted.authorName && loadedMessageIds.has(quoted.id) ? (
                 <button
@@ -384,21 +458,26 @@ function ConversationThread({ id }: { id: string }) {
               )}
               <div className="bubble__meta">
                 {expiry && `${expiry} · `}
-                <time dateTime={m.createdAt}>{new Date(m.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</time>
+                <time dateTime={m.createdAt}>{sentAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</time>
               </div>
               {entry && <SendFailure failure={entry.failure} retry={() => privateOutbox.retry(entry)} dismiss={() => privateOutbox.dismiss(entry)} />}
               {!entry && <ReactionBar reactions={m.reactions ?? []} myId={myId} mine={mine} onToggle={(k) => react(m, k)} />}
               {!entry && (
                 <>
-                  <button
-                    className="iconbtn bubble__more"
-                    aria-label="Reaccionar u opciones del mensaje" aria-expanded={msgMenu === m.id} aria-controls={msgMenu === m.id ? `message-options-${m.id}` : undefined}
-                    onClick={() => setMsgMenu(msgMenu === m.id ? null : m.id)}
-                  >
-                    <DotsIcon />
-                  </button>
+                  {albumNotice && (
+                    <button
+                      className="iconbtn bubble__more"
+                      aria-label="Reaccionar u opciones del mensaje" aria-expanded={msgMenu === m.id} aria-controls={msgMenu === m.id ? `message-options-${m.id}` : undefined}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMsgMenu(msgMenu === m.id ? null : m.id);
+                      }}
+                    >
+                      <DotsIcon />
+                    </button>
+                  )}
                   {msgMenu === m.id && (
-                    <div className={`menu menu--bubble ${mine ? "" : "menu--bubble-theirs"}`} id={`message-options-${m.id}`} role="menu" ref={positionMessageMenu}>
+                    <div className={`menu menu--bubble ${mine ? "" : "menu--bubble-theirs"}`} id={`message-options-${m.id}`} role="menu" ref={positionMessageMenu} onClick={(e) => e.stopPropagation()}>
                       <ReactionPicker current={myReaction(m.reactions ?? [], myId)} onPick={(k) => react(m, k)} />
                       {!albumNotice && <button role="menuitem" onClick={() => startReply(m)}>Responder</button>}
                       {mine && !albumNotice && <button role="menuitem" className="danger" onClick={() => unsend(m)}>Desenviar (se borra para los dos)</button>}
@@ -407,6 +486,12 @@ function ConversationThread({ id }: { id: string }) {
                 </>
               )}
             </div>
+          );
+          return (
+            <Fragment key={m.idempotencyKey ?? m.id}>
+              {startsDay && <time className="chat__date" dateTime={day}>{day === today ? "Hoy" : chatDateFormat.format(sentAt)}</time>}
+              {bubble}
+            </Fragment>
           );
         })}
         {lastSeen && messages[messages.length - 1]?.id === lastMine.id && <p className="seen">Visto</p>}
@@ -491,12 +576,13 @@ function ConversationThread({ id }: { id: string }) {
             }}
           />
           <div className="composer__action">
-            <button className="sendbtn" aria-label="Mandar" disabled={!text.trim()} onMouseDown={(e) => e.preventDefault()}><SendIcon /></button>
+            <button className="sendbtn" aria-label="Mandar" disabled={!text.trim()} onPointerDown={keyboard.onPointerDown} onMouseDown={(e) => e.preventDefault()}><SendIcon /></button>
           </div>
         </div>
       </form>
 
       {openPhoto && <ChatPhotoViewer src={openPhoto} watermark={openPhotoMessage?.senderId !== myId} onClose={() => setPhotoMessageId(null)} />}
+      {dialog}
       {viewer && <ExpiringViewer src={viewer.src} seconds={viewer.seconds} onClose={() => setViewer(null)} />}
     </div>
   );
