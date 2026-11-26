@@ -28,8 +28,8 @@ test("permite elegir, cambiar y borrar el signo y filtrar perfiles en Gente", as
     await signIn(grid, viewer);
     await grid.goto("/gente");
     await expect(grid.locator("html")).toHaveAttribute("data-theme", "penumbra");
-    const listedOwner = grid.getByRole("link", { name: new RegExp(`^${owner.name},`) });
-    const listedUnassigned = grid.getByRole("link", { name: new RegExp(`^${unassigned.name},`) });
+    const listedOwner = grid.getByRole("link", { name: new RegExp(`^${owner.name}(?:,|$)`) });
+    const listedUnassigned = grid.getByRole("link", { name: new RegExp(`^${unassigned.name}(?:,|$)`) });
     await expect(listedUnassigned).toBeVisible();
 
     await grid.getByRole("button", { name: "Filtros", exact: true }).click();
