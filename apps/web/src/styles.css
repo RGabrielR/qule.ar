@@ -503,6 +503,7 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 @keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
 @keyframes page-back { from { opacity: 0; transform: translateX(-32px); } }
 @keyframes tab-in { from { opacity: 0; transform: scale(0.98); } }
+@keyframes tile-in { from { opacity: 0; transform: scale(0.96); } }
 /* Cambio de tema (theme.ts, con View Transitions): la pantalla vieja se funde con la nueva. Es un fundido, así que
    también vale con movimiento reducido */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--dur-page); animation-timing-function: var(--ease-in-out); }
@@ -517,7 +518,9 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 @keyframes skeleton-pulse { to { opacity: 0.45; } }
 /* Lo que llega a una lista, escalonado dentro de su tanda (components/useArrival.ts) */
 .arrive { animation: rise-in var(--dur-base) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * var(--stagger)); }
-@media (prefers-reduced-motion: reduce) { .arrive { animation-name: fade-in; animation-delay: 0s; } }
+/* En las grillas de fotos, cada ficha se asienta en su lugar (sin subir) y la tanda entra en diagonal */
+.grid > .arrive { animation-name: tile-in; }
+@media (prefers-reduced-motion: reduce) { .arrive, .grid > .arrive { animation-name: fade-in; animation-delay: 0s; } }
 /* Lo que se va (salida de las hojas) */
 @keyframes fade-out { to { opacity: 0; } }
 /* Avisos que llegan desde arriba de la pantalla */

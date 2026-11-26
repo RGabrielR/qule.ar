@@ -27,7 +27,7 @@ function PeopleGrid({ title, people, empty, note }: { title: string; people: (Au
   useRememberScroll(pageRef, people != null);
   // Las fotos entran escalonadas cuando llegan; al volver de un perfil, no: la grilla vuelve a estar como estaba
   const returning = useNavigationType() === "POP";
-  const arrival = useArrival(people?.map((p) => p.id), { quietFirst: returning });
+  const arrival = useArrival(people?.map((p) => p.id), { quietFirst: returning, columns: 3 });
   return (
     <div className={`page ${enter}`} ref={pageRef}>
       <header className="topbar topbar--thread">

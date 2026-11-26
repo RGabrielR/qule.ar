@@ -80,6 +80,11 @@ type NearbyPosition = { userId: string; query: string; top: number; count: numbe
 const positions = new Map<string, NearbyPosition>();
 const POSITION_LIMIT = 20;
 
+// Lo último que mostró la grilla. Al volver a la pestaña aparece al instante, sin esqueleto ni la entrada completa,
+// y se revalida por detrás: solo las personas nuevas entran animadas (como Instagram y las apps nativas).
+type GridCache = { userId: string; query: string; people: NearbyPerson[]; hasMore: boolean };
+let gridCache: GridCache | null = null;
+
 export function Nearby() {
   const { me, reload } = useMe();
   const location = useLocation();
@@ -91,11 +96,14 @@ export function Nearby() {
   const entry = filtersEntry ?? location.key;
   const userId = me?.user.id;
   const [filters, setFilters] = useState<Filters>(loadFilters);
-  const [people, setPeople] = useState<NearbyPerson[]>([]);
+  const [cached] = useState(() => (gridCache && gridCache.userId === userId && gridCache.query === toQuery(filters, 0) ? gridCache : null));
+  const [people, setPeople] = useState<NearbyPerson[]>(() => cached?.people ?? []);
   // Con qué filtros se pidió la grilla que se ve: si cambian, la grilla nueva entra entera
-  const [peopleQuery, setPeopleQuery] = useState<string>();
-  const [hasMore, setHasMore] = useState(false);
-  const [status, setStatus] = useState<Status>("loading");
+  const [peopleQuery, setPeopleQuery] = useState<string | undefined>(cached?.query);
+  // Sube cada vez que se tira para actualizar: la grilla renovada vuelve a entrar entera
+  const [refreshes, setRefreshes] = useState(0);
+  const [hasMore, setHasMore] = useState(cached?.hasMore ?? false);
+  const [status, setStatus] = useState<Status>(cached ? "ready" : "loading");
   const [loc, setLoc] = useState<LocState>("ok");
   const [updating, setUpdating] = useState<"idle" | "busy" | "done">("idle");
   const [refreshDistance, setRefreshDistance] = useState(0);
@@ -118,7 +126,9 @@ export function Nearby() {
   const pendingRestore = useRef(returnPosition);
   // Las fotos entran escalonadas en cada tanda ("Ver más", actualizar). Al volver de un perfil a la misma
   // posición, no: la grilla tiene que verse como estaba.
-  const arrival = useArrival(status === "ready" ? people.map((p) => p.id) : null, { quietFirst: returnPosition != null, batch: peopleQuery });
+  const arrival = useArrival(status === "ready" ? people.map((p) => p.id) : null, {
+    quietFirst: returnPosition != null, batch: `${peopleQuery}#${refreshes}`, columns: 3,
+  });
   const visible = useRef({ count: 0, ready: false });
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
@@ -127,6 +137,7 @@ export function Nearby() {
   useLayoutEffect(() => {
     if (status !== "ready" || !userId) return;
     saveGridList(entry, { userId, query: toQuery(filtersRef.current, 0), people: people.map(toGridPerson), hasMore });
+    gridCache = { userId, query: toQuery(filtersRef.current, 0), people, hasMore };
   }, [entry, userId, people, hasMore, status]);
 
   useLayoutEffect(() => {
@@ -173,6 +184,7 @@ export function Nearby() {
       setLoc((prev) => (d.hasLocation ? "ok" : prev === "ok" ? "none" : prev));
       setPeople((prev) => (offset ? [...prev, ...loaded] : loaded));
       setPeopleQuery(toQuery(f, 0));
+      if (releasedDistance > 0) setRefreshes((n) => n + 1);
       setHasMore(hasMore);
       setStatus("ready");
     } catch {
