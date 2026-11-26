@@ -672,8 +672,8 @@ function GroupChatThread({ id }: { id: string }) {
             <div
               key={key} id={`gm-${m.id}`}
               className={`gmsg ${entry ? "" : "message-gesture"} ${grouped && !m.replyTo ? "gmsg--grouped" : ""} ${arrived ? "gmsg--new" : ""}`}
-              {...(!entry && messageActions(m.id))}
               onAnimationEnd={arrived ? (e) => e.target === e.currentTarget && settle(key) : undefined}
+              {...(!entry && messageActions(m.id))}
             >
               <div className="gmsg__avatar">
                 {!(grouped && !m.replyTo) && (

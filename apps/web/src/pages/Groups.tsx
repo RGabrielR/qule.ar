@@ -114,9 +114,9 @@ export function Groups() {
       {tab === "mine" ? (
         <>
         <MyInvites invites={invites ?? []} onChange={() => refreshGroups("refresh")} />
-        {ordered == null ? <GroupsSkeleton /> : (
+        {mine == null ? <GroupsSkeleton /> : (
         <>
-        {ordered.length > 1 && (
+        {(ordered?.length ?? 0) > 1 && (
           <div className="row searchbar">
             <button type="button" className="btn btn--small" aria-pressed={ordering} onClick={() => setOrdering(!ordering)}>
               {ordering ? "Listo" : "Reordenar mis grupos"}
@@ -125,7 +125,7 @@ export function Groups() {
           </div>
         )}
         <ul className="glist">
-          {ordered.map((g, index) => (
+          {ordered?.map((g, index) => (
             <li key={g.id} {...arriveMine(g.id)}>
               <Link to={`/grupos/${g.id}`} className="gcard">
                 <GroupAvatar name={g.name} photo={g.photo} general={g.isGeneral} appear />
@@ -147,7 +147,7 @@ export function Groups() {
               )}
             </li>
           ))}
-          {ordered.length <= 1 && (
+          {mine.length <= 1 && (
             <li className="empty empty--inline">
               <p className="muted">Todavía estás solo en el general. Mirá <button className="linkbtn" onClick={() => setParams({ ver: "todos" })}>todos los grupos</button> o creá uno.</p>
             </li>

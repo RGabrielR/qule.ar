@@ -5,13 +5,11 @@ import { Avatar } from "../components/Avatar";
 import { BackIcon, PlusIcon } from "../components/Icons";
 import { InvitePeopleSheet } from "../components/Invite";
 import { useInstalledAndroidBack } from "../useSectionBack";
-import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 
 export function GroupInvitations() {
   const { id = "" } = useParams();
   const { pathname, search, hash, state } = useLocation();
   const navigate = useNavigate();
-  const enter = usePageTransition();
   const chat = `/grupos/${id}`;
   const details = `${chat}/info`;
   const path = `/groups/${id}/invites`;
@@ -110,9 +108,9 @@ export function GroupInvitations() {
   }
 
   return (
-    <div className={`page ${enter}`}>
+    <div className="page">
       <header className="topbar topbar--thread">
-        <button type="button" className="iconbtn" aria-label="Volver" onClick={() => { markBack(); goBack(); }}><BackIcon /></button>
+        <button type="button" className="iconbtn" aria-label="Volver" onClick={goBack}><BackIcon /></button>
         <div className="topbar__grow">
           <h1 className="topbar__title topbar__title--sm">Invitaciones</h1>
           {current && <p className="topbar__sub">{current.name}</p>}

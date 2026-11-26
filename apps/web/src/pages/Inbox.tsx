@@ -7,16 +7,16 @@ import { BellOffIcon, FilterIcon } from "../components/Icons";
 import { countFilters, EMPTY, FilterSheet, toQuery, type Filters } from "./Nearby";
 import { albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { Avatar } from "../components/Avatar";
+import { Skeleton, SkeletonRows } from "../components/Skeleton";
+import { useArrival } from "../components/useArrival";
 import { useConversationActions } from "../features/messages/ConversationActions";
 import { ConversationMenuRow } from "../features/messages/ConversationMenuRow";
 import { usePullToRefresh } from "../features/navigation/pullToRefresh";
-import { Skeleton, SkeletonRows } from "../components/Skeleton";
-import { useArrival } from "../components/useArrival";
 import { useTabData } from "../features/navigation/tabData";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { useRememberScroll } from "../features/navigation/viewMemory";
-import { useOlderChats } from "../features/messages/useOlderChats";
 import { useTabTransition } from "../features/navigation/pageTransition";
+import { useOlderChats } from "../features/messages/useOlderChats";
 
 function ago(iso: string) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -87,14 +87,14 @@ export function Inbox() {
     && (!filters.online || chat.other?.presence === "online")
     && (!matching || (chat.other != null && matching.has(chat.other.id)))
     && words.every((word) => normalize(chat.other?.name ?? "").includes(word)));
-  const { act, dialog, errorNotice } = useConversationActions();
   const enter = useTabTransition();
+  const { act, dialog, errorNotice } = useConversationActions();
   const pageRef = useRef<HTMLDivElement>(null);
   const positionMenu = useMessageMenuPosition(pageRef);
   useRememberScroll(pageRef, list != null);
-  const pullRefresh = usePullToRefresh(pageRef, () => refreshConversations("refresh"));
   // Las filas entran escalonadas cuando llegan; las que ya estaban guardadas al volver a la pestaña, no
   const arrival = useArrival(filtered?.map((c) => c.id));
+  const pullRefresh = usePullToRefresh(pageRef, () => refreshConversations("refresh"));
 
   return (
     <div className={`page ${enter}`} ref={pageRef}>
@@ -153,7 +153,8 @@ export function Inbox() {
               : c.last.body;
             const { className, style } = arrival(c.id);
             return (
-              <ConversationMenuRow key={c.id} chat={c} className={className} style={style} positionMenu={positionMenu} onAction={(action) => void act(action, c)}
+              <ConversationMenuRow key={c.id} chat={c} positionMenu={positionMenu} onAction={(action) => void act(action, c)}
+                className={className} style={style}
                 avatar={c.other ? (
                   <Link to={`/perfil/${c.other.id}`} className="inbox__avatar" aria-label={`Ver perfil de ${c.other.name}`}>
                     <Avatar src={c.other.photo ?? null} name={c.other.name} size={52} appear />

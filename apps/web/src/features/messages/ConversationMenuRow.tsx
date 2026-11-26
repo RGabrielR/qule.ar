@@ -7,9 +7,9 @@ import { ConversationMenu } from "./ConversationMenu";
 const HOLD_MS = 500;
 const MOVE_TOLERANCE = 10;
 
-export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAction, className = "", style }: {
+export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAction, className, style }: {
   chat: ConversationSummary;
-  /** Para la entrada escalonada de la fila (`useArrival`). */
+  /** Para la entrada escalonada de la fila (useArrival) */
   className?: string;
   style?: CSSProperties;
   /** La foto va afuera del enlace al chat: abre el perfil. */
@@ -33,7 +33,7 @@ export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAc
   useEffect(() => () => cancelPress(), []);
 
   return (
-    <li className={`inbox__row ${className}`} style={style}>
+    <li className={`inbox__row ${className ?? ""}`} style={style}>
       {avatar}
       <Link
         ref={link}

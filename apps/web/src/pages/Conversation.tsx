@@ -82,10 +82,10 @@ function ConversationThread({ id }: { id: string }) {
   const typingTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const myId = me?.user.id;
   const albumNoticeTime = useAlbumNoticeTime(messages);
-  const today = useChatToday();
   // Los mensajes que llegan después de abrir el chat entran animados (el historial no)
   const [historyReady, setHistoryReady] = useState(false);
   const { arrivals, settle } = useNewArrivals(messages.map((m) => m.idempotencyKey ?? m.id), historyReady, id);
+  const today = useChatToday();
 
   useEffect(() => {
     setPhotoMessageId(null);
@@ -110,8 +110,8 @@ function ConversationThread({ id }: { id: string }) {
       const loaded = [...history].sort(compareDmOrder);
       beforeHistory = null;
       setMessages(loaded);
-      setHasMore(d.hasMore);
       setHistoryReady(true);
+      setHasMore(d.hasMore);
       // Al abrir el chat, marcá también los mensajes anteriores a la página de historial.
       const oldestLoaded = d.messages[0];
       if (oldestLoaded && d.hasMore) receipts.includeOlderMessages(oldestLoaded.id);
@@ -396,16 +396,16 @@ function ConversationThread({ id }: { id: string }) {
           const albumText = <><LockIcon /> {mine ? "Le compartiste tu álbum privado" : "Te compartió su álbum privado"}{m.body ? ` por ${m.body}` : ""}</>;
           const expiry = albumExpiryLabel(m, albumNoticeTime);
           const quoted = m.replyTo;
-          // Mantener apretado (o clic derecho) abre las acciones. Los avisos de álbum y lo que todavía se está mandando no.
-          const gesture = !albumNotice && !entry;
           const key = m.idempotencyKey ?? m.id;
           const arrived = arrivals.has(key);
+          // Mantener apretado (o clic derecho) abre las acciones. Los avisos de álbum y lo que todavía se está mandando no.
+          const gesture = !albumNotice && !entry;
           const bubble = (
             <div
               id={`dm-${m.id}`}
               className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""} ${gesture ? "message-gesture" : ""} ${arrived ? "bubble--new" : ""}`}
-              {...(gesture && messageActions(m.id))}
               onAnimationEnd={arrived ? (e) => e.target === e.currentTarget && settle(key) : undefined}
+              {...(gesture && messageActions(m.id))}
             >
               {quoted && (quoted.authorName && loadedMessageIds.has(quoted.id) ? (
                 <button
@@ -488,7 +488,7 @@ function ConversationThread({ id }: { id: string }) {
             </div>
           );
           return (
-            <Fragment key={key}>
+            <Fragment key={m.idempotencyKey ?? m.id}>
               {startsDay && <time className="chat__date" dateTime={day}>{day === today ? "Hoy" : chatDateFormat.format(sentAt)}</time>}
               {bubble}
             </Fragment>

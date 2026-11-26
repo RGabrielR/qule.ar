@@ -200,15 +200,6 @@ html:has(.shell--thread), body:has(.shell--thread) { overflow: hidden; overscrol
 /* La pestaña activa cambia de color con transición */
 .tabbar__item { height: var(--tabbar-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: var(--text-2xs); font-weight: 600; position: relative; transition: color var(--dur-fast) var(--ease-out); }
 .tabbar__item.active { color: var(--accent); }
-/* El ícono de la pestaña se hunde al apretar y rebota al tocarlo (App.tsx) */
-.tabbar__icon { display: grid; transition: scale var(--dur-press) var(--ease-out); }
-.tabbar__item:active .tabbar__icon { scale: 0.9; }
-.tabbar__icon--pop { animation: settle var(--dur-base) var(--ease-out); }
-@media (prefers-reduced-motion: reduce) {
-  .tabbar__icon { transition: none; }
-  .tabbar__item:active .tabbar__icon { scale: none; }
-  .tabbar__icon--pop { animation: none; }
-}
 .tabbar__item .badge { position: absolute; top: 8px; left: calc(50% + 6px); }
 
 .page { flex: 1; overflow-y: auto; padding-bottom: 24px; }
@@ -516,15 +507,30 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
   .blocked__row--leaving { transform: none; }
 }
 
-/* Entrada de pantallas (features/navigation/pageTransition.ts): hacia adelante desde la derecha, al volver desde la izquierda */
-.page--forward { animation: page-forward var(--dur-page) var(--ease-out) backwards; }
-.page--back { animation: page-back var(--dur-page) var(--ease-out) backwards; }
-/* Cambiar de pestaña: sin deslizar (en las apps nativas las pestañas no se mueven), se asienta con un fundido y un
-   acercamiento mínimo. Con la curva de las hojas, que no es tan brusca al principio, para que el fundido se llegue a ver */
-.page--tab { animation: tab-in var(--dur-page) var(--ease-sheet) backwards; }
+/* Entrada de pantallas (features/navigation/pageTransition.ts). El encabezado (y las solapas) nunca se mueve ni se
+   funde entero: queda quieto, como en las apps nativas, y solo aparece su contenido (título, botones). Lo que
+   entra es lo de abajo: cada hijo directo de la pantalla, todos con la misma animación.
+   - Pantalla nueva (.page--forward): desde la derecha. Al volver con la flecha (.page--back): desde la izquierda.
+   - Pestaña (.page--tab): sin deslizar; se asienta con un fundido y un acercamiento mínimo, creciendo desde abajo
+     del encabezado (cada bloque con el origen arriba, así se mueven juntos) y con la curva de las hojas, que no
+     es tan brusca al principio, para que se llegue a ver.
+   Quedan afuera lo que va encima de la pantalla y lo que trae su propia entrada. La clase se va sola cuando la
+   entrada termina (useEntryClass), así lo que se monte después (una hoja, un aviso, la lista) no la repite. */
+.page--forward { --enter: page-forward; --enter-time: var(--dur-page); --enter-ease: var(--ease-out); }
+.page--back { --enter: page-back; --enter-time: var(--dur-page); --enter-ease: var(--ease-out); }
+.page--tab { --enter: tab-in; --enter-time: var(--dur-sheet); --enter-ease: var(--ease-sheet); }
+:is(.page--forward, .page--back, .page--tab) > :not(.topbar, .tabs, .skeleton-wait, .arrive, .notice, .empty--in, .sheet-backdrop, .lightbox, .viewer, dialog) {
+  transform-origin: 50% 0; animation: var(--enter) var(--enter-time) var(--enter-ease) backwards;
+}
+/* Lo que se desliza no tiene que dejar desplazar la pantalla de costado mientras entra */
+.page--forward, .page--back { overflow-x: clip; }
 @keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
-@keyframes page-back { from { opacity: 0; transform: translateX(-32px); } }
-@keyframes tab-in { from { opacity: 0; transform: scale(0.98); } }
+/* Volver: la pantalla de antes ya estaba, así que no se funde (parpadearía): solo se desliza a su lugar, como en iOS */
+@keyframes page-back { from { transform: translateX(-32px); } }
+/* El contenido del encabezado y de las solapas aparece con un fundido. Entre solapas de la misma pestaña el
+   encabezado es el mismo y no se funde; al volver tampoco: la pantalla de antes ya estaba. */
+:is(.page--forward, .page--tab:not(.page--same-header)) > :is(.topbar, .tabs) > * { animation: fade-in var(--enter-time) var(--enter-ease) backwards; }
+@keyframes tab-in { from { opacity: 0; transform: scale(0.977); } }
 @keyframes tile-in { from { opacity: 0; transform: scale(0.96); } }
 /* Cambio de tema (theme.ts, con View Transitions): la pantalla vieja se funde con la nueva. Es un fundido, así que
    también vale con movimiento reducido */
@@ -534,8 +540,6 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } }
 /* Contadores que aparecen o cambian de número (.badge). Con `scale` para no pisar un transform del elemento. */
 @keyframes pop-in { from { opacity: 0; scale: 0.85; } }
-/* Un ícono que se acomoda después de un toque (.tabbar__icon--pop) */
-@keyframes settle { from { scale: 0.9; } }
 /* Pulso de los esqueletos (components/Skeleton.tsx), con `alternate` */
 @keyframes skeleton-pulse { to { opacity: 0.45; } }
 /* Lo que llega a una lista, escalonado dentro de su tanda (components/useArrival.ts) */
@@ -554,7 +558,11 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 /* Hojas de abajo, como en iOS */
 @keyframes sheet-up { from { transform: translateY(100%); } }
 @keyframes sheet-down { to { transform: translateY(100%); } }
-@media (prefers-reduced-motion: reduce) { .page--forward, .page--back, .page--tab { animation: fade-in var(--dur-fast) var(--ease-out) backwards; } }
+@media (prefers-reduced-motion: reduce) {
+  /* Con movimiento reducido: solo fundidos, y al volver nada */
+  .page--forward, .page--tab { --enter: fade-in; --enter-time: var(--dur-fast); --enter-ease: var(--ease-out); }
+  .page--back { --enter: none; }
+}
 
 /* ---------- Grupos ---------- */
 .tabs { display: flex; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--line); }
@@ -641,14 +649,11 @@ a.gcard:active { background: var(--surface); }
 /* ---------- Cerca (grilla) ---------- */
 .grid { list-style: none; margin: 0; padding: 2px; display: grid; grid-template-columns: repeat(var(--people-grid-columns), 1fr); gap: 2px; }
 .tile { display: block; position: relative; aspect-ratio: 1; overflow: hidden; background: var(--surface-2); transition: scale var(--dur-press) var(--ease-out); }
-/* Vista previa desenfocada de la foto mientras llega la nítida (components/photoPreview.ts). Agrandada un poco para
-   que el desenfoque no deje los bordes claros; la foto va encima (position: relative) y se enfoca con su fundido */
-.tile::before { content: ""; position: absolute; inset: 0; background: var(--preview, none) center / cover no-repeat; filter: blur(var(--blur-preview)); transform: scale(1.25); }
 /* La foto de la grilla se hunde apenas al tocarla */
 .tile:active { scale: 0.97; }
 @media (prefers-reduced-motion: reduce) { .tile:active { scale: none; opacity: 0.7; } }
-/* La foto entra con un fundido al cargar (gridPhoto, sobre su vista previa borrosa) y crece apenas con el mouse encima */
-.tile img { position: relative; width: 100%; height: 100%; object-fit: cover; display: block; transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-page) var(--ease-in-out); }
+/* La foto entra con un fundido al cargar (photoAppear) y crece apenas con el mouse encima */
+.tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out); }
 @media (hover: hover) and (pointer: fine) { .tile:hover img { transform: scale(1.03); } }
 .tile__empty { width: 100%; height: 100%; display: grid; place-items: center; font-family: var(--display); font-size: var(--display-md); font-weight: 800; color: var(--accent); background: var(--accent-soft); }
 .tile::after { content: ""; position: absolute; inset: 45% 0 0; background: linear-gradient(transparent, var(--scrim-fade)); pointer-events: none; }

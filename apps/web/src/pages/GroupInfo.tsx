@@ -9,8 +9,8 @@ import { setGroupMuted } from "../features/groups/groupNotifications";
 import { ReportDialog } from "../components/ReportDialog";
 import { slowModeText } from "../features/groups/groupRules";
 import { useTabData } from "../features/navigation/tabData";
-import { GroupAvatar } from "../components/GroupAvatar";
 import { markBack, usePageTransition } from "../features/navigation/pageTransition";
+import { GroupAvatar } from "../components/GroupAvatar";
 import { Skeleton, SkeletonRows, SkeletonText, SkeletonWait } from "../components/Skeleton";
 import { useInstalledAndroidBack } from "../useSectionBack";
 
@@ -108,6 +108,7 @@ export function GroupInfo() {
   }
 
   function goBack() {
+    markBack();
     // Volvé al origen. Si Detalles se abrió directo, volvé al chat.
     if (location.key === "default" || window.history.state?.idx === 0) nav(`/grupos/${id}`, { replace: true });
     else nav(-1);
@@ -124,7 +125,7 @@ export function GroupInfo() {
   return (
     <div className={`page ${enter}`}>
       <header className="topbar topbar--thread">
-        <button className="iconbtn" onClick={() => { markBack(); goBack(); }} aria-label="Volver"><BackIcon /></button>
+        <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
         <h1 className="topbar__grow topbar__title topbar__title--sm">{info.isGeneral ? "# " : ""}{info.name}</h1>
         {(canManageGroup || showChatLink) && (
           <GroupActionMenu hasPendingRequests={hasPendingRequests}>
