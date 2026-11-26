@@ -103,10 +103,8 @@ export function BlockedPeople() {
 
       {!nobody && (
         <div className="searchbar form">
-          <label className="field">
-            <span>Buscar por nombre</span>
-            <input className="input" type="search" value={query} maxLength={60} onChange={(e) => setQuery(e.target.value)} />
-          </label>
+          <input className="input" type="search" placeholder="Buscar por nombre" aria-label="Buscar por nombre" value={query} maxLength={60}
+            onChange={(e) => setQuery(e.target.value)} />
         </div>
       )}
       {notice && <p className="notice notice--error" role="alert">{notice}</p>}
@@ -131,7 +129,7 @@ export function BlockedPeople() {
                 style={{ "--i": Math.min(i, 10) } as CSSProperties}
               >
                 <div className="blocked__inner">
-                  <Avatar src={person.photo} name={person.name} size={44} />
+                  <Avatar src={person.photo} name={person.name} size={44} appear />
                   <span className="blocked__name">{person.name}</span>
                   <button className="linkbtn" disabled={busyId === person.id || leaving.has(person.id)} onClick={() => void unblock(person)}>
                     Desbloquear
