@@ -214,6 +214,8 @@ html:has(.pull-refresh), .page:has(> .pull-refresh) { overscroll-behavior-y: non
 .empty .muted { max-width: 34ch; }
 
 .avatar { border-radius: var(--radius-pill); object-fit: cover; flex: none; display: block; background: var(--surface-3); }
+.avatar--appear { opacity: 0; transition: opacity 260ms cubic-bezier(0.23, 1, 0.32, 1); }
+.avatar--appear[data-loaded] { opacity: 1; }
 .avatar--empty { display: grid; place-items: center; font-weight: 700; color: var(--accent-2); background: var(--accent-soft); }
 
 /* ---------- Chat de grupo ---------- */
@@ -383,9 +385,41 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 .photo-crop__zoom { display: flex; align-items: center; gap: 12px; font-size: var(--text-sm); }
 .photo-crop__zoom input { flex: 1; min-width: 0; height: 32px; margin: 0; accent-color: var(--accent); }
 .savebar { position: sticky; bottom: 0; padding: 10px 0 4px; background: linear-gradient(transparent, var(--bg) 30%); display: flex; }
-.blocked { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.blocked li { display: flex; align-items: center; gap: 10px; }
-.blocked li span { flex: 1; }
+/* Personas bloqueadas (pages/BlockedPeople.tsx) */
+.settings-link {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px;
+  color: var(--muted); transition: opacity 150ms ease;
+}
+.settings-link svg { flex: none; transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+.settings-link:active { opacity: 0.6; }
+@media (hover: hover) and (pointer: fine) { .settings-link:hover svg { transform: translateX(3px); } }
+.blocked { list-style: none; margin: 0; padding: 4px 0; }
+/* Cada fila entra escalonada dentro de su tanda; al desbloquear se desvanece y se cierra */
+.blocked__row {
+  display: grid; grid-template-rows: 1fr;
+  animation: blocked-in 240ms cubic-bezier(0.23, 1, 0.32, 1) backwards; animation-delay: calc(var(--i, 0) * 35ms);
+  transition: grid-template-rows 260ms cubic-bezier(0.77, 0, 0.175, 1), opacity 180ms cubic-bezier(0.23, 1, 0.32, 1), transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.blocked__row--leaving { grid-template-rows: 0fr; opacity: 0; transform: translateX(24px); }
+.blocked__inner { min-height: 0; overflow: hidden; display: flex; align-items: center; gap: 12px; padding: 8px 16px; }
+.blocked__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.blocked__inner .linkbtn { flex: none; }
+.blocked__more { height: 1px; }
+.empty--in { animation: blocked-in 240ms cubic-bezier(0.23, 1, 0.32, 1) backwards; }
+@keyframes blocked-in { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) {
+  .blocked__row, .empty--in { animation-name: fade-in; animation-delay: 0ms; }
+  .blocked__row { transition: opacity 180ms ease; }
+  .blocked__row--leaving { transform: none; }
+}
+
+/* Entrada de pantallas (features/navigation/pageTransition.ts): hacia adelante desde la derecha, al volver desde la izquierda */
+.page--forward { animation: page-forward 280ms cubic-bezier(0.23, 1, 0.32, 1) backwards; }
+.page--back { animation: page-back 280ms cubic-bezier(0.23, 1, 0.32, 1) backwards; }
+@keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
+@keyframes page-back { from { opacity: 0; transform: translateX(-32px); } }
+@keyframes fade-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .page--forward, .page--back { animation: fade-in 180ms ease-out backwards; } }
 
 /* ---------- Grupos ---------- */
 .tabs { display: flex; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--line); }

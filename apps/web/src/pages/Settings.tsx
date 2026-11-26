@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { api, ApiError, authClient, closeSocket, type Author, type NotifyKind } from "../api";
+import { api, ApiError, authClient, closeSocket, type NotifyKind } from "../api";
 import { useMe } from "../App";
 import { APP_NAME, THEME_LABELS, themes, type ThemeName } from "../brand";
-import { Avatar } from "../components/Avatar";
-import { BackIcon } from "../components/Icons";
+import { BackIcon, ChevronRightIcon } from "../components/Icons";
+import { usePageTransition } from "../features/navigation/pageTransition";
+import { useRememberScroll } from "../features/navigation/viewMemory";
 import { disablePush, enablePush, pushHelp, pushState, testPush, type PushState } from "../push";
 import { getTheme, setTheme } from "../theme";
 import { staffNotices } from "../features/moderation/notices";
@@ -134,15 +135,18 @@ function ThemeSetting() {
 
 export function Settings() {
   const { me, reload } = useMe();
-  const [blocked, setBlocked] = useState<Author[] | null>(null);
-  const [blocksError, setBlocksError] = useState(false);
+  const enter = usePageTransition();
+  const pageRef = useRef<HTMLDivElement>(null);
+  // Al volver (por ejemplo, de Personas bloqueadas) queda donde estabas; al entrar desde Mi perfil arranca arriba
+  useRememberScroll(pageRef, enter !== "page--forward");
+  const [blockedCount, setBlockedCount] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteText, setDeleteText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api<Author[]>("/blocks").then(setBlocked).catch(() => setBlocksError(true));
+    api<{ total: number }>("/blocks/page?limit=0").then((r) => setBlockedCount(r.total)).catch(() => {});
   }, []);
 
   if (!me?.profile) return null;
@@ -173,13 +177,6 @@ export function Settings() {
     });
   }
 
-  function unblock(userId: string) {
-    return change(async () => {
-      await api(`/blocks/${userId}`, { method: "DELETE" });
-      setBlocked((items) => items?.filter((person) => person.id !== userId) ?? null);
-    });
-  }
-
   function logout() {
     return change(async () => {
       const result = await authClient.signOut();
@@ -198,7 +195,7 @@ export function Settings() {
   }
 
   return (
-    <div className="page">
+    <div className={`page ${enter}`} ref={pageRef}>
       <header className="topbar topbar--thread">
         <Link to="/yo" className="iconbtn" aria-label="Volver a Mi perfil"><BackIcon /></Link>
         <h1 className="topbar__title">Configuración</h1>
@@ -256,21 +253,14 @@ export function Settings() {
 
       <section className="section">
         <h2 className="section__title">Personas bloqueadas</h2>
-        {!blocked ? (
-          <p className="muted">{blocksError ? "No pudimos cargar la lista." : "Cargando…"}</p>
-        ) : blocked.length === 0 ? (
-          <p className="muted">No bloqueaste a nadie.</p>
-        ) : (
-          <ul className="blocked">
-            {blocked.map((b) => (
-              <li key={b.id}>
-                <Avatar src={b.photo} name={b.name} size={36} />
-                <span>{b.name}</span>
-                <button className="linkbtn" disabled={busy} onClick={() => unblock(b.id)}>Desbloquear</button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <Link to="/yo/configuracion/bloqueadas" className="settings-link">
+          <span>
+            {blockedCount == null ? "Ver la lista"
+              : blockedCount === 0 ? "No bloqueaste a nadie"
+              : `${blockedCount} ${blockedCount === 1 ? "persona" : "personas"}`}
+          </span>
+          <ChevronRightIcon />
+        </Link>
       </section>
 
       <section className="section">

@@ -31,6 +31,7 @@ import { EditProfile } from "./pages/MyProfile";
 import { MyReport, MyReports } from "./pages/MyReports";
 import { MyProfileOverview } from "./pages/MyProfileOverview";
 import { Settings } from "./pages/Settings";
+import { BlockedPeople } from "./pages/BlockedPeople";
 import { ChatIcon, GridIcon, GroupIcon, UserIcon } from "./components/Icons";
 import { Nearby } from "./pages/Nearby";
 import { Favorites, Toques, Views } from "./pages/People";
@@ -96,6 +97,7 @@ export function App() {
           <Route path="/yo/reportes/:id" element={<MyReport />} />
           <Route path="/yo/editar" element={<EditProfile />} />
           <Route path="/yo/configuracion" element={<Settings />} />
+          <Route path="/yo/configuracion/bloqueadas" element={<BlockedPeople />} />
           <Route path="/visitas" element={<Views />} />
           <Route path="/favoritos" element={<Favorites />} />
           <Route path="/toques" element={<Navigate to="/cerca/toques" replace />} />
