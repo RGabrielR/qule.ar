@@ -107,7 +107,7 @@ test("alerta de spam de reportes", async (t) => {
   assert.equal((await request("/api/admin/report-spam", helper)).status, 403);
   const seen = await request("/api/admin/report-spam", mod);
   assert.equal(seen.status, 200);
-  const list = await seen.json() as { id: string; reporterId?: string; reporter: unknown; dismissable: number }[];
+  const { alerts: list } = await seen.json() as { alerts: { id: string; reporterId?: string; reporter: unknown; dismissable: number }[] };
   assert.equal(list[0].reporter, null, "quién reporta con nombre solo lo ve la administración general");
   assert.equal(list[0].reporterId, undefined, "con el id se podría saber quién reporta");
   assert.ok(list[0].id && list[0].id !== ricardo.id);

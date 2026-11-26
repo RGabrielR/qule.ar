@@ -4,6 +4,7 @@ import { pushTo } from "./push.js";
 import { notifyStaff } from "./staff.js";
 import { deleteImage, deleteReportCapture } from "./storage.js";
 import { forgetFile } from "./fileCache.js";
+import { reportCounts } from "./reportSpam.js";
 
 const { report } = schema;
 
@@ -43,14 +44,15 @@ export async function notifyModeratorsUrgent(reason: string) {
 
 /**
  * Perfiles ocultos de la grilla por precaución: tienen reportes urgentes abiertos de AUTO_HIDE_REPORTERS
- * personas distintas. Vuelven a aparecer cuando moderación cierra esos reportes (descarta o actúa).
+ * personas distintas (cuyos reportes cuentan: ver reportSpam.ts). Vuelven a aparecer cuando moderación cierra esos reportes (descarta o actúa).
  * No es una suspensión: la cuenta sigue funcionando, solo deja de aparecer en "Cerca" y en las listas para invitar.
  */
 export async function autoHiddenUsers(): Promise<Set<string>> {
   const rows = await db
     .select({ id: report.targetUserId })
     .from(report)
-    .where(and(eq(report.status, "open"), inArray(report.reason, [...URGENT_REASONS])))
+    // Los reportes de cuentas que moderación marcó como de mala fe no cuentan (ver reportSpam.ts)
+    .where(and(eq(report.status, "open"), inArray(report.reason, [...URGENT_REASONS]), reportCounts))
     .groupBy(report.targetUserId)
     .having(sql`count(distinct ${report.reporterId}) >= ${AUTO_HIDE_REPORTERS}`);
   return new Set(rows.flatMap((r) => (r.id ? [r.id] : [])));
@@ -112,7 +114,7 @@ export async function autoHiddenGroups(): Promise<Set<string>> {
   const rows = await db
     .select({ id: report.groupId })
     .from(report)
-    .where(and(eq(report.status, "open"), inArray(report.reason, [...URGENT_REASONS]), sql`${report.groupId} is not null`))
+    .where(and(eq(report.status, "open"), inArray(report.reason, [...URGENT_REASONS]), sql`${report.groupId} is not null`, reportCounts))
     .groupBy(report.groupId)
     .having(sql`count(distinct ${report.reporterId}) >= ${AUTO_HIDE_REPORTERS}`);
   return new Set(rows.flatMap((r) => (r.id ? [r.id] : [])));

@@ -187,8 +187,15 @@
     {
       "idx": 26,
       "version": "7",
-      "when": 1795698746937,
-      "tag": "0026_captura_y_respuesta_en_reporte",
+      "when": 1795698726481,
+      "tag": "0026_reportes_que_no_cuentan",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1795699063548,
+      "tag": "0027_captura_y_respuesta_en_reporte",
       "breakpoints": true
     }
   ]

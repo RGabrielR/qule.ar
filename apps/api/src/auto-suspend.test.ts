@@ -100,6 +100,11 @@ test("suspensión automática por reportes de varias personas", async (t) => {
   const pending = await pendingAutoSuspensions(now);
   assert.equal(pending.get(tito.id)?.at, new Date(ago(2).getTime() + 24 * HOUR).toISOString());
   assert.equal(await runAutoSuspensions(now), 0, "todavía está dentro de las 24 h");
+  // Si los reportes de una de las cinco personas dejan de contar, ya no llega al número
+  await db.insert(schema.reportMute).values({ userId: people[5].id, mutedBy: mod.id });
+  assert.deepEqual(await autoSuspendCandidates(now), []);
+  await db.delete(schema.reportMute).where(eq(schema.reportMute.userId, people[5].id));
+  assert.equal((await autoSuspendCandidates(now)).length, 1);
 
   // El panel lo muestra en el reporte
   const list = await (await request("/api/admin/reports", mod)).json() as { targetUserId?: string; target: { id: string } | null; targetAutoSuspendAt: string | null }[];

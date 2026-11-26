@@ -14,8 +14,10 @@ export type Report = {
   id: string;
   /** Sobre qué es: "g:<grupo>", "u:<persona>" o "r:<reporte>" si la cuenta se borró. Los del mismo tema se agrupan. */
   subject: string;
-  /** Cuántas personas distintas reportaron ese tema (entre los reportes de la lista). */
+  /** Cuántas personas distintas reportaron ese tema (entre los reportes de la lista). No suma a quienes no cuentan. */
   subjectReporters: number;
+  /** Lo mandó una cuenta cuyos reportes moderación hizo que no cuenten (ver ReportSpamAlerts). */
+  reporterMuted: boolean;
   reason: string;
   details: string | null;
   status: "open" | "dismissed" | "actioned";

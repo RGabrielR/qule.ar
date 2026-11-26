@@ -418,6 +418,18 @@ export const staffPermission = pgTable("staff_permission", {
 }, (t) => [primaryKey({ columns: [t.userId, t.permission] })]);
 
 /**
+ * Cuentas cuyos reportes dejaron de contar, por decisión de moderación (ver reportSpam.ts). Sus reportes siguen
+ * entrando y se ven en el panel, pero no ocultan perfiles ni grupos, no mandan avisos urgentes, no suman personas
+ * en las tarjetas y no alcanzan para una suspensión preventiva. A esa persona no se le dice nada.
+ */
+export const reportMute = pgTable("report_mute", {
+  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  mutedBy: text("muted_by").references(() => user.id, { onDelete: "set null" }),
+  reason: text("reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * Pedido de revisión de una suspensión, hecho desde la app por la persona suspendida. Uno por suspensión
  * (suspendedAt identifica cuál). Si la cuenta se borra, se borra con ella.
  */
