@@ -1,3 +1,4 @@
+import { groupOutbox, newMessageKey, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router";
@@ -30,15 +31,23 @@ type QuoteWindow = HistoryPage & { hasNewer: boolean };
 
 export function GroupChat() {
   const { id = "general" } = useParams();
+  return <GroupChatThread key={id} id={id} />;
+}
+
+function GroupChatThread({ id }: { id: string }) {
   const { me } = useMe();
+  const scope = JSON.stringify([me?.user.id, id]);
+  const pending = usePending(groupOutbox, scope);
   const nav = useNavigate();
   const goBack = useSectionBack("/grupos");
   const [info, setInfo] = useState<GroupInfo | null>(null);
   const [infoTick, setInfoTick] = useState(0);
-  const [messages, setMessages] = useState<GroupMessage[]>([]);
+  const [confirmed, setMessages] = useState<GroupMessage[]>([]);
+  const { messages, pendingByMessage, remember, forget } = useTimeline(confirmed, pending, me?.user.id);
   const [quoteWindow, setQuoteWindow] = useState<QuoteWindow | null>(null);
   const visibleMessages = quoteWindow?.messages ?? messages;
   const [queued, setQueued] = useState<GroupMessage[]>([]);
+  const [historyReady, setHistoryReady] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [text, setText] = useDraft(`group:${me?.user.id ?? ""}:${id}`, editing === null);
@@ -197,6 +206,7 @@ export function GroupChat() {
       queuedChanges?.push(change);
       setQueued(change);
     }
+    setHistoryReady(false);
     setFindingQuote(false);
     setQuoteWindow(null);
     setMessages([]);
@@ -216,6 +226,10 @@ export function GroupChat() {
           `/groups/${id}/messages`, { signal: controller.signal, cache: "no-store" },
         );
         if (controller.signal.aborted) return;
+        for (const m of [...d.messages, ...d.queued]) {
+          if (m.author.id === me?.user.id) groupOutbox.acknowledge(scope, m);
+        }
+        setHistoryReady(true);
         if (firstLoad) stickToBottom.current = true;
         firstLoad = false;
         const oldest = d.messages[0];
@@ -250,11 +264,16 @@ export function GroupChat() {
     void refreshHistory();
     const onMessage = (m: GroupMessage) => {
       if (m.groupId !== id) return;
+      if (m.author.id === me?.user.id) groupOutbox.acknowledge(scope, m);
       liveQueued((q) => q.filter((x) => x.id !== m.id));
       livePublished((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
     };
     const onQueued = (m: GroupMessage) => {
       if (m.groupId !== id) return;
+      if (m.author.id === me?.user.id) {
+        forget(m.idempotencyKey ?? m.id);
+        groupOutbox.acknowledge(scope, m);
+      }
       liveQueued((q) => {
         const rest = q.filter((x) => x.id !== m.id);
         return [...rest, m].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
@@ -266,6 +285,10 @@ export function GroupChat() {
     const onDeleted = (p: { id: string; groupId: string }) => {
       if (p.groupId === id) livePublished((list) => list.filter((x) => x.id !== p.id), true);
     };
+    const stopWatching = groupOutbox.watchConfirmations(scope, (m) => {
+      if (m.status === "queued") onQueued(m);
+      if (m.status === "published") onMessage(m);
+    });
     s.on("group:message", onMessage);
     s.on("group:queued", onQueued);
     s.on("group:cancelled", onCancelled);
@@ -276,6 +299,7 @@ export function GroupChat() {
     };
     s.on("reaction", onReaction);
     return () => {
+      stopWatching();
       request?.abort();
       s.off("disconnect", onDisconnect);
       s.off("connect", onReconnect);
@@ -287,7 +311,7 @@ export function GroupChat() {
       s.off("group:deleted", onDeleted);
       s.off("reaction", onReaction);
     };
-  }, [id, isMember]);
+  }, [id, isMember, scope]);
 
   // Reloj para las cuentas regresivas de la cola
   useEffect(() => {
@@ -350,39 +374,62 @@ export function GroupChat() {
   async function send(e?: React.FormEvent) {
     e?.preventDefault();
     const body = text.trim();
-    if (!body) return;
+    if (!body || !me) return;
     // Mandar con el botón le saca el foco al campo y cierra el teclado. Se lo devolvemos.
     inputRef.current?.focus({ preventScroll: true });
-    setNotice(null);
-    // Se vacía al toque; si falla, se devuelve el texto
-    setText("");
-    const wasEditing = editing;
-    const wasReplying = replyTo;
-    setReplyTo(null);
-    try {
-      if (wasEditing) {
-        setEditing(null);
-        await api(`/groups/${id}/messages/${wasEditing}`, { method: "PATCH", json: { body } });
-        return;
-      }
-      const r = await api<{ message: GroupMessage; reasons: string[] }>(`/groups/${id}/messages`, {
-        method: "POST",
-        json: { body, replyToId: wasReplying?.id },
-      });
-      jumpToEnd();
-      if (r.message.status === "queued") {
-        setQueued((q) => (q.some((x) => x.id === r.message.id) ? q : [...q, r.message]));
-        const why = r.reasons.length ? ` (${r.reasons.join(", ")})` : "";
-        setNotice({ kind: "info", text: `Tu mensaje quedó en cola${why}. Sale solo cuando te toque.` });
-      } else {
-        setMessages((list) => (list.some((x) => x.id === r.message.id) ? list : [...list, r.message]));
-      }
-    } catch (err) {
-      setText((t) => t || body);
-      if (wasEditing) setEditing(wasEditing);
-      if (wasReplying) setReplyTo(wasReplying);
-      setNotice({ kind: "error", text: (err as Error).message });
+    if (!editing && info && queued.length >= info.rules.maxQueued) {
+      setNotice({ kind: "info", text: "Tu cola está llena. Esperá a que salga un mensaje o cancelá uno." });
+      return;
     }
+    setNotice(null);
+    setText("");
+    const quote = replyTo;
+    setReplyTo(null);
+    if (editing) {
+      setEditing(null);
+      try {
+        await api(`/groups/${id}/messages/${editing}`, { method: "PATCH", json: { body } });
+      } catch (err) {
+        setText((draft) => draft || body);
+        setEditing(editing);
+        setReplyTo(quote);
+        setNotice({ kind: "error", text: (err as Error).message });
+      }
+      return;
+    }
+
+    const idempotencyKey = newMessageKey();
+    remember(idempotencyKey);
+    jumpToEnd();
+    // Durante una ráfaga todavía no sabemos cuáles de los envíos van a ocupar un turno.
+    const inFlight = pending.filter((entry) => !entry.failure).length;
+    groupOutbox.add({
+      scope,
+      waitForConfirmation: !historyReady || !info || queued.length + inFlight >= info.rules.maxQueued,
+      message: {
+        id: idempotencyKey, idempotencyKey, groupId: id, body, status: "published", scheduledAt: new Date().toISOString(),
+        author: { id: me.user.id, name: me.profile?.displayName ?? me.user.name, photo: me.photos.find((p) => !p.isPrivate)?.thumb ?? null },
+        replyTo: quote ? { id: quote.id, authorName: quote.author.name, body: quote.body?.slice(0, 160) ?? null } : null,
+        reactions: [],
+      },
+      submit: async () => {
+        try {
+          const result = await api<{ message: GroupMessage; reasons: string[] }>(`/groups/${id}/messages`, {
+            method: "POST", headers: { "Idempotency-Key": idempotencyKey }, json: { body, replyToId: quote?.id },
+          });
+          if (result.message.status === "queued") {
+            const why = result.reasons.length ? ` (${result.reasons.join(", ")})` : "";
+            setNotice({ kind: "info", text: `Tu mensaje quedó en cola${why}. Sale solo cuando te toque.` });
+          }
+          return result.message;
+        } catch (error) {
+          if (!(error instanceof ApiError && error.status === 429)) throw error;
+          setNotice({ kind: "info", text: error.message });
+          setText((draft) => draft || body);
+          return null;
+        }
+      },
+    });
   }
 
   async function cancel(m: GroupMessage) {
@@ -495,13 +542,14 @@ export function GroupChat() {
           </div>
         )}
         {visibleMessages.map((m, i) => {
+          const entry = pendingByMessage.get(m);
           const prev = visibleMessages[i - 1];
           const grouped =
             prev && prev.author.id === m.author.id &&
             new Date(m.scheduledAt).getTime() - new Date(prev.scheduledAt).getTime() < 5 * 60_000;
           const mine = m.author.id === me?.user.id;
           return (
-            <div key={m.id} id={`gm-${m.id}`} className={`gmsg ${grouped && !m.replyTo ? "gmsg--grouped" : ""}`}>
+            <div key={m.idempotencyKey ?? m.id} id={`gm-${m.id}`} className={`gmsg ${grouped && !m.replyTo ? "gmsg--grouped" : ""}`}>
               <div className="gmsg__avatar">
                 {!(grouped && !m.replyTo) && (
                   <Link to={`/perfil/${m.author.id}`} aria-label={`Ver perfil de ${m.author.name}`}>
@@ -525,9 +573,9 @@ export function GroupChat() {
                 <p className="gmsg__body">{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>
                 <ReactionBar reactions={m.reactions ?? []} myId={me?.user.id} onToggle={(k) => react(m, k)} />
               </div>
-              <button className="iconbtn gmsg__more" aria-label="Opciones del mensaje" aria-expanded={menuFor === m.id} aria-controls={menuFor === m.id ? `message-options-${m.id}` : undefined} onClick={() => setMenuFor(menuFor === m.id ? null : m.id)}>
+              {!entry && <button className="iconbtn gmsg__more" aria-label="Opciones del mensaje" aria-expanded={menuFor === m.id} aria-controls={menuFor === m.id ? `message-options-${m.id}` : undefined} onClick={() => setMenuFor(menuFor === m.id ? null : m.id)}>
                 <DotsIcon />
-              </button>
+              </button>}
               {menuFor === m.id && (
                 <div className="menu" id={`message-options-${m.id}`} role="menu" ref={positionMessageMenu}>
                   {m.status === "published" && <ReactionPicker current={myReaction(m.reactions ?? [], me?.user.id)} onPick={(k) => react(m, k)} />}
@@ -544,6 +592,7 @@ export function GroupChat() {
                   )}
                 </div>
               )}
+              {entry && <SendFailure failure={entry.failure} retry={() => groupOutbox.retry(entry)} dismiss={() => groupOutbox.dismiss(entry)} />}
             </div>
           );
         })}

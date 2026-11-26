@@ -5,13 +5,13 @@ import { z } from "zod";
 import { nextSlot } from "../antispam.js";
 import { db, schema } from "../db/index.js";
 import { DEFAULT_SPAM_RULES } from "../db/schema.js";
-import { ageFrom, authorsFor, blockedWith, newId, requireProfile, requireUser, thumbUrl, type AppEnv } from "../lib.js";
+import { ageFrom, authorsFor, blockedWith, messageKey, newId, requireProfile, requireUser, thumbUrl, type AppEnv } from "../lib.js";
 import { distanceLabel, visibleKm } from "../geo.js";
 import { autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, forbiddenGroupText, groupIsEvidence, reportMinorGroupAttempt } from "../moderation.js";
 import { BULK_MAX, bulkInput, pendingConds, requestFilters, requestPage } from "../joinRequests.js";
 import { limit } from "../ratelimit.js";
 import { MAX_UPLOAD_BYTES, saveImage } from "../storage.js";
-import { emitToGroup, emitToUser, isOnline, serializeGroupMessages, syncGroupRoom } from "../realtime.js";
+import { emitPublishedMessage, emitToGroup, emitToUser, isOnline, serializeGroupMessages, syncGroupRoom } from "../realtime.js";
 import { broadcast, onBroadcast } from "../shared.js";
 import { pushTo } from "../push.js";
 import { notifyGroupMessage } from "../groupNotify.js";
@@ -1053,8 +1053,8 @@ groupRoutes.get("/groups/:id/messages", async (c) => {
         .orderBy(asc(groupMessage.scheduledAt));
 
   return c.json({
-    messages: await serializeGroupMessages(published.reverse()),
-    queued: await serializeGroupMessages(queued),
+    messages: await serializeGroupMessages(published.reverse(), u.id),
+    queued: await serializeGroupMessages(queued, u.id),
     hasMore,
   });
 });
@@ -1068,41 +1068,54 @@ groupRoutes.post("/groups/:id/messages", async (c) => {
   if (!member) throw new HTTPException(403, { message: "No sos parte de este grupo" });
   const raw = await c.req.json();
   const { body } = parse(bodySchema, raw);
-  // Respuesta a otro mensaje: tiene que ser del mismo grupo y estar publicado
-  let replyToId: string | null = null;
-  if (typeof raw?.replyToId === "string" && raw.replyToId) {
-    const [orig] = await db.select({ id: groupMessage.id }).from(groupMessage)
-      .where(and(eq(groupMessage.id, raw.replyToId), eq(groupMessage.groupId, groupId), eq(groupMessage.status, "published")));
-    if (!orig) throw new HTTPException(400, { message: "Ese mensaje ya no está" });
-    replyToId = orig.id;
-  }
+  const idempotencyKey = messageKey(c.req.header("Idempotency-Key"));
+  const { row, slot } = await db.transaction(async (tx) => {
+    await tx.select({ id: group.id }).from(group).where(eq(group.id, groupId)).for("update");
+    if (idempotencyKey) {
+      const [existing] = await tx.select().from(groupMessage).where(and(eq(groupMessage.userId, u.id), eq(groupMessage.idempotencyKey, idempotencyKey)));
+      if (existing && existing.groupId !== groupId) throw new HTTPException(409);
+      if (existing) return { row: existing, slot: null };
+    }
+    // Respuesta a otro mensaje: tiene que ser del mismo grupo y estar publicado
+    let replyToId: string | null = null;
+    if (typeof raw?.replyToId === "string" && raw.replyToId) {
+      const [orig] = await tx.select({ id: groupMessage.id }).from(groupMessage)
+        .where(and(eq(groupMessage.id, raw.replyToId), eq(groupMessage.groupId, groupId), eq(groupMessage.status, "published")));
+      if (!orig) throw new HTTPException(400, { message: "Ese mensaje ya no está" });
+      replyToId = orig.id;
+    }
 
-  // Cuentas nuevas no pueden mandar links en grupos
-  const isNew = Date.now() - new Date(u.createdAt).getTime() < g.spamRules.newAccountHours * 3_600_000;
-  if (isNew && /(https?:\/\/|www\.|\.[a-z]{2,}\/)/i.test(body)) {
-    throw new HTTPException(400, { message: `Las cuentas nuevas no pueden mandar links en grupos durante las primeras ${g.spamRules.newAccountHours} h` });
-  }
+    // Cuentas nuevas no pueden mandar links en grupos
+    const isNew = Date.now() - new Date(u.createdAt).getTime() < g.spamRules.newAccountHours * 3_600_000;
+    if (isNew && /(https?:\/\/|www\.|\.[a-z]{2,}\/)/i.test(body)) {
+      throw new HTTPException(400, { message: `Las cuentas nuevas no pueden mandar links en grupos durante las primeras ${g.spamRules.newAccountHours} h` });
+    }
 
-  const slot = await nextSlot({ groupId, userId: u.id, userCreatedAt: new Date(u.createdAt), rules: g.spamRules });
-  if (!slot.ok) throw new HTTPException(429, { message: slot.error });
+    const slot = await nextSlot({ groupId, userId: u.id, userCreatedAt: new Date(u.createdAt), rules: g.spamRules }, tx);
+    if (!slot.ok) throw new HTTPException(429, { message: slot.error });
 
-  const now = new Date();
-  const publishNow = slot.at.getTime() <= now.getTime();
-  const [row] = await db
-    .insert(groupMessage)
-    .values({
-      id: newId(),
-      groupId,
-      userId: u.id,
-      body,
-      replyToId,
-      status: publishNow ? "published" : "queued",
-      scheduledAt: publishNow ? now : slot.at,
-    })
-    .returning();
-  const [msg] = await serializeGroupMessages([row]);
-  if (publishNow) {
-    await emitToGroup(groupId, u.id, "group:message", msg);
+    const now = new Date();
+    const publishNow = slot.at.getTime() <= now.getTime();
+    const [row] = await tx
+      .insert(groupMessage)
+      .values({
+        id: newId(),
+        idempotencyKey,
+        groupId,
+        userId: u.id,
+        body,
+        replyToId,
+        status: publishNow ? "published" : "queued",
+        scheduledAt: publishNow ? now : slot.at,
+      })
+      .onConflictDoNothing({ target: [groupMessage.userId, groupMessage.idempotencyKey] }).returning();
+    if (!row) throw new HTTPException(409);
+    return { row, slot };
+  });
+  const [msg] = await serializeGroupMessages([row], u.id);
+  if (!slot) return c.json({ message: msg, reasons: [], intervalSeconds: g.spamRules.intervalSeconds });
+  if (row.status === "published") {
+    await emitPublishedMessage(msg, row.idempotencyKey);
     notifyGroupMessage(row).catch((e) => console.error("notifyGroupMessage", e));
   }
   else emitToUser(u.id, "group:queued", msg);
@@ -1123,7 +1136,7 @@ groupRoutes.patch("/groups/:id/messages/:mid", async (c) => {
     ))
     .returning();
   if (!row) throw new HTTPException(409, { message: "Ese mensaje ya salió" });
-  const [msg] = await serializeGroupMessages([row]);
+  const [msg] = await serializeGroupMessages([row], u.id);
   emitToUser(u.id, "group:queued", msg);
   return c.json({ message: msg });
 });
