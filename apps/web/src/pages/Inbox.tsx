@@ -85,10 +85,8 @@ export function Inbox() {
       <header className="topbar"><h1 className="topbar__title">Mensajes</h1></header>
       {!!list?.length && (
         <div className="searchbar form">
-          <label className="field">
-            <span>Buscar por nombre</span>
-            <input className="input" type="search" value={query} maxLength={60} onChange={(e) => setQuery(e.target.value)} />
-          </label>
+          <input className="input" type="search" placeholder="Buscar por nombre" aria-label="Buscar por nombre" value={query} maxLength={60}
+            onChange={(e) => setQuery(e.target.value)} />
           <div className="inbox-filters" role="group" aria-label="Filtros">
             <button type="button" className={`chip ${filters.favorites ? "chip--on" : ""}`} aria-pressed={filters.favorites}
               onClick={() => setFilters({ ...filters, favorites: !filters.favorites })}>Favoritos</button>
