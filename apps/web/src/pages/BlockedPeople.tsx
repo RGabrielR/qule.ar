@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { api, type Author } from "../api";
 import { Avatar } from "../components/Avatar";
 import { BackIcon } from "../components/Icons";
-import { markBack, usePageTransition } from "../features/navigation/pageTransition";
+import { usePageTransition } from "../features/navigation/pageTransition";
 import { useSectionBack } from "../useSectionBack";
 
 type Page = { people: Author[]; total: number; hasMore: boolean };
@@ -10,8 +10,8 @@ type Page = { people: Author[]; total: number; hasMore: boolean };
 type Row = { person: Author; i: number };
 type List = { q: string; rows: Row[]; total: number; hasMore: boolean };
 
-// Lo que dura el cierre de una fila al desbloquear (igual que en styles.css)
-const LEAVE_MS = 260;
+// Lo que dura el cierre de una fila al desbloquear (--dur-base)
+const LEAVE_MS = 240;
 
 export function BlockedPeople() {
   const goBack = useSectionBack("/yo/configuracion");
@@ -97,7 +97,7 @@ export function BlockedPeople() {
   return (
     <div className={`page ${enter}`} ref={pageRef}>
       <header className="topbar topbar--thread">
-        <button type="button" className="iconbtn" aria-label="Volver a Configuración" onClick={() => { markBack(); goBack(); }}><BackIcon /></button>
+        <button type="button" className="iconbtn" aria-label="Volver a Configuración" onClick={goBack}><BackIcon /></button>
         <h1 className="topbar__title">Personas bloqueadas</h1>
       </header>
 

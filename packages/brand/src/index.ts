@@ -185,6 +185,33 @@ export const zIndex = {
   lightbox: 100,
 } as const;
 
+// ---------- Movimiento ----------
+
+/**
+ * Curvas y duraciones de las animaciones. Todo lo que se mueve usa estas, así la app se siente igual en todos lados.
+ * Solo se anima transform y opacity (no tamaños ni posiciones), y siempre con una variante para movimiento reducido.
+ */
+export const motion = {
+  /** Entrar, salir, responder a un toque: arranca rápido y frena suave. */
+  "ease-out": "cubic-bezier(0.23, 1, 0.32, 1)",
+  /** Algo que ya está en pantalla y se mueve o cambia de tamaño. */
+  "ease-in-out": "cubic-bezier(0.77, 0, 0.175, 1)",
+  /** Hojas que suben desde abajo, como en iOS. */
+  "ease-sheet": "cubic-bezier(0.32, 0.72, 0, 1)",
+  /** Respuesta a un toque (botones, chips). */
+  "dur-press": "120ms",
+  /** Fundidos chicos: fotos que terminan de cargar, avisos. */
+  "dur-fast": "180ms",
+  /** Lo que aparece en una lista, menús. */
+  "dur-base": "240ms",
+  /** Cambio de pantalla. */
+  "dur-page": "280ms",
+  /** Hojas y diálogos. */
+  "dur-sheet": "320ms",
+  /** Separación entre elementos que entran escalonados. */
+  stagger: "35ms",
+} as const;
+
 // ---------- CSS ----------
 
 const night = themes.oscuro;
@@ -257,6 +284,7 @@ function globalVars(): Record<string, string> {
     ...Object.fromEntries(Object.entries(fontSizes)),
     ...Object.fromEntries(Object.entries(radii).map(([k, v]) => [`radius-${k}`, v])),
     ...Object.fromEntries(Object.entries(zIndex).map(([k, v]) => [`z-${k}`, String(v)])),
+    ...motion,
   };
 }
 
