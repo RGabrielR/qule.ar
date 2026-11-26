@@ -15,6 +15,7 @@ import { GroupActions } from "../features/groups/GroupActions";
 import { slowModeText } from "../features/groups/groupRules";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
+import { useKeyboardAfterSend } from "../features/chat/useKeyboardAfterSend";
 import { CreatePollButton, CreatePollDialog } from "../features/polls/CreatePollDialog";
 import { PollCard } from "../features/polls/PollCard";
 import { applyMyVote, applyPollTotals } from "../features/polls/polls";
@@ -60,6 +61,7 @@ function GroupChatThread({ id }: { id: string }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const keyboard = useKeyboardAfterSend(inputRef);
 
   function startReply(m: GroupMessage) {
     setMenuFor(null);
@@ -386,7 +388,7 @@ function GroupChatThread({ id }: { id: string }) {
     const body = text.trim();
     if (!body || !me) return;
     // Mandar con el botón le saca el foco al campo y cierra el teclado. Se lo devolvemos.
-    inputRef.current?.focus({ preventScroll: true });
+    keyboard.restore();
     if (!editing && info && queued.length >= info.rules.maxQueued) {
       setNotice({ kind: "info", text: "Tu cola está llena. Esperá a que salga un mensaje o cancelá uno." });
       return;
@@ -732,7 +734,7 @@ function GroupChatThread({ id }: { id: string }) {
             }}
           />
           <div className="composer__action">
-            <button className="sendbtn" aria-label="Mandar" disabled={!text.trim()} onMouseDown={(e) => e.preventDefault()}>
+            <button className="sendbtn" aria-label="Mandar" disabled={!text.trim()} onPointerDown={keyboard.onPointerDown} onMouseDown={(e) => e.preventDefault()}>
               <SendIcon />
             </button>
           </div>
