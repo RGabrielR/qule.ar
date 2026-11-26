@@ -2,8 +2,7 @@ import type { SyntheticEvent } from "react";
 
 /** Si la foto ya estaba en caché cuando se montó, se marca de entrada y aparece sin fundido. */
 function markIfComplete(img: HTMLImageElement | null) {
-  // Una foto que falló también figura como "completa": esa no se marca
-  if (img?.complete && img.naturalWidth) img.dataset.loaded = "";
+  if (img?.complete) img.dataset.loaded = "";
 }
 
 function markLoaded(event: SyntheticEvent<HTMLImageElement>) {

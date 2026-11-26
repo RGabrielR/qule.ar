@@ -276,9 +276,6 @@ function globalVars(): Record<string, string> {
     "shadow-icon": `0 1px 2px ${alpha("#000000", 0.6)}`,
     "shadow-ring-ok": `0 0 0 2px ${alpha(p.ok, 0.25)}`,
 
-    // Desenfoque de la vista previa de una foto mientras llega la nítida (grillas de Gente, Visitas, Favoritos…)
-    "blur-preview": "12px",
-
     // El botón "Seguir con Google" respeta los colores de Google
     "google-bg": "#ffffff",
     "google-bg-hover": "#eeeeee",

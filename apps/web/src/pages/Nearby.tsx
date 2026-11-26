@@ -11,7 +11,7 @@ import { useSheetExit } from "../components/useSheetExit";
 import { getGridList, saveGridList, toGridPerson } from "../features/profileSwipe/gridList";
 import { HasPlaceChips, type HasPlace } from "../features/place/hasPlace";
 import { useTabTransition } from "../features/navigation/pageTransition";
-import { gridPhoto, previewStyle } from "../components/photoPreview";
+import { photoAppear } from "../components/photoAppear";
 import { Skeleton, SkeletonGrid } from "../components/Skeleton";
 import { useArrival } from "../components/useArrival";
 
@@ -84,8 +84,12 @@ const POSITION_LIMIT = 20;
 // y se revalida por detrás: solo las personas nuevas entran animadas (como Instagram y las apps nativas).
 type GridCache = { userId: string; query: string; people: NearbyPerson[]; hasMore: boolean };
 let gridCache: GridCache | null = null;
-// Las fotos de esa grilla quedan referenciadas, así el navegador las mantiene decodificadas en memoria y al volver
-// se dibujan en el primer cuadro (sobre todo en iPhone, que si no las vuelve a leer del disco).
+// Cuándo se pidió la grilla al servidor por última vez. Si volvés antes de este tiempo (de un perfil o de otra
+// pestaña), no se vuelve a pedir: casi siempre sería la misma, y reacomodarla se ve como una recarga.
+let gridFetchedAt = 0;
+const FRESH_MS = 2 * 60_000;
+// Las fotos de la grilla quedan decodificadas en memoria, así al volver se dibujan enseguida (en iPhone, si no,
+// las vuelve a leer del disco y aparecen un instante después).
 const keptPhotos = new Map<string, HTMLImageElement>();
 function keepPhotos(people: NearbyPerson[]) {
   const urls = new Set(people.flatMap((p) => (p.photo ? [p.photo] : [])));
@@ -94,6 +98,7 @@ function keepPhotos(people: NearbyPerson[]) {
     if (keptPhotos.has(url)) continue;
     const img = new Image();
     img.src = url;
+    img.decode().catch(() => {});
     keptPhotos.set(url, img);
   }
 }
@@ -111,6 +116,8 @@ export function Nearby() {
   const [filters, setFilters] = useState<Filters>(loadFilters);
   const [cached] = useState(() => (gridCache && gridCache.userId === userId && gridCache.query === toQuery(filters, 0) ? gridCache : null));
   const [people, setPeople] = useState<NearbyPerson[]>(() => cached?.people ?? []);
+  // Las fotos de lo que ya estaba guardado se muestran directo, sin ocultarse hasta cargar ni fundido
+  const [cachedIds] = useState(() => new Set(cached?.people.map((p) => p.id)));
   // Con qué filtros se pidió la grilla que se ve: si cambian, la grilla nueva entra entera
   const [peopleQuery, setPeopleQuery] = useState<string | undefined>(cached?.query);
   // Sube cada vez que se tira para actualizar: la grilla renovada vuelve a entrar entera
@@ -196,6 +203,7 @@ export function Nearby() {
       }
       if (signal.aborted) return;
       setLoc((prev) => (d.hasLocation ? "ok" : prev === "ok" ? "none" : prev));
+      if (!offset) gridFetchedAt = Date.now();
       setPeople((prev) => (offset ? [...prev, ...loaded] : loaded));
       setPeopleQuery(toQuery(f, 0));
       if (releasedDistance > 0) setRefreshes((n) => n + 1);
@@ -290,7 +298,10 @@ export function Nearby() {
     // Cada vez que se manda una ubicación nueva (a mano o sola), la grilla se reordena.
     // Si volvés de un perfil, carga tantas personas como había para poder volver a la misma posición.
     const onLocation = () => load(filtersRef.current, 0, 0, pendingRestore.current?.count ?? visible.current.count);
-    onLocation();
+    // Con la grilla guardada y reciente (y con todas las personas que hacen falta para volver a la misma posición),
+    // no se pide de nuevo. Una ubicación nueva o tirar para actualizar sí la renuevan.
+    const fresh = cached && Date.now() - gridFetchedAt < FRESH_MS && (pendingRestore.current?.count ?? 0) <= cached.people.length;
+    if (!fresh) onLocation();
     window.addEventListener(LOCATION_EVENT, onLocation);
     return () => {
       window.removeEventListener(LOCATION_EVENT, onLocation);
@@ -400,8 +411,8 @@ export function Nearby() {
           <ul className="grid">
             {people.map((p) => (
               <li key={p.id} {...arrival(p.id)}>
-                <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" style={previewStyle(p.photo)} aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
-                  {p.photo ? <img alt="" loading="lazy" {...gridPhoto(p.photo)} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
+                <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
+                  {p.photo ? <img src={p.photo} alt="" loading="lazy" {...(cachedIds.has(p.id) ? {} : photoAppear)} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
                   {p.favorite && <span className="tile__fav" aria-label="Favorito"><StarIcon filled size={14} /></span>}
                   <span className="tile__info">
                     <span className="tile__name">
