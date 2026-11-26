@@ -250,7 +250,7 @@ export async function checkMinorSignals(
 // Las drogas no se filtran por palabras: hablar de consumo cuidado y de reducción de daños está permitido.
 // Vender u ofrecer drogas se reporta a mano ("venta o drogas").
 
-type ForbiddenKind = "menores" | "venta" | "servicios";
+type ForbiddenKind = "menores" | "venta" | "servicios" | "cruising";
 
 const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: Signal[] }[] = [
   {
@@ -269,6 +269,16 @@ const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: Signal[
     patterns: [
       /\bvend(?:o|e|emos|en|er|edor\w*)\b/, /\bventas?\b/, /\bcompr(?:o|amos|a y venta)\b/, /\bprecios?\b/,
       /\$\s?\d/, /\bofertas?\b/, /\bcobr(?:o|amos)\b/, /\bdelivery\b/, /\bstock\b/, /\bmayorista\w*/,
+    ].map((re) => ({ re })),
+  },
+  {
+    // Convocatorias explícitas a sexo en lugares donde terceros lo pueden ver sin querer (Código Penal, art. 129: más
+    // grave si lo pueden ver menores). Se mira la conducta, no la palabra: "cruising" solo no bloquea, porque también
+    // puede ser ir a un sauna o a un bar. Ver docs/MODERACION.md y la discusión #270.
+    kind: "cruising",
+    message: "No se pueden crear grupos para organizar encuentros sexuales en lugares donde otras personas los puedan ver sin querer (vía pública, plazas, baños públicos, transporte).",
+    patterns: [
+      /\b(?:sexo|garch\w*|coger|cogida\w*)\s+en\s+(?:la\s+|el\s+|los\s+|las\s+)?(?:via publica|calle|plazas?|parques?|playas?|banos? publicos?|estaciones?|trenes?|bosques?)\b/,
     ].map((re) => ({ re })),
   },
 ];
@@ -331,7 +341,7 @@ export async function scanExistingGroups() {
       id: crypto.randomUUID(),
       reporterId: null,
       groupId: g.id,
-      reason: bad.kind === "menores" ? "menor de edad" : "venta o drogas",
+      reason: bad.kind === "menores" ? "menor de edad" : bad.kind === "cruising" ? "otro" : "venta o drogas",
       details: `${AUTO_DETAILS_PREFIX}: «${bad.hit}» en un grupo creado antes de las reglas nuevas.`,
       targetName: g.name,
       messageBody: text,
