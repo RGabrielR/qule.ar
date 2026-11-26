@@ -153,6 +153,11 @@ input[type="date"].input { width: auto; min-width: 0; height: 48px; appearance: 
 /* ---------- Layout con barra de pestañas ---------- */
 .shell { --people-grid-columns: 3; height: 100%; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; border-inline: 1px solid var(--line); }
 @media (min-width: 560px) { .shell { --people-grid-columns: 4; } }
+/* Dentro de la app el documento nunca se desplaza ni rebota (lo que se desplaza es cada pantalla, por dentro), y
+   arrastrar desde el encabezado o la barra de pestañas no mueve nada: quedan fijos, como en una app instalada.
+   Los toques y los gestos propios (deslizar entre pestañas, tirar para actualizar) siguen andando. */
+html:has(.shell), body:has(.shell) { overscroll-behavior: none; }
+.topbar, .tabbar { touch-action: none; }
 html:has(.shell--thread), body:has(.shell--thread) { overflow: hidden; overscroll-behavior: none; }
 .shell--thread { position: fixed; inset-inline: 0; top: var(--chat-top, 0px); height: var(--chat-height, 100dvh); overflow: clip; }
 .shell__main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
