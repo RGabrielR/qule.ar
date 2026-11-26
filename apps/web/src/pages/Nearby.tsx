@@ -18,7 +18,7 @@ export type Filters = {
   online: boolean; withPhoto: boolean; favorites: boolean;
 };
 
-const EMPTY: Filters = { bodyType: [], position: [], tribes: [], lookingFor: [], relationship: [], hasPlace: [], online: false, withPhoto: false, favorites: false };
+export const EMPTY: Filters = { bodyType: [], position: [], tribes: [], lookingFor: [], relationship: [], hasPlace: [], online: false, withPhoto: false, favorites: false };
 const STORE_KEY = "mortero:filtros";
 
 function loadFilters(): Filters {
@@ -38,7 +38,7 @@ function saveFilters(f: Filters) {
   }
 }
 
-function toQuery(f: Filters, offset: number) {
+export function toQuery(f: Filters, offset: number) {
   const q = new URLSearchParams();
   for (const k of ["ageMin", "ageMax", "heightMin", "heightMax", "weightMin", "weightMax"] as const) {
     if (f[k] != null) q.set(k, String(f[k]));
@@ -359,7 +359,7 @@ export function Nearby() {
           <ul className="grid">
             {people.map((p) => (
               <li key={p.id}>
-                <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" aria-label={`${p.name}, ${p.age}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
+                <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
                   {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
                   {p.favorite && <span className="tile__fav" aria-label="Favorito"><StarIcon filled size={14} /></span>}
                   <span className="tile__info">
@@ -426,7 +426,7 @@ function Chips({ label, options, value, onChange }: { label: string; options: st
   );
 }
 
-function FilterSheet({ initial, onApply, onClose }: { initial: Filters; onApply: (f: Filters) => void; onClose: () => void }) {
+export function FilterSheet({ initial, onApply, onClose }: { initial: Filters; onApply: (f: Filters) => void; onClose: () => void }) {
   const [f, setF] = useState<Filters>(initial);
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setF({ ...f, [k]: v });
 

@@ -24,6 +24,13 @@ En Argentina, una plataforma no responde por lo que publican otras personas **mi
 
 **Ocultamiento por precaución.** Si un perfil recibe reportes urgentes de **3 personas distintas** que todavía nadie revisó, deja de aparecer en "Cerca" y en las listas para invitar a grupos. No es una suspensión: la cuenta sigue funcionando. Vuelve a aparecer cuando moderación cierra esos reportes. Así se limita el daño si nadie llega a revisarlo enseguida.
 
+**Suspensión automática.** Si **5 personas distintas** reportan a la misma cuenta **por el mismo motivo** en **3 semanas** y esos reportes siguen abiertos, a quienes tienen el permiso Suspensiones (y a la administración general, siempre) les llega un aviso, y en el reporte aparece cuándo se suspende sola. Si en **24 horas** nadie descarta esos reportes ni actúa, la app suspende la cuenta. Queda en Suspendidas como "Automática, falta revisarla": alguien del equipo la **mantiene** o **reactiva la cuenta**, y la persona puede pedir una revisión como en cualquier suspensión.
+
+- **Qué no cuenta:** el motivo "otro", reportar varias veces a la misma persona, los reportes descartados, los de hace más de 3 semanas y los de cuentas con menos de 48 horas o suspendidas, y los de personas cuyos reportes no cuentan (ver más abajo). Así no sirve para atacar a alguien con cuentas recién creadas.
+- **Al equipo no lo suspende sola:** si pasa con alguien del equipo, le avisa a la administración general.
+- **Lo público se borra recién cuando una persona la mantiene.** Al suspender sola, la app guarda la prueba pero no borra los mensajes en grupos, las fotos ni los álbumes, por si fue un ataque. Se borran cuando alguien del equipo la **mantiene** (en Suspendidas o al responder una revisión).
+- **Si no corresponde:** descartá los reportes antes de que se cumplan las 24 horas, o reactivá la cuenta después.
+
 ## Grupos
 
 - **Se pueden reportar** al abrir la vista previa del grupo o desde **Ver detalles** si ya sos parte. Los motivos son los mismos que para las personas.
@@ -35,7 +42,7 @@ En Argentina, una plataforma no responde por lo que publican otras personas **mi
 
 Un grupo **no se puede crear ni editar** si el nombre o la descripción apuntan a:
 
-- **menores** ("+14", "-18", "15 años", "sub 18", "menores", "teen"…). Además, el intento le llega a moderación como alerta urgente sobre quien lo intentó;
+- **menores** ("+14", "-18", "15 años", "sub 18", "menorcitos", "teens", "busco menores"…). Además, el intento le llega a moderación como alerta urgente sobre quien lo intentó;
 - **vender o comprar** cosas o servicios ("vendo", "venta", "precio", "$ 500", "stock", "delivery"…);
 - **masajes, acompañantes o servicios sexuales**.
 
@@ -51,7 +58,30 @@ Los grupos que **ya existían** con esos nombres se revisan al arrancar la app y
 
 La app revisa los nombres y las descripciones de los **perfiles y los grupos** cuando se crean o se editan. Si encuentra señales de que puede haber menores, crea un reporte urgente por "menor de edad", marcado como "Alerta automática de la app", y avisa a moderación. **No borra ni oculta nada sola:** lo decide una persona.
 
-Hoy busca: "-18", "+14" (y cualquier "+" seguido de un número menor de 18; "+18" no cuenta), "15 años" o "16a", "sub 18", "menores", "menor de edad", "teen", "secundaria" y "liceo". La lista está en `MINOR_SIGNALS` (`apps/api/src/moderation.ts`). Si aparece una señal nueva, se suma ahí.
+Busca edades concretas ("-18", "+14" y cualquier "+" seguido de un número menor de 18, "15 años", "16a", "sub 18"), "menorcito/s" y "teen/s", que no tienen uso inocente en una app de citas, y además:
+
+- **"menores" o "menor de edad"**, salvo negados ("no menores", "sin menores", "nada de menores") o con una edad adulta ("menores a 40"). "Menores de 18" sí cuenta.
+- **"secundaria", "secundario" o "liceo"**, solo como estudiante ("voy a la secundaria", "estoy en el liceo", "termino el secundario"). "Perfil secundario" o "exalumnos del liceo" no cuentan.
+
+La lista está en `MINOR_SIGNALS` (`apps/api/src/moderation.ts`). Si aparece una señal nueva, se suma ahí, con su caso en `minor-signals.test.ts`.
+
+## Reportes de mala fe
+
+Hay quien reporta mucho y sin fundamento: para tapar los reportes de verdad, para llenar de avisos a moderación o para intentar que oculten o suspendan a alguien. Arriba de los reportes abiertos, quien tiene el permiso Suspensiones (o la administración general) ve **Quién reporta**: cuentas que reportan de una forma para mirar, con sus números de los últimos 90 días (cuántos reportes, cuántos descartados, cuántos con una medida y cuántos sin revisar) y por qué aparecen:
+
+- reportó a **5 o más personas o grupos distintos en una hora**;
+- de sus reportes ya revisados (al menos 5), **se descartó el 80 % o más**;
+- mandó **15 o más reportes en 90 días y ninguno terminó en una medida**;
+- **junto con otras cuentas reportó a la misma persona o grupo en un día** (3 o más cuentas), y varias son **nuevas** (menos de 7 días) o **se crearon casi a la misma hora**. Solo aparecen esas cuentas: quien reportó lo mismo desde una cuenta vieja, no.
+
+Ninguna señal decide sola. Puede ser alguien que encontró varios problemas de verdad: mirá sus reportes antes de decidir. Las opciones son:
+
+- **Que sus reportes no cuenten.** Siguen entrando y se ven en la lista (marcados "no cuenta"), pero no ocultan perfiles ni grupos, no mandan avisos, no suman personas en las tarjetas y **no alcanzan para una suspensión preventiva ni automática**. **Excepción: los reportes por menor de edad cuentan siempre** (avisan, suman y alcanzan para una suspensión preventiva): con menores en juego es preferible moderar de más. Se puede deshacer ("Que vuelvan a contar").
+- **Descartar sus reportes de la última hora** de una vez (pide confirmación). Los urgentes y los anteriores se revisan de a uno.
+- **Suspender** a quien reporta, con el diálogo de siempre.
+- **Ignorar** la tarjeta: vuelve solo cuando pasó una hora, la cuenta mandó reportes nuevos y sigue habiendo alguna señal. Si la tarjeta era por reportar a muchas personas en una hora, mientras está activa sus reportes urgentes no mandan avisos; ignorarla los devuelve.
+
+A quien reporta no se le dice nada, ni a quien reporta de buena fe ni a quien quedó marcado. Además hay un tope de 15 reportes por hora y 40 por día por persona. Todo queda en el registro de moderación. El nombre de quien reporta lo ve solo la administración general; el resto del equipo ve "Una cuenta" con los números y puede actuar igual (el panel no recibe el id de la cuenta: cada tarjeta tiene un identificador propio).
 
 ## Qué hacer en cada caso
 
@@ -90,6 +120,16 @@ Al reportar, la app guarda una copia de lo reportado: el texto del mensaje y sus
 - **Al suspender** se borra lo público de la persona: sus mensajes en grupos (también los que tenía en cola), sus reacciones en grupos, sus fotos, álbumes y videos, y las fotos que mandó por privado. Quienes tienen los grupos o las charlas abiertas lo ven desaparecer en vivo. Antes de borrar se guarda la prueba: si tiene un reporte urgente abierto o que terminó en una medida, **todos** sus archivos quedan guardados con ese reporte; los demás reportes sobre su perfil guardan sus fotos públicas. Los textos de sus mensajes privados no se borran: son privados y son la prueba de quien los recibió. Si después se reactiva la cuenta, lo borrado no vuelve.
 - Los archivos guardados solo los puede pedir moderación. El panel dice cuántos hay, pero **no los muestra ni hace falta descargarlos**. Si una fiscalía los pide, quien administra el servidor los entrega.
 
+### Verificar fotos de álbumes privados
+
+Con el [piloto de marca invisible](ALBUM-WATERMARK.md) activo, abrí **Verificar foto** desde el reporte. La persona que reporta puede adjuntar una captura al enviar el reporte. Si la adjuntó, ya aparece cargada en Moderación. Elegí la foto original de una cuenta vinculada al caso e indicá el ID de la cuenta que querés verificar. Por defecto se propone la cuenta reportada. Podés ajustar el área en ambas imágenes si la captura incluye bordes o muestra solo una parte de la foto.
+
+El panel identifica quién subió la foto original. Si la marca coincide, también muestra a qué cuenta se entregó esa copia. La coincidencia es un indicio para revisar junto con la demás evidencia. Puede haber circulado entre varias personas antes de que se tomara la captura.
+
+Tras guardar una coincidencia, **Acción** permite enviar una respuesta privada que la persona puede leer en **Yo → Configuración → Mis reportes**. Los reportes aparecen desde que se envían. Cada uno muestra el texto enviado y la respuesta en el mismo hilo. El aviso abre el hilo directamente. Desde la misma pestaña, se puede borrar un mensaje reportado con un motivo o confirmar la suspensión dentro de la misma pestaña si la copia coincide con la cuenta reportada y quien modera tiene el permiso.
+
+La consulta queda en **Registro** con el reporte y la acción. La captura que adjunta la persona al reportar se guarda cifrada y se elimina si se descarta el reporte. Si moderación carga una captura solo para verificarla, el verificador no conserva el archivo. El panel habilita la herramienta en reportes de personas abiertos o que terminaron en una medida, con ambas cuentas identificadas. Los reportes por menor de edad siguen el protocolo correspondiente.
+
 ## Reglas para quien modera
 
 - **Mirá solo lo necesario** para resolver el reporte: el mensaje o el perfil reportado. Nada más. Son datos personales, y muchas veces sensibles (Ley 25.326).
@@ -107,8 +147,9 @@ Quien administra en general (las cuentas de `ADMIN_USER_IDS` o `ADMIN_EMAILS` en
 | Reportes | Ver los reportes, descartarlos y borrar el mensaje reportado. Ante un reporte por menor de edad, suspender de forma preventiva (ver abajo) |
 | Suspensiones | Suspender y reactivar cuentas |
 | Revisiones | Responder los pedidos de revisión de suspensiones (mantener o levantar) |
+| Verificar fotos | Comparar capturas con fotos de los álbumes privados de las cuentas vinculadas a un reporte. También requiere Reportes |
 
-**Suspensión preventiva por menor de edad.** Con un reporte abierto por "menor de edad" y indicios suficientes, quien tiene solo el permiso Reportes puede suspender la cuenta en el momento, sin esperar a alguien con Suspensiones. Le llega un aviso a quienes tienen Suspensiones (a la administración general, siempre) y la cuenta aparece en Suspendidas como "Preventiva, falta revisarla": otra persona la **mantiene** o **reactiva la cuenta**. Quien la hizo no la puede confirmar. Igual que cualquier suspensión, la persona puede pedir una revisión.
+**Suspensión preventiva por menor de edad.** Con un reporte abierto por "menor de edad" y indicios suficientes, quien tiene solo el permiso Reportes puede suspender la cuenta en el momento, sin esperar a alguien con Suspensiones. Le llega un aviso a quienes tienen Suspensiones (a la administración general, siempre) y la cuenta aparece en Suspendidas como "Preventiva, falta revisarla": otra persona la **mantiene** o **reactiva la cuenta**. Quien la hizo no la puede confirmar. Alcanza cualquier reporte por menor de edad, aunque venga de una cuenta cuyos reportes no cuentan (ver "Reportes de mala fe"). Igual que cualquier suspensión, la persona puede pedir una revisión.
 
 Solo la administración general puede dar de baja o reactivar grupos, ver quién mandó cada reporte, dar y sacar permisos, suspender a alguien del equipo y ver el **Registro**. A la administración general no la puede suspender nadie desde la app. Nadie del equipo ve mails, IPs ni datos de salud. Los permisos se chequean en el servidor, no solo escondiendo botones.
 

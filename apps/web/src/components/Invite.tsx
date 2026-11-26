@@ -172,7 +172,7 @@ export function InvitePeopleSheet({ groupId, groupName, onClose, onChange }: {
               <Link to={`/perfil/${p.id}`} className="member__who">
                 <Avatar src={p.photo} name={p.name} size={40} />
                 <span className="invite-who">
-                  <span><b>{p.name}</b> <span className="muted">{p.age}</span></span>
+                  <span><b>{p.name}</b></span>
                   {(p.online || p.distance) && (
                     <span className="muted small">
                       {p.online && <><i className="dot dot--on" /> En línea</>}

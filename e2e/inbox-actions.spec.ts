@@ -24,7 +24,7 @@ test("mantener apretado un chat permite silenciar, eliminar, reportar y bloquear
     await expect(oldMessage).toBeOK();
     const { id: oldId } = await oldMessage.json();
 
-    const item = inbox.getByRole("link", { name: new RegExp(sender.name) });
+    const item = inbox.locator(".inbox__item").filter({ hasText: sender.name });
     await expect(item).toBeVisible();
     await expect(inbox.getByRole("list").getByRole("button", { name: /Opciones del chat/ })).toHaveCount(0);
     await expect(inbox.locator("html")).toHaveAttribute("data-theme", "penumbra");
@@ -60,7 +60,7 @@ test("mantener apretado un chat permite silenciar, eliminar, reportar y bloquear
     expect(await (await page.request.get(`${apiPath}/summary`)).json()).toMatchObject({ muted: false });
 
     await page.goto("/mensajes");
-    const senderItem = page.getByRole("link", { name: new RegExp(receiver.name) });
+    const senderItem = page.locator(".inbox__item").filter({ hasText: receiver.name });
     const senderMenu = page.getByRole("menu", { name: "Opciones del chat" });
     await senderItem.click({ button: "right" });
     await expect(senderMenu).toHaveCount(0);

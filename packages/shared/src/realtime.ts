@@ -9,6 +9,8 @@ export const DM_EVENTS = {
   settings: "dm:settings",
 } as const;
 
+export const REPORT_RESPONSE_EVENT = "report:response";
+
 /**
  * Por qué el servidor rechaza una conexión en vivo. Los pasajeros (el cupo de intentos por minuto y el de
  * conexiones abiertas por cuenta) se reintentan solos desde la app; sin sesión o sin perfil, no tiene sentido.

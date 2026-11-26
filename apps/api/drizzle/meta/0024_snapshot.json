@@ -1,5 +1,5 @@
 {
-  "id": "10ef19ea-5ce2-48ce-87b4-fb71958ff415",
+  "id": "ab1e9edb-9f22-47f2-aed5-8b3288930453",
   "prevId": "e75efa68-7359-47ec-928e-4726f6fc2988",
   "version": "7",
   "dialect": "postgresql",
@@ -692,95 +692,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.conversation_settings": {
-      "name": "conversation_settings",
-      "schema": "",
-      "columns": {
-        "conversation_id": {
-          "name": "conversation_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "muted": {
-          "name": "muted",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "cleared_at": {
-          "name": "cleared_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "conv_settings_conversation_idx": {
-          "name": "conv_settings_conversation_idx",
-          "columns": [
-            {
-              "expression": "conversation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "conversation_settings_conversation_id_conversation_id_fk": {
-          "name": "conversation_settings_conversation_id_conversation_id_fk",
-          "tableFrom": "conversation_settings",
-          "tableTo": "conversation",
-          "columnsFrom": [
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "conversation_settings_user_id_user_id_fk": {
-          "name": "conversation_settings_user_id_user_id_fk",
-          "tableFrom": "conversation_settings",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "conversation_settings_user_id_conversation_id_pk": {
-          "name": "conversation_settings_user_id_conversation_id_pk",
-          "columns": [
-            "user_id",
-            "conversation_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.direct_message": {
       "name": "direct_message",
       "schema": "",
@@ -790,6 +701,12 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "conversation_id": {
           "name": "conversation_id",
@@ -862,6 +779,27 @@
         }
       },
       "indexes": {
+        "dm_sender_idempotency_idx": {
+          "name": "dm_sender_idempotency_idx",
+          "columns": [
+            {
+              "expression": "sender_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "dm_conv_idx": {
           "name": "dm_conv_idx",
           "columns": [
@@ -1569,6 +1507,12 @@
           "primaryKey": true,
           "notNull": true
         },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "group_id": {
           "name": "group_id",
           "type": "text",
@@ -1614,6 +1558,27 @@
         }
       },
       "indexes": {
+        "gm_sender_idempotency_idx": {
+          "name": "gm_sender_idempotency_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "gm_group_sched_idx": {
           "name": "gm_group_sched_idx",
           "columns": [

@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 /**
  * La grilla de Cerca filtra y ordena en Postgres (routes/nearby.ts). Esta prueba arma miles de perfiles al azar
@@ -17,7 +17,7 @@ process.env.DATA_DIR = dataDir;
 process.env.DATA_KEY ??= randomBytes(32).toString("base64");
 
 const { db, schema, runMigrations, closeDb } = await import("./db/index.js");
-const { nearbyPage, parseNearbyFilters } = await import("./routes/nearby.js");
+const { chatPeopleMatching, nearbyPage, parseNearbyFilters } = await import("./routes/nearby.js");
 const { forgetUnlisted } = await import("./verification.js");
 const { ageFrom, imageUrl, thumbUrl } = await import("./lib.js");
 const { distanceLabel, visibleKm } = await import("./geo.js");
@@ -265,3 +265,48 @@ test("una cuenta nueva aparece en Gente recién cuando confirma el mail", async 
     await db.delete(schema.user).where(inArray(schema.user.id, [id, old]));
   }
 });
+
+test("Mensajes: de las personas con chat, solo las que cumplen los filtros de perfil", async () => {
+  // Chats con algunas personas: favoritas, bloqueadas, suspendidas o en incógnito también (el chat sigue existiendo)
+  const others = Array.from({ length: N }, (_, i) => `u${i}`).filter((_, i) => i % 7 === 0 || i % 37 === 0);
+  await db.insert(schema.conversation).values(others.map((id) => (
+    ME < id ? { id: `chat-${id}`, userA: ME, userB: id } : { id: `chat-${id}`, userA: id, userB: ME })));
+  await db.insert(schema.conversation).values({ id: "chat-ajeno", userA: "u1", userB: "u2" }); // un chat entre otras personas
+
+  const all = new Map((await db.select().from(schema.profile)).map((p) => [p.userId, p]));
+  const favs = new Set((await db.select().from(schema.favorite)).filter((x) => x.userId === ME).map((x) => x.favoriteId));
+  const withPhoto = new Set((await db.select().from(schema.photo)).filter((p) => !p.isPrivate).map((p) => p.userId));
+  const anyOf = (w: string[], v: string | null) => !w.length || (v != null && w.includes(v));
+  const overlap = (w: string[], vs: string[]) => !w.length || vs.some((v) => w.includes(v));
+  const inRange = (v: number | null, min?: number, max?: number) =>
+    (min == null && max == null) || (v != null && (min == null || v >= min) && (max == null || v <= max));
+
+  assert.equal(await chatPeopleMatching(ME, parseNearbyFilters({})), null);
+  assert.equal(await chatPeopleMatching(ME, parseNearbyFilters({ online: "1" })), null); // en línea se mira en la app
+
+  for (const q of CASES.filter((q) => Object.keys(q).some((k) => k !== "offset" && k !== "online"))) {
+    const f = parseNearbyFilters(q);
+    const expected = others.filter((id) => {
+      const p = all.get(id)!;
+      return (!f.favorites || favs.has(id)) && (!f.withPhoto || withPhoto.has(id)) &&
+        inRange(ageFrom(p.birthdate), f.ageMin, f.ageMax) && inRange(p.heightCm, f.heightMin, f.heightMax) &&
+        inRange(p.weightKg, f.weightMin, f.weightMax) && anyOf(f.bodyType, p.bodyType) && anyOf(f.position, p.position) &&
+        anyOf(f.relationship, p.relationship) && anyOf(f.hasPlace, p.hasPlace) &&
+        overlap(f.tribes, p.tribes) && overlap(f.lookingFor, p.lookingFor);
+    });
+    // null es "sin filtros de perfil": se ven todos los chats (pasa con un valor que no existe, como hasPlace inventado)
+    const got = await chatPeopleMatching(ME, f) ?? others;
+    assert.deepEqual([...got].sort(), expected.sort(), JSON.stringify(q));
+  }
+
+  // Quien oculta su edad no aparece con un filtro de edad en Mensajes: si no, achicando el rango se deduciría (#263)
+  const hider = others[0];
+  const age = ageFrom(all.get(hider)!.birthdate);
+  const exact = parseNearbyFilters({ ageMin: String(age), ageMax: String(age) });
+  assert.ok((await chatPeopleMatching(ME, exact))?.includes(hider), "con la edad visible, el rango exacto la encuentra");
+  await db.update(schema.profile).set({ showAge: false }).where(eq(schema.profile.userId, hider));
+  assert.ok(!(await chatPeopleMatching(ME, exact))?.includes(hider), "con la edad oculta, ningún rango la encuentra");
+  assert.ok(!(await chatPeopleMatching(ME, parseNearbyFilters({ ageMin: "18", ageMax: "99" })))?.includes(hider));
+  await db.update(schema.profile).set({ showAge: true }).where(eq(schema.profile.userId, hider));
+});
+

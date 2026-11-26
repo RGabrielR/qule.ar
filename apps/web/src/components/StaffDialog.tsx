@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type StaffAccess } from "../api";
-import { PERMISSION_LABELS } from "../staff";
+import { PERMISSION_LABELS, toggleStaffPermission } from "../staff";
 import { DialogFocus } from "./DialogFocus";
 
 type Perm = Exclude<StaffAccess, "owner">;
@@ -23,7 +23,6 @@ export function StaffDialog({ userId, name, onClose }: { userId: string; name: s
       .catch((e) => setError((e as Error).message));
   }, [userId]);
 
-  const toggle = (p: Perm) => setPerms((list) => (list.includes(p) ? list.filter((x) => x !== p) : [...list, p]));
   const changed = saved != null && (perms.length !== saved.length || perms.some((p) => !saved.includes(p)));
 
   async function save() {
@@ -66,7 +65,7 @@ export function StaffDialog({ userId, name, onClose }: { userId: string; name: s
             <div className="stack">
               {PERMISSION_LABELS.map((p) => (
                 <label key={p.id} className="field--inline small">
-                  <input type="checkbox" checked={perms.includes(p.id)} disabled={state === "saving"} onChange={() => toggle(p.id)} />
+                  <input type="checkbox" checked={perms.includes(p.id)} disabled={state === "saving" || (p.id === "photoVerification" && !perms.includes("reports"))} onChange={() => setPerms((list) => toggleStaffPermission(list, p.id))} />
                   <span><b>{p.label}</b> <span className="muted">· {p.hint}</span></span>
                 </label>
               ))}

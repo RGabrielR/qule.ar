@@ -23,11 +23,11 @@ export async function nextSlot(opts: {
   userCreatedAt: Date;
   rules: SpamRules;
   now?: Date;
-}): Promise<Slot> {
+}, reader: Pick<typeof db, "select"> = db): Promise<Slot> {
   const { groupId, userId, rules } = opts;
   const now = opts.now ?? new Date();
 
-  const [{ queued }] = await db
+  const [{ queued }] = await reader
     .select({ queued: sql<number>`count(*)::int` })
     .from(groupMessage)
     .where(and(eq(groupMessage.groupId, groupId), eq(groupMessage.userId, userId), eq(groupMessage.status, "queued")));
@@ -44,7 +44,7 @@ export async function nextSlot(opts: {
     reasons.push("cuenta nueva");
   }
 
-  const recentInGroup = await db
+  const recentInGroup = await reader
     .select({ userId: groupMessage.userId })
     .from(groupMessage)
     .where(and(eq(groupMessage.groupId, groupId), eq(groupMessage.status, "published")))
@@ -57,7 +57,7 @@ export async function nextSlot(opts: {
   }
 
   // Los borrados también cuentan, para que borrar y volver a mandar no sirva para saltarse el límite.
-  const myRecent = await db
+  const myRecent = await reader
     .select({ scheduledAt: groupMessage.scheduledAt })
     .from(groupMessage)
     .where(and(
