@@ -9,6 +9,7 @@ import { setGroupMuted } from "../features/groups/groupNotifications";
 import { ReportDialog } from "../components/ReportDialog";
 import { slowModeText } from "../features/groups/groupRules";
 import { useTabData } from "../features/navigation/tabData";
+import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 import { GroupPhotoSetting } from "../components/GroupPhoto";
 import { GroupAvatar } from "../components/GroupAvatar";
 
@@ -18,6 +19,7 @@ export function GroupInfo() {
   const { refreshGroups } = useTabData();
   const nav = useNavigate();
   const location = useLocation();
+  const enter = usePageTransition();
   const [info, setInfo] = useState<Info | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   // Las recargas por socket o invitaciones llaman a load() sin cantidad: el ref conserva lo que se ve.
@@ -109,16 +111,16 @@ export function GroupInfo() {
   }
 
   if (location.hash === "#solicitudes") return <Navigate to={`/grupos/${id}/solicitudes`} replace />;
-  if (!info) return <div className="page" />;
+  if (!info) return <div className={`page ${enter}`} />;
   const showChatLink = Boolean(info.role && !location.state?.fromGroupChat);
   const showRequestsLink = isMod && !info.isGeneral;
 
   return (
-    <div className="page">
+    <div className={`page ${enter}`}>
       <header className="topbar topbar--thread">
         {/* Volver al lugar desde donde se abrió: si no, el gesto de atrás vuelve a entrar a la info.
             Si se entró directo (una notificación, o recargando), no hay a dónde volver: va al chat del grupo. */}
-        <button className="iconbtn" onClick={() => (location.key === "default" ? nav(`/grupos/${id}`, { replace: true }) : nav(-1))} aria-label="Volver"><BackIcon /></button>
+        <button className="iconbtn" onClick={() => { markBack(); if (location.key === "default") nav(`/grupos/${id}`, { replace: true }); else nav(-1); }} aria-label="Volver"><BackIcon /></button>
         <h1 className="topbar__grow topbar__title topbar__title--sm">{info.isGeneral ? "# " : ""}{info.name}</h1>
         {(showChatLink || showRequestsLink) && (
           <div className="topbar__actions">

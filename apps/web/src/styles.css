@@ -393,12 +393,14 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 /* Entrada de pantallas (features/navigation/pageTransition.ts): hacia adelante desde la derecha, al volver desde la izquierda */
 .page--forward { animation: page-forward var(--dur-page) var(--ease-out) backwards; }
 .page--back { animation: page-back var(--dur-page) var(--ease-out) backwards; }
+/* Cambiar de pestaña: fundido corto, sin deslizar (en las apps nativas las pestañas no se mueven) */
+.page--tab { animation: fade-in var(--dur-fast) var(--ease-out) backwards; }
 @keyframes page-forward { from { opacity: 0; transform: translateX(32px); } }
 @keyframes page-back { from { opacity: 0; transform: translateX(-32px); } }
 /* Animaciones compartidas: usar estas antes de crear otras (ver "Movimiento" en docs/LOOK.md) */
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } }
-@media (prefers-reduced-motion: reduce) { .page--forward, .page--back { animation: fade-in var(--dur-fast) var(--ease-out) backwards; } }
+@media (prefers-reduced-motion: reduce) { .page--forward, .page--back, .page--tab { animation: fade-in var(--dur-fast) var(--ease-out) backwards; } }
 
 /* ---------- Grupos ---------- */
 .tabs { display: flex; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--line); }

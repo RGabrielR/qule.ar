@@ -9,6 +9,7 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { BackIcon, DotsIcon, ImageIcon, LockIcon, SendIcon, TimerIcon } from "../components/Icons";
 import { useSectionBack } from "../useSectionBack";
+import { usePageTransition } from "../features/navigation/pageTransition";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
@@ -39,6 +40,7 @@ function ConversationThread({ id }: { id: string }) {
   const pending = usePending(privateOutbox, scope);
   const nav = useNavigate();
   const goBack = useSectionBack("/mensajes");
+  const enter = usePageTransition();
   const [other, setOther] = useState<ChatContact | null>(null);
   const [confirmed, setMessages] = useState<Dm[]>([]);
   const { messages, pendingByMessage, remember } = useTimeline(confirmed, pending, me?.user.id);
@@ -292,7 +294,7 @@ function ConversationThread({ id }: { id: string }) {
     ((seen.readAtById.get(lastMine.id) ?? "") >= lastMine.createdAt || (seen.through && compareDmOrder(lastMine, seen.through) <= 0))));
 
   return (
-    <div className="chat">
+    <div className={`chat ${enter}`}>
       <header className="topbar topbar--thread">
         <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
         {other && (

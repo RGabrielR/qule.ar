@@ -10,6 +10,7 @@ import { PlusIcon } from "../components/Icons";
 import { MyInvites } from "../components/Invite";
 import { JoinButton } from "../components/JoinButton";
 import { DialogFocus } from "../components/DialogFocus";
+import { useTabTransition } from "../features/navigation/pageTransition";
 
 /** Tiene que coincidir con EXPLORE_PAGE en apps/api/src/routes/groups.ts */
 const GROUPS_PAGE = 60;
@@ -25,6 +26,7 @@ export function Groups() {
   // La búsqueda va en la dirección: al volver de un grupo sigue ahí
   const q = params.get("q") ?? "";
   const setQ = (value: string) => setParams(value ? { ver: "todos", q: value } : { ver: "todos" }, { replace: true });
+  const enter = useTabTransition();
   const pageRef = useRef<HTMLDivElement>(null);
   useRememberScroll(pageRef, tab === "mine" ? mine != null : all != null);
   const [creating, setCreating] = useState(false);
@@ -80,7 +82,7 @@ export function Groups() {
   }, [tab, q, loadAll]);
 
   return (
-    <div className="page" ref={pageRef}>
+    <div className={`page ${enter}`} ref={pageRef}>
       <header className="topbar">
         <h1 className="topbar__title">Grupos</h1>
         <button className="btn btn--small btn--primary" onClick={() => setCreating(true)}><PlusIcon /> Crear</button>

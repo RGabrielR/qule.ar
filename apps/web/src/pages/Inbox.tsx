@@ -9,6 +9,7 @@ import { albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumN
 import { Avatar } from "../components/Avatar";
 import { useTabData } from "../features/navigation/tabData";
 import { useRememberScroll } from "../features/navigation/viewMemory";
+import { useTabTransition } from "../features/navigation/pageTransition";
 
 function ago(iso: string) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -77,11 +78,12 @@ export function Inbox() {
     && (!filters.online || chat.other?.presence === "online")
     && (!matching || (chat.other != null && matching.has(chat.other.id)))
     && words.every((word) => normalize(chat.other?.name ?? "").includes(word)));
+  const enter = useTabTransition();
   const pageRef = useRef<HTMLDivElement>(null);
   useRememberScroll(pageRef, list != null);
 
   return (
-    <div className="page" ref={pageRef}>
+    <div className={`page ${enter}`} ref={pageRef}>
       <header className="topbar"><h1 className="topbar__title">Mensajes</h1></header>
       {!!list?.length && (
         <div className="searchbar form">

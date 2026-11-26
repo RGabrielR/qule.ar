@@ -20,6 +20,7 @@ import { PollCard } from "../features/polls/PollCard";
 import { applyMyVote, applyPollTotals } from "../features/polls/polls";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { useSectionBack } from "../useSectionBack";
+import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
@@ -43,6 +44,7 @@ function GroupChatThread({ id }: { id: string }) {
   const pending = usePending(groupOutbox, scope);
   const nav = useNavigate();
   const goBack = useSectionBack("/grupos");
+  const enter = usePageTransition();
   const [info, setInfo] = useState<GroupInfo | null>(null);
   const [infoTick, setInfoTick] = useState(0);
   const [confirmed, setMessages] = useState<GroupMessage[]>([]);
@@ -522,15 +524,15 @@ function GroupChatThread({ id }: { id: string }) {
     updatePublished((list) => list.filter((x) => x.id !== m.id));
   }
 
-  if (!info) return <div className="chat" />;
+  if (!info) return <div className={`chat ${enter}`} />;
   const rulesText = slowModeText(info.rules);
 
   // Vista previa para quien todavía no es miembro del grupo
   if (!isMember) {
     return (
-      <div className="page">
+      <div className={`page ${enter}`}>
         <header className="topbar topbar--thread">
-          <button className="iconbtn" onClick={() => (window.history.state?.idx > 0 ? nav(-1) : nav("/grupos?ver=todos"))} aria-label="Volver"><BackIcon /></button>
+          <button className="iconbtn" onClick={() => { markBack(); if (window.history.state?.idx > 0) nav(-1); else nav("/grupos?ver=todos"); }} aria-label="Volver"><BackIcon /></button>
           <h1 className="topbar__title topbar__title--sm">{info.name}</h1>
         </header>
         <div className="preview">
@@ -562,7 +564,7 @@ function GroupChatThread({ id }: { id: string }) {
   }
 
   return (
-    <div className="chat">
+    <div className={`chat ${enter}`}>
       <header className="topbar">
         <button type="button" className="iconbtn" onClick={goBack} aria-label="Volver a Grupos"><BackIcon /></button>
         <GroupAvatar name={info.name} photo={info.photo} general={info.isGeneral} size="sm" />

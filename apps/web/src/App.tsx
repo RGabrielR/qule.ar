@@ -12,6 +12,7 @@ import { useHidePrivateMediaWhenAway } from "./features/photos/Watermark";
 import { Legal } from "./pages/Legal";
 import { Logo } from "./components/Logo";
 import { TAB_PATHS, useTabSwipe } from "./features/navigation/useTabSwipe";
+import { useForgetPageIntent } from "./features/navigation/pageTransition";
 import { TabDataProvider, useTabData } from "./features/navigation/tabData";
 import { APP_NAME } from "./brand";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
@@ -100,8 +101,15 @@ export function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <UpdateBanner />
+      <PageIntentReset />
     </MeContext.Provider>
   );
+}
+
+// Aparte, para que cambiar de pantalla no vuelva a dibujar toda la app (ver pageTransition.ts)
+function PageIntentReset() {
+  useForgetPageIntent();
+  return null;
 }
 
 function RequireAuth({ children, needProfile }: { children: React.ReactNode; needProfile?: boolean }) {

@@ -7,6 +7,7 @@ import { useMe } from "../App";
 import { BackIcon } from "../components/Icons";
 import { useSectionBack } from "../useSectionBack";
 import { useRememberScroll } from "../features/navigation/viewMemory";
+import { usePageTransition } from "../features/navigation/pageTransition";
 
 function ago(iso: string) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -18,10 +19,11 @@ function ago(iso: string) {
 
 function PeopleGrid({ title, people, empty, note }: { title: string; people: (Author & { sub?: string; reaction?: string; isNew?: boolean })[] | null; empty: string; note?: string }) {
   const goBack = useSectionBack("/yo");
+  const enter = usePageTransition();
   const pageRef = useRef<HTMLDivElement>(null);
   useRememberScroll(pageRef, people != null);
   return (
-    <div className="page" ref={pageRef}>
+    <div className={`page ${enter}`} ref={pageRef}>
       <header className="topbar topbar--thread">
         <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
         <h1 className="topbar__title topbar__title--sm">{title}</h1>

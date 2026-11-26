@@ -9,6 +9,7 @@ import { BODY_TYPES, LOOKING_FOR, POSITIONS, RELATIONSHIP, TRIBES } from "../opt
 import { DialogFocus } from "../components/DialogFocus";
 import { getGridList, saveGridList, toGridPerson } from "../features/profileSwipe/gridList";
 import { HasPlaceChips, type HasPlace } from "../features/place/hasPlace";
+import { useTabTransition } from "../features/navigation/pageTransition";
 
 export type Filters = {
   ageMin?: number; ageMax?: number;
@@ -94,6 +95,7 @@ export function Nearby() {
   const [refreshDistance, setRefreshDistance] = useState(0);
   const [refreshError, setRefreshError] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
+  const enter = useTabTransition();
   const pageRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<AbortController | null>(null);
   const pull = useRef<{ x: number; y: number; distance: number } | null>(null);
@@ -282,7 +284,7 @@ export function Nearby() {
   const readyToRefresh = pullDistance === REFRESH_DISTANCE;
 
   return (
-    <div ref={pageRef} className="page nearby-page" onTouchStart={startPull} onTouchEnd={endPull} onTouchCancel={cancelPull}>
+    <div ref={pageRef} className={`page nearby-page ${enter}`} onTouchStart={startPull} onTouchEnd={endPull} onTouchCancel={cancelPull}>
       <header className="topbar">
         <h1 className="topbar__title">Gente</h1>
         {status === "ready" && (
