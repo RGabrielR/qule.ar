@@ -46,3 +46,13 @@ test("siguen saltando las palabras que apuntan a menores", () => {
     assert.equal(moderation.forbiddenGroupText(text)?.kind, "menores", text);
   }
 });
+
+test("no se permiten grupos para encuentros sexuales en lugares públicos (cruising)", () => {
+  for (const text of ["Cruising CABA", "cruisin zona norte", "Sexo en la plaza", "Garchar en parques", "Coger en baños públicos"]) {
+    assert.equal(moderation.forbiddenGroupText(text)?.kind, "cruising", text);
+  }
+  // Lo inocente sigue pasando
+  for (const text of ["Mate en la plaza", "Encuentros en parques para correr", "Club de cruceros", "Cruiser de motos"]) {
+    assert.equal(moderation.forbiddenGroupText(text), null, text);
+  }
+});
