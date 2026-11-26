@@ -28,6 +28,7 @@ import { securityHeaders } from "./security.js";
 import { limitApiBody } from "./requestBody.js";
 import { sweepExpiredPhotos } from "./expiring.js";
 import { purgeRemovedGroups, scanExistingGroups } from "./moderation.js";
+import { runAutoSuspensions } from "./autoSuspend.js";
 import { signalReady } from "./shared.js";
 
 checkDataKey();
@@ -37,7 +38,7 @@ checkDataKey();
 const leader = !cluster.isWorker || process.env.LEADER === "1";
 
 if (leader) {
-  await runMigrations();
+  if (!env.DATABASE_URL || env.MIGRATE_ON_STARTUP) await runMigrations();
   const encryptedProfiles = await encryptLegacyHealth(db);
   if (encryptedProfiles) console.log(`Datos de salud cifrados: ${encryptedProfiles} perfiles`);
   // Mensajes privados y copias de reportes de antes del cifrado: de a tandas y en segundo plano
@@ -54,6 +55,13 @@ if (leader) {
   // Grupos que ya existían con nombres que ahora no se permiten: van a moderación (no se repite si ya se revisó)
   await scanExistingGroups().catch((e) => console.error("scanExistingGroups", e));
   setInterval(() => purgeRemovedGroups().catch((e) => console.error("purgeRemovedGroups", e)), 6 * 3_600_000).unref();
+
+  // Cuentas reportadas por lo mismo por varias personas, sin que nadie lo revise en un día: se suspenden solas
+  const autoSuspend = () => runAutoSuspensions()
+    .then((n) => n && console.log(`Suspensiones automáticas: ${n}`))
+    .catch((e) => console.error("runAutoSuspensions", e));
+  await autoSuspend();
+  setInterval(autoSuspend, 15 * 60_000).unref();
 
   // El chat general existe siempre
   const [general] = await db.select().from(schema.group).where(eq(schema.group.isGeneral, true));

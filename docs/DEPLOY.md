@@ -95,6 +95,17 @@ docker run -d --name mortero-db --restart unless-stopped --network mortero \
 
 Postgres no expone ningún puerto hacia afuera: solo lo ve la app, por la red `mortero`.
 
+### Permisos separados para migrar y atender la API
+
+Usá una cuenta de servicio nueva para la API. Reservá la cuenta que administra el esquema para las migraciones. En una instalación existente, conservá el dueño actual de las tablas para la cuenta que migra.
+
+1. Ejecutá `deploy/postgres-runtime.sql` en la base de qule.ar con la cuenta que aplica las migraciones. En `psql`, usá `\password qule_api` para asignarle su propia contraseña.
+2. En instalaciones que todavía conceden `CREATE` sobre el esquema `public` a `PUBLIC`, revisá quién lo usa y quitá esa concesión en la base dedicada. Comprobá que `has_schema_privilege('qule_api', 'public', 'CREATE')` devuelva `false`.
+3. En cada despliegue, ejecutá `npm run db:migrate --workspace api` con la conexión de migraciones antes de levantar la API nueva. Podés hacerlo en un contenedor temporal de la misma imagen, con un archivo de entorno separado y acceso a la misma red de Docker.
+4. En el entorno de la API, poné `DATABASE_URL` con la cuenta `qule_api` y `MIGRATE_ON_STARTUP=false`. Protegé los dos archivos de entorno y cargá en la API solo las credenciales del rol de servicio.
+
+En staging, verificá que la API arranque, pueda escribir y consultar datos, y que el rol de servicio carezca de permisos para crear o alterar tablas.
+
 ## 4. App
 
 ```bash

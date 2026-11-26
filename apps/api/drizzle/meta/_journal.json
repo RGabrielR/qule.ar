@@ -173,15 +173,22 @@
     {
       "idx": 24,
       "version": "7",
-      "when": 1795558315727,
-      "tag": "0024_captura_en_reporte",
+      "when": 1795616961500,
+      "tag": "0024_message_idempotency",
       "breakpoints": true
     },
     {
       "idx": 25,
       "version": "7",
-      "when": 1795560062811,
-      "tag": "0025_acciones_reporte_foto",
+      "when": 1795697899174,
+      "tag": "0025_encuestas_grupos",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795698746937,
+      "tag": "0026_captura_y_respuesta_en_reporte",
       "breakpoints": true
     }
   ]

@@ -24,11 +24,11 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
   return data as T;
 }
 
-export const upload = <T,>(path: string, file: File, extra: Record<string, string> = {}) => {
+export const upload = <T,>(path: string, file: File, extra: Record<string, string> = {}, headers?: HeadersInit) => {
   const fd = new FormData();
   fd.append("file", file);
   for (const [k, v] of Object.entries(extra)) fd.append(k, v);
-  return api<T>(path, { method: "POST", body: fd });
+  return api<T>(path, { method: "POST", body: fd, headers });
 };
 
 let socket: Socket | null = null;
@@ -54,6 +54,7 @@ export function getSocket(): Socket {
 }
 export function closeSocket() {
   clearTimeout(retryTimer);
+  window.dispatchEvent(new Event("mortero:session-ended"));
   socket?.disconnect();
   socket = null;
 }
@@ -163,7 +164,13 @@ export type NearbyPerson = {
   favorite: boolean;
 };
 
+/** Encuesta de un grupo: solo totales, nunca quién votó qué. myVote es mi opción (null si no voté). */
+export type Poll = { options: string[]; counts: number[]; total: number; myVote?: number | null };
+/** Totales nuevos de una encuesta, en vivo (sin el voto de nadie). */
+export type PollEvent = { groupId: string; messageId: string; counts: number[]; total: number };
+
 export type GroupMessage = {
+  idempotencyKey?: string | null;
   id: string;
   groupId: string;
   body: string | null;
@@ -173,11 +180,14 @@ export type GroupMessage = {
   author: Pick<Author, "id" | "name" | "photo">;
   replyTo: { id: string; authorName: string; body: string | null } | null;
   reactions: { kind: string; by: string[] }[];
+  /** Si es una encuesta: el texto (body) es la pregunta. Ver features/polls. */
+  poll?: Poll | null;
   /** Si los links se pueden tocar: la cuenta que lo mandó tenía más de 24 h (ver canOpenLinks en el API). */
   canOpenLinks?: boolean;
 };
 
 export type Dm = {
+  idempotencyKey?: string | null;
   id: string;
   conversationId: string;
   senderId: string;
