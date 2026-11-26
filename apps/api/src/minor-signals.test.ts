@@ -47,12 +47,12 @@ test("siguen saltando las palabras que apuntan a menores", () => {
   }
 });
 
-test("no se permiten grupos para encuentros sexuales en lugares públicos (cruising)", () => {
-  for (const text of ["Cruising CABA", "cruisin zona norte", "Sexo en la plaza", "Garchar en parques", "Coger en baños públicos"]) {
+test("no se permiten grupos que convocan a sexo donde otras personas lo pueden ver sin querer", () => {
+  for (const text of ["Sexo en la plaza", "Garchar en parques", "Coger en baños públicos", "Sexo en la vía pública"]) {
     assert.equal(moderation.forbiddenGroupText(text)?.kind, "cruising", text);
   }
-  // Lo inocente sigue pasando
-  for (const text of ["Mate en la plaza", "Encuentros en parques para correr", "Club de cruceros", "Cruiser de motos"]) {
+  // Se mira la conducta, no la palabra: "cruising" solo puede ser un sauna o un bar (discusión #270)
+  for (const text of ["Cruising CABA", "cruisin zona norte", "Mate en la plaza", "Encuentros en parques para correr", "Club de cruceros"]) {
     assert.equal(moderation.forbiddenGroupText(text), null, text);
   }
 });

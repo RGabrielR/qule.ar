@@ -44,7 +44,7 @@ qule.ar es un espacio para la comunidad LGBTIQ+ y las personas aliadas. Al usarl
 - No ofrecer ni pedir servicios sexuales pagos ni nada ilegal.
 - **No vender ni ofrecer drogas.** Hablar de consumo cuidado y de reducción de daños sí se puede: esos grupos son bienvenidos.
 - No usar la app ni los grupos para vender o comprar cosas o servicios, incluidos los masajes.
-- No usar la app ni los grupos para organizar encuentros sexuales en lugares públicos (cruising).
+- No usar la app ni los grupos para organizar encuentros sexuales en lugares donde otras personas los puedan ver sin querer, como la vía pública, plazas, baños públicos o transporte. En lugares privados o habilitados, sí.
 - No publicar contenido sexual de menores, contenido sexual sin consentimiento ni violencia. Esto lo denunciamos a las autoridades.
 - No intentar romper la app, entrar a cuentas ajenas ni sacar datos de forma automática.
 

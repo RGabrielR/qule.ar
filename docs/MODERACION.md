@@ -45,13 +45,19 @@ Un grupo **no se puede crear ni editar** si el nombre o la descripción apuntan 
 - **menores** ("+14", "-18", "15 años", "sub 18", "menorcitos", "teens", "busco menores"…). Además, el intento le llega a moderación como alerta urgente sobre quien lo intentó;
 - **vender o comprar** cosas o servicios ("vendo", "venta", "precio", "$ 500", "stock", "delivery"…);
 - **masajes, acompañantes o servicios sexuales**;
-- **encuentros sexuales en lugares públicos** ("cruising", "sexo en la plaza", "garchar en parques"…). La app no puede organizarlos: el sexo en un lugar donde terceros lo pueden ver sin querer es exhibición obscena (Código Penal, art. 129), más grave si lo pueden ver menores, y los códigos contravencionales locales también lo sancionan. Las charlas sobre el tema, o los encuentros en lugares públicos que no son sexuales ("mate en la plaza"), sí se pueden.
+- **convocatorias explícitas a sexo en lugares donde otras personas lo pueden ver sin querer** ("sexo en la plaza", "garchar en parques", "coger en baños públicos"…).
+
+**Encuentros sexuales en lugares públicos: se mira la conducta, no la palabra** (discusión #270). "Cruising" por sí solo no se bloquea: también puede ser ir a un sauna, a un bar o conocer gente. Lo que no se permite es **organizar encuentros sexuales en lugares donde otras personas los puedan ver sin querer** (vía pública, plazas, baños públicos, transporte): el art. 129 del Código Penal sanciona la exhibición obscena expuesta a la vista involuntaria de terceros, más grave si la pueden ver menores. En lugares privados o habilitados, sí.
+
+- **"Nos vemos en tal plaza"**, sin más: puede ser solo juntarse. No se actúa.
+- **Un relato** ("estuve en ese baño y…"): es algo que ya pasó. Se evalúa el contexto.
+- **Una convocatoria concreta** ("vamos a coger en el baño de tal lugar"): si se reporta, se revisa pronto, se borra el mensaje y, según el caso, se suspende. Siempre queda registrado qué se hizo.
 
 **Las drogas no se filtran por palabras.** Hablar de consumo cuidado y de reducción de daños está permitido, y esos grupos son bienvenidos. Lo que no se permite es vender u ofrecer drogas: eso se reporta a mano (ver "Mensajes", más abajo).
 
 La persona ve un mensaje que explica por qué no se puede. Las listas están en `FORBIDDEN_GROUP` (`apps/api/src/moderation.ts`), probadas para no frenar grupos inocentes: "Promo 2010" o "Juegos de mesa +18" pasan sin problema. Si aparece una forma nueva de esquivarlas, se suma ahí.
 
-Los grupos que **ya existían** con esos nombres se revisan al arrancar la app y van a moderación como alerta automática, con el motivo "menor de edad", "venta o drogas" (para los de venta y servicios) u "otro" (para los de encuentros en lugares públicos). No se repiten: si moderación ya lo revisó y el texto no cambió, no vuelve a aparecer.
+Los grupos que **ya existían** con esos nombres se revisan al arrancar la app y van a moderación como alerta automática, con el motivo "menor de edad", "venta o drogas" (para los de venta y servicios) u "otro" (para las convocatorias a sexo en lugares públicos). No se repiten: si moderación ya lo revisó y el texto no cambió, no vuelve a aparecer.
 
 **Mensajes:** las reglas se aplican a nombres y descripciones, no a lo que se escribe adentro. Si alguien vende u ofrece drogas o vende algo en un chat, se reporta con el motivo **"venta o drogas"** y moderación borra el mensaje o suspende la cuenta.
 

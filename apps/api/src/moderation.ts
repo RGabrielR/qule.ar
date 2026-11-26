@@ -262,13 +262,12 @@ const FORBIDDEN_GROUP: { kind: ForbiddenKind; message: string; patterns: Signal[
     ].map((re) => ({ re })),
   },
   {
-    // Encuentros sexuales en lugares públicos (cruising). La app no puede organizarlos: el sexo en un lugar donde
-    // terceros lo pueden ver sin querer es exhibición obscena (Código Penal, art. 129), más grave si lo pueden ver
-    // menores, y los códigos contravencionales locales también lo sancionan. Ver docs/MODERACION.md.
+    // Convocatorias explícitas a sexo en lugares donde terceros lo pueden ver sin querer (Código Penal, art. 129: más
+    // grave si lo pueden ver menores). Se mira la conducta, no la palabra: "cruising" solo no bloquea, porque también
+    // puede ser ir a un sauna o a un bar. Ver docs/MODERACION.md y la discusión #270.
     kind: "cruising",
-    message: "No se pueden crear grupos para organizar encuentros sexuales en lugares públicos (cruising).",
+    message: "No se pueden crear grupos para organizar encuentros sexuales en lugares donde otras personas los puedan ver sin querer (vía pública, plazas, baños públicos, transporte).",
     patterns: [
-      /\bcruis(?:ing|in|ear|eo|eros?)\b/,
       /\b(?:sexo|garch\w*|coger|cogida\w*)\s+en\s+(?:la\s+|el\s+|los\s+|las\s+)?(?:via publica|calle|plazas?|parques?|playas?|banos? publicos?|estaciones?|trenes?|bosques?)\b/,
     ].map((re) => ({ re })),
   },
