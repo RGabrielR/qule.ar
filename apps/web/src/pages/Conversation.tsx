@@ -2,6 +2,7 @@ import { ChatPresenceDot } from "../features/messages/chatPresence";
 import { compareDmOrder, DM_EVENTS, type DmReadReceipt, type DmSettingsChange } from "@mortero/shared/realtime";
 import { privateOutbox, newMessageKey, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, getSocket, upload, type ChatContact, type Dm, type ReactionEvent } from "../api";
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
@@ -53,6 +54,9 @@ function ConversationThread({ id }: { id: string }) {
   const muted = details?.id === id && details.muted;
   const { act, dialog, errorNotice } = useConversationActions(() => nav("/mensajes", { replace: true }));
   const [confirmed, setMessages] = useState<Dm[]>([]);
+  /** Si hay mensajes más viejos que los cargados (se piden con "Ver mensajes anteriores"). */
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const { messages, pendingByMessage, remember } = useTimeline(confirmed, pending, me?.user.id);
   const [seen, setSeen] = useState<{ conversationId: string; readAtById: Map<string, string>; through?: Pick<Dm, "createdAt" | "id"> }>();
   const [text, setText] = useDraft(`dm:${me?.user.id ?? ""}:${id}`);
@@ -100,6 +104,7 @@ function ConversationThread({ id }: { id: string }) {
       const loaded = [...history].sort(compareDmOrder);
       beforeHistory = null;
       setMessages(loaded);
+      setHasMore(d.hasMore);
       // Al abrir el chat, marcá también los mensajes anteriores a la página de historial.
       const oldestLoaded = d.messages[0];
       if (oldestLoaded && d.hasMore) receipts.includeOlderMessages(oldestLoaded.id);
@@ -192,6 +197,33 @@ function ConversationThread({ id }: { id: string }) {
       setMessages((list) => list.map((x) => (x.id === m.id ? { ...x, reactions } : x)));
     } catch (err) {
       setError((err as Error).message);
+    }
+  }
+
+  /** Trae la página anterior y deja a la vista el mismo mensaje que estabas mirando. */
+  async function loadOlder() {
+    const oldest = confirmed[0];
+    if (!oldest || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const query = new URLSearchParams({ before: oldest.createdAt, beforeId: oldest.id });
+      const page = await api<{ messages: Dm[]; hasMore: boolean }>(`/conversations/${id}/messages?${query}`);
+      const list = listRef.current;
+      const anchor = document.getElementById(`dm-${oldest.id}`);
+      const top = anchor?.getBoundingClientRect().top;
+      stickToBottom.current = false;
+      flushSync(() => {
+        setMessages((current) => {
+          const known = new Set(current.map((m) => m.id));
+          return [...page.messages.filter((m) => !known.has(m.id)), ...current].sort(compareDmOrder);
+        });
+        setHasMore(page.hasMore);
+      });
+      if (list && anchor && top !== undefined) list.scrollTop += anchor.getBoundingClientRect().top - top;
+    } catch {
+      setError("No se pudieron cargar los mensajes anteriores.");
+    } finally {
+      setLoadingOlder(false);
     }
   }
 
@@ -340,6 +372,11 @@ function ConversationThread({ id }: { id: string }) {
       {errorNotice}
 
       <div className="chat__list chat__list--dm" role="log" aria-label="Mensajes" ref={listRef} onScroll={onListScroll}>
+        {hasMore && (
+          <button className="btn btn--ghost btn--small chat__older" disabled={loadingOlder} onClick={() => void loadOlder()}>
+            {loadingOlder ? "Cargando…" : "Ver mensajes anteriores"}
+          </button>
+        )}
         {messages.map((m) => {
           const entry = pendingByMessage.get(m);
           const sentAt = new Date(m.createdAt);

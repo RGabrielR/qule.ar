@@ -432,6 +432,7 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 .inbox-filters::-webkit-scrollbar { display: none; }
 .inbox-filters .chip { flex: none; gap: 6px; height: 32px; padding: 0 12px; font-size: var(--text-sm); }
 .inbox-filters__more { padding: 0 9px; }
+.inbox__more { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 16px 20px; text-align: center; }
 .glist { list-style: none; margin: 0; padding: 6px 0; }
 .glist__more { display: flex; justify-content: center; padding: 12px 16px 20px; }
 .gcard { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }

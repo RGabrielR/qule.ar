@@ -221,8 +221,21 @@ async function albumNoticeStates(
   return states;
 }
 
+/**
+ * La bandeja, de a INBOX_LIMIT chats, del más reciente al más viejo. Con `before` y `beforeId` (la fecha y el id del
+ * último chat de la página anterior) trae los que siguen. Los bloqueos y los chats sin mensajes se filtran en la
+ * consulta, así una página corta quiere decir que no hay más.
+ */
 socialRoutes.get("/conversations", async (c) => {
   const me = c.get("user");
+  const cursor = z.object({ before: z.iso.datetime({ offset: true }), beforeId: z.string().min(1).max(64) })
+    .safeParse({ before: c.req.query("before"), beforeId: c.req.query("beforeId") });
+  if (!cursor.success && (c.req.query("before") || c.req.query("beforeId"))) {
+    throw new HTTPException(400, { message: "Página inválida" });
+  }
+  // Los ms alcanzan: la fecha viaja en ISO y se compara redondeada igual que en la consulta.
+  const at = sql`date_trunc('milliseconds', ${conversation.lastMessageAt})`;
+  const before = cursor.success ? new Date(cursor.data.before).toISOString() : null;
   const otherId = sql<string>`case when ${conversation.userA} = ${me.id} then ${conversation.userB} else ${conversation.userA} end`;
   const blocked = db.select({ blocked: sql`1` }).from(block).where(or(
     and(eq(block.blockerId, me.id), eq(block.blockedId, otherId)),
@@ -232,12 +245,19 @@ socialRoutes.get("/conversations", async (c) => {
   const lastMessage = db.select().from(directMessage)
     .where(and(eq(directMessage.conversationId, conversation.id), visibleDm(me.id)))
     .orderBy(desc(directMessage.createdAt), desc(directMessage.id)).limit(1).as("last_message");
+  // Bloqueos y chats sin mensajes visibles (vacíos o vaciados) se filtran acá: una página corta quiere decir que no hay más.
   const rows = await db
     .select()
     .from(conversation).innerJoinLateral(lastMessage, sql`true`)
     .leftJoin(conversationSettings, settingsFor(me.id, conversation.id))
-    .where(and(or(eq(conversation.userA, me.id), eq(conversation.userB, me.id)), notExists(blocked)))
-    .orderBy(desc(conversation.lastMessageAt), desc(conversation.id))
+    .where(and(
+      or(eq(conversation.userA, me.id), eq(conversation.userB, me.id)),
+      notExists(blocked),
+      before && cursor.success
+        ? sql`(${at} < ${before}::timestamptz or (${at} = ${before}::timestamptz and ${conversation.id} < ${cursor.data.beforeId}))`
+        : undefined,
+    ))
+    .orderBy(desc(at), desc(conversation.id))
     .limit(INBOX_LIMIT);
   const visible = rows.map(({ conversation: cv, last_message: last, conversation_settings: settings }) => ({
     id: cv.id, lastMessageAt: cv.lastMessageAt, otherId: cv.userA === me.id ? cv.userB : cv.userA, last, muted: settings?.muted ?? false,
@@ -359,9 +379,17 @@ socialRoutes.get("/conversations/:id/messages", async (c) => {
   const me = c.get("user");
   const { conv, otherId } = await myConversation(c.req.param("id"), me.id);
   if (await isBlocked(me.id, otherId)) return c.notFound();
+  // Página anterior: `before` (fecha del mensaje más viejo que ya tenés) y, si la mandás, `beforeId` para desempatar.
   const before = c.req.query("before");
+  const beforeId = c.req.query("beforeId");
   const conds = [eq(directMessage.conversationId, conv.id), visibleDm(me.id)];
-  if (before) conds.push(lt(directMessage.createdAt, new Date(before)));
+  if (before) {
+    const at = new Date(before);
+    if (Number.isNaN(at.getTime())) throw new HTTPException(400, { message: "Página inválida" });
+    conds.push(beforeId
+      ? or(lt(directMessage.createdAt, at), and(eq(directMessage.createdAt, at), lt(directMessage.id, beforeId)))!
+      : lt(directMessage.createdAt, at));
+  }
   const rows = await db
     .select({ message: directMessage, senderCreatedAt: schema.user.createdAt })
     .from(directMessage)
