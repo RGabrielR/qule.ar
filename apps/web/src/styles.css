@@ -362,6 +362,11 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 .tabs button { background: none; border: 0; padding: 10px 4px; margin-right: 14px; color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
 .searchbar { padding: 12px 16px 4px; }
+/* Atajos de filtros en Mensajes: una fila que se desliza de costado si no entra */
+.inbox-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+.inbox-filters::-webkit-scrollbar { display: none; }
+.inbox-filters .chip { flex: none; gap: 6px; height: 32px; padding: 0 12px; font-size: var(--text-sm); }
+.inbox-filters__more { padding: 0 9px; }
 .glist { list-style: none; margin: 0; padding: 6px 0; }
 .glist__more { display: flex; justify-content: center; padding: 12px 16px 20px; }
 .gcard { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
