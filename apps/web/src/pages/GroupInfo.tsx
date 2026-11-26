@@ -12,6 +12,7 @@ import { useTabData } from "../features/navigation/tabData";
 import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 import { GroupPhotoSetting } from "../components/GroupPhoto";
 import { GroupAvatar } from "../components/GroupAvatar";
+import { Skeleton, SkeletonRows, SkeletonText, SkeletonWait } from "../components/Skeleton";
 
 export function GroupInfo() {
   const { id = "" } = useParams();
@@ -22,6 +23,8 @@ export function GroupInfo() {
   const enter = usePageTransition();
   const [info, setInfo] = useState<Info | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  // Los miembros llegan después que la info: mientras tanto, su esqueleto
+  const [membersReady, setMembersReady] = useState(false);
   // Las recargas por socket o invitaciones llaman a load() sin cantidad: el ref conserva lo que se ve.
   const visibleMembers = useRef(0);
   const [memberNext, setMemberNext] = useState<number | null>(null);
@@ -52,6 +55,7 @@ export function GroupInfo() {
       }
       visibleMembers.current = list.length;
       setMembers(list);
+      setMembersReady(true);
       setMemberNext(next);
       if ((g.role === "owner" || g.role === "moderator") && !g.isGeneral) {
         setInvites(await api<SentInvite[]>(`/groups/${id}/invites`));
@@ -111,7 +115,7 @@ export function GroupInfo() {
   }
 
   if (location.hash === "#solicitudes") return <Navigate to={`/grupos/${id}/solicitudes`} replace />;
-  if (!info) return <div className={`page ${enter}`} />;
+  if (!info) return <div className={`page ${enter}`}><GroupInfoSkeleton /></div>;
   const showChatLink = Boolean(info.role && !location.state?.fromGroupChat);
   const showRequestsLink = isMod && !info.isGeneral;
 
@@ -206,6 +210,7 @@ export function GroupInfo() {
       {!info.isGeneral && (
         <section className="section">
           <h2 className="section__title">Miembros <span className="muted">{info.memberCount}</span></h2>
+          {!membersReady ? <SkeletonRows flush count={Math.min(Math.max(info.memberCount, 1), 6)} avatar={40} lines={1} /> : (
           <ul className="members">
             {members.map((m) => {
               const isMe = m.id === me?.user.id;
@@ -214,7 +219,7 @@ export function GroupInfo() {
               return (
                 <li key={m.id} className="member">
                   <Link to={`/perfil/${m.id}`} className="member__who">
-                    <Avatar src={m.photo} name={m.name} size={40} />
+                    <Avatar src={m.photo} name={m.name} size={40} appear />
                     <span>
                       <b>{m.name}</b>{isMe && <span className="muted"> (vos)</span>}
                       {m.role !== "member" && <span className="pill pill--role">{ROLE_LABEL[m.role]}</span>}
@@ -242,6 +247,7 @@ export function GroupInfo() {
               );
             })}
           </ul>
+          )}
           {memberNext != null && (
             <div className="center">
               <button className="btn btn--small" disabled={loadingMore} onClick={loadMoreMembers}>
@@ -299,6 +305,24 @@ export function GroupInfo() {
         </section>
       )}
     </div>
+  );
+}
+
+/** Mientras llega la info del grupo: la barra, la foto y las primeras secciones con su forma. */
+function GroupInfoSkeleton() {
+  return (
+    <SkeletonWait>
+      <header className="topbar topbar--thread">
+        <span className="skeleton--iconbtn" />
+        <Skeleton className="skeleton--title" />
+      </header>
+      <section className="section group-head"><Skeleton className="skeleton--group-photo" /></section>
+      <section className="section">
+        <Skeleton className="skeleton--title section__title" />
+        <SkeletonText lines={3} />
+      </section>
+      <section className="section"><SkeletonText lines={2} /></section>
+    </SkeletonWait>
   );
 }
 

@@ -10,6 +10,9 @@ import { DialogFocus } from "../components/DialogFocus";
 import { getGridList, saveGridList, toGridPerson } from "../features/profileSwipe/gridList";
 import { HasPlaceChips, type HasPlace } from "../features/place/hasPlace";
 import { useTabTransition } from "../features/navigation/pageTransition";
+import { photoAppear } from "../components/photoAppear";
+import { Skeleton, SkeletonGrid } from "../components/Skeleton";
+import { useArrival } from "../components/useArrival";
 
 export type Filters = {
   ageMin?: number; ageMax?: number;
@@ -88,6 +91,8 @@ export function Nearby() {
   const userId = me?.user.id;
   const [filters, setFilters] = useState<Filters>(loadFilters);
   const [people, setPeople] = useState<NearbyPerson[]>([]);
+  // Con qué filtros se pidió la grilla que se ve: si cambian, la grilla nueva entra entera
+  const [peopleQuery, setPeopleQuery] = useState<string>();
   const [hasMore, setHasMore] = useState(false);
   const [status, setStatus] = useState<Status>("loading");
   const [loc, setLoc] = useState<LocState>("ok");
@@ -110,6 +115,9 @@ export function Nearby() {
     return { ...saved, count: Math.max(saved.count, swiped) };
   });
   const pendingRestore = useRef(returnPosition);
+  // Las fotos entran escalonadas en cada tanda ("Ver más", actualizar). Al volver de un perfil a la misma
+  // posición, no: la grilla tiene que verse como estaba.
+  const arrival = useArrival(status === "ready" ? people.map((p) => p.id) : null, { quietFirst: returnPosition != null, batch: peopleQuery });
   const visible = useRef({ count: 0, ready: false });
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
@@ -163,6 +171,7 @@ export function Nearby() {
       if (signal.aborted) return;
       setLoc((prev) => (d.hasLocation ? "ok" : prev === "ok" ? "none" : prev));
       setPeople((prev) => (offset ? [...prev, ...loaded] : loaded));
+      setPeopleQuery(toQuery(f, 0));
       setHasMore(hasMore);
       setStatus("ready");
     } catch {
@@ -287,6 +296,7 @@ export function Nearby() {
     <div ref={pageRef} className={`page nearby-page ${enter}`} onTouchStart={startPull} onTouchEnd={endPull} onTouchCancel={cancelPull}>
       <header className="topbar">
         <h1 className="topbar__title">Gente</h1>
+        {status === "loading" && <Skeleton className="skeleton--btn-sm" />}
         {status === "ready" && (
           <div className="topbar__actions">
             {loc === "ok" && me?.profile?.hasLocation && (
@@ -345,6 +355,8 @@ export function Nearby() {
       </div>
       <p className="sr-only" role="status">{refreshing ? "Actualizando…" : readyToRefresh ? "Soltá para actualizar" : ""}</p>
 
+      {status === "loading" && <SkeletonGrid />}
+
       {status === "ready" && people.length === 0 && (
         <div className="empty">
           <p className="empty__title">{active ? "Nadie con esos filtros" : "Todavía no hay nadie más"}</p>
@@ -360,9 +372,9 @@ export function Nearby() {
         <>
           <ul className="grid">
             {people.map((p) => (
-              <li key={p.id}>
+              <li key={p.id} {...arrival(p.id)}>
                 <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
-                  {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
+                  {p.photo ? <img src={p.photo} alt="" loading="lazy" {...photoAppear} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
                   {p.favorite && <span className="tile__fav" aria-label="Favorito"><StarIcon filled size={14} /></span>}
                   <span className="tile__info">
                     <span className="tile__name">

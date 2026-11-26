@@ -16,6 +16,7 @@ import { useProfileSwipe } from "../features/profileSwipe/useProfileSwipe";
 import { ShareAlbums } from "../features/photos/ShareAlbums";
 import { usePageTransition } from "../features/navigation/pageTransition";
 import { useSectionBack } from "../useSectionBack";
+import { Skeleton, SkeletonText, SkeletonWait } from "../components/Skeleton";
 
 export function ProfilePage() {
   const { id = "" } = useParams();
@@ -211,7 +212,22 @@ function ProfileView({ id }: { id: string }) {
         back={<button className="iconbtn iconbtn--float" onClick={goBack} aria-label="Volver"><BackIcon /></button>}
         aside={swipe.active && <ProfileSwitcher swipe={swipe} className="profile-switch--cover" />}
       />
-      {content}
+      {content ?? <ProfileSkeleton />}
     </div>
+  );
+}
+
+/** Mientras llega el perfil: los botones de arriba, el texto y la tabla de datos, con su forma. */
+function ProfileSkeleton() {
+  return (
+    <SkeletonWait className="profile__body">
+      <div className="row">
+        <Skeleton className="skeleton--btn skeleton--grow" />
+        <Skeleton className="skeleton--btn skeleton--icon" />
+        <Skeleton className="skeleton--btn skeleton--icon" />
+      </div>
+      <SkeletonText lines={2} />
+      <Skeleton className="skeleton--stats" />
+    </SkeletonWait>
   );
 }

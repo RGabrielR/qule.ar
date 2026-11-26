@@ -210,6 +210,8 @@ export const motion = {
   "dur-sheet": "320ms",
   /** Separación entre elementos que entran escalonados. */
   stagger: "35ms",
+  /** Pulso de los esqueletos mientras se espera (una ida; vuelve con `alternate`). */
+  "dur-pulse": "900ms",
 } as const;
 
 // ---------- CSS ----------

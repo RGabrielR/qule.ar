@@ -106,11 +106,11 @@ Tamaños (`font-size: var(--…)`):
 
 ## Movimiento
 
-Las animaciones hacen que la app se sienta fluida, como una app instalada y no como una web. Las curvas y duraciones están en `motion` (`packages/brand`): `--ease-out`, `--ease-in-out`, `--ease-sheet`, `--dur-press`, `--dur-fast`, `--dur-base`, `--dur-page`, `--dur-sheet` y `--stagger`. No se escriben curvas ni duraciones sueltas.
+Las animaciones hacen que la app se sienta fluida, como una app instalada y no como una web. Las curvas y duraciones están en `motion` (`packages/brand`): `--ease-out`, `--ease-in-out`, `--ease-sheet`, `--dur-press`, `--dur-fast`, `--dur-base`, `--dur-page`, `--dur-sheet`, `--stagger` y `--dur-pulse` (el pulso de los esqueletos). No se escriben curvas ni duraciones sueltas.
 
 - **Cambio de pantalla:** la nueva entra desde la derecha (`.page--forward`); al volver con el botón de la app, desde la izquierda (`.page--back`). Lo arma `usePageTransition()` en `features/navigation/pageTransition.ts`. El gesto de volver del sistema no se anima: Safari ya hace el suyo.
-- **Contenido que llega:** sube y aparece (`rise-in`), escalonado por `--stagger` dentro de cada tanda. Las fotos aparecen con un fundido al terminar de cargar.
-- **Esperas:** esqueletos con la forma de lo que va a llegar, en vez de "Cargando…".
+- **Contenido que llega:** sube y aparece (`rise-in`), escalonado por `--stagger` dentro de cada tanda (`useArrival` en `components/useArrival.ts`). Lo que ya estaba guardado al abrir la pantalla no se anima, y cada fila se anima una sola vez. Las fotos aparecen con un fundido al terminar de cargar (`photoAppear`), sin fundido si ya estaban en caché.
+- **Esperas:** esqueletos con la forma de lo que va a llegar, en vez de "Cargando…" (`components/Skeleton.tsx`). Aparecen recién si la espera pasa de un instante y laten despacio con la opacidad; nada de brillos que se desplazan.
 - **Toques:** respuesta inmediata y corta (`--dur-press`). El hover solo en compu (`@media (hover: hover) and (pointer: fine)`).
 - Solo `transform` y `opacity`. Nada de `scale(0)`: lo que aparece arranca de 0,95 o más.
 - Con movimiento reducido (`prefers-reduced-motion`), todo pasa a fundidos simples.

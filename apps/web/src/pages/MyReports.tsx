@@ -5,6 +5,7 @@ import { usePageTransition } from "../features/navigation/pageTransition";
 import { useSectionBack } from "../useSectionBack";
 import { api, getSocket } from "../api";
 import { BackIcon } from "../components/Icons";
+import { SkeletonRows } from "../components/Skeleton";
 
 type ReportSummary = {
   id: string;
@@ -68,7 +69,7 @@ export function MyReports() {
         <h1 className="topbar__title topbar__title--sm">Mis reportes</h1>
       </header>
       {error ? <p className="notice notice--error" role="alert">No pudimos cargar tus reportes.</p>
-        : !reports ? <p className="empty muted" role="status">Cargando…</p>
+        : !reports ? <SkeletonRows count={4} />
         : reports.length === 0 ? <p className="empty muted">Todavía no enviaste reportes.</p>
         : (
           <ul className="inbox reports-inbox">

@@ -231,9 +231,43 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .empty .muted { max-width: 34ch; }
 
 .avatar { border-radius: var(--radius-pill); object-fit: cover; flex: none; display: block; background: var(--surface-3); }
-.avatar--appear { opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
-.avatar--appear[data-loaded] { opacity: 1; }
+/* Fotos que entran con un fundido al terminar de cargar (components/photoAppear.ts); las de caché ya vienen marcadas */
+.photo-appear { opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
+.photo-appear[data-loaded] { opacity: 1; }
 .avatar--empty { display: grid; place-items: center; font-weight: 700; color: var(--accent-2); background: var(--accent-soft); }
+
+/* Esqueletos (components/Skeleton.tsx): aparecen si la espera pasa de un instante y laten despacio */
+.skeleton-wait { animation: fade-in var(--dur-base) var(--ease-out) var(--dur-fast) backwards; }
+.skeleton-wait__shapes { display: contents; }
+.skeleton { display: block; flex: none; background: var(--surface-2); border-radius: var(--radius-sm); animation: skeleton-pulse var(--dur-pulse) var(--ease-in-out) infinite alternate; }
+.skeleton--round { border-radius: var(--radius-pill); }
+.skeleton--square { border-radius: var(--radius-xl); }
+.skeleton-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* Cada línea ocupa el alto de una línea de texto y dibuja una barra más fina en el medio */
+.skeleton-line { height: 1lh; padding-block: 0.3lh; background: none; border-radius: 0; }
+.skeleton-line::before { content: ""; display: block; height: 100%; border-radius: var(--radius-hair); background: var(--surface-2); }
+.skeleton-line:last-child:not(:first-child) { width: 65%; }
+.skeleton-rows { padding: 4px 0; }
+.skeleton-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
+.skeleton-row .skeleton-line:first-child { width: 42%; }
+.skeleton-row:nth-child(3n + 2) .skeleton-line:first-child { width: 30%; }
+.skeleton-row:nth-child(3n) .skeleton-line:first-child { width: 54%; }
+.skeleton-row .skeleton-line + .skeleton-line { font-size: var(--text-md); }
+.skeleton-rows--flush { padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.skeleton-rows--flush .skeleton-row { padding: 0; }
+.skeleton-tile { aspect-ratio: 1; border-radius: 0; }
+.skeleton--input { height: 47px; border-radius: var(--radius-lg); }
+.skeleton--chip { width: 84px; height: 32px; border-radius: var(--radius-pill); }
+.skeleton--btn { height: 46px; border-radius: var(--radius-pill); }
+.skeleton--btn-sm { width: 96px; height: 34px; border-radius: var(--radius-pill); }
+.skeleton--icon { width: 46px; }
+.skeleton--grow { flex: 1; }
+.skeleton--iconbtn { display: block; flex: none; width: 40px; height: 40px; border-radius: var(--radius-pill); }
+.skeleton--title { width: 45%; height: 20px; }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-wait { animation-duration: var(--dur-fast); }
+  .skeleton { animation: none; opacity: 0.7; }
+}
 
 /* ---------- Chat de grupo ---------- */
 .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -336,7 +370,11 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .profile__cover-media { position: absolute; inset: 0; }
 .profile__cover-media img { position: absolute; inset: 0; }
 .profile__cover-media img[hidden] { visibility: hidden; }
-.profile__skeleton { position: absolute; inset: 0; background: linear-gradient(var(--surface-3), var(--surface-2)); }
+.profile__skeleton { position: absolute; inset: 0; background: linear-gradient(var(--surface-3), var(--surface-2)); animation: skeleton-pulse var(--dur-pulse) var(--ease-in-out) infinite alternate; }
+/* La foto (o su vista previa) entra con un fundido cuando reemplaza al esqueleto (features/profile/ProfileCoverImage.tsx) */
+.profile__cover-media img.profile__cover-fade { transition: opacity var(--dur-fast) var(--ease-out); }
+.profile__cover-media img.profile__cover-fade[hidden] { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .profile__skeleton { animation: none; } }
 .profile__photo::after { content: ""; position: absolute; inset: auto 0 0; height: 45%; background: linear-gradient(transparent, var(--scrim-strong)); pointer-events: none; }
 .profile__photo > .iconbtn--float { z-index: var(--z-sticky); }
 .profile__nophoto { width: 100%; height: 100%; display: grid; place-items: center; font-family: var(--display); font-size: var(--display-xl); color: var(--accent); background: var(--accent-soft); }
@@ -368,6 +406,8 @@ html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .stats > div:last-child:nth-child(odd) { grid-column: span 2; }
 .stats dt { font-size: var(--text-xs); color: var(--muted); }
 .stats dd { margin: 2px 0 0; font-weight: 600; }
+/* Esqueleto de la tabla de datos del perfil mientras llega (pages/Profile.tsx): unas tres filas */
+.skeleton--stats { height: 186px; border-radius: var(--radius-xl); }
 
 .confirm { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-xl); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 .confirm--danger { border-color: var(--danger-strong); background: var(--danger-soft); }
@@ -433,6 +473,8 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 .blocked__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .blocked__inner .linkbtn { flex: none; }
 .blocked__more { height: 1px; }
+/* Esqueleto mientras llega la primera tanda: mismo alto que las filas */
+.blocked .skeleton-row { padding: 8px 16px; }
 .empty--in { animation: rise-in var(--dur-base) var(--ease-out) backwards; }
 @media (prefers-reduced-motion: reduce) {
   .blocked__row, .empty--in { animation-name: fade-in; animation-delay: 0ms; }
@@ -454,6 +496,11 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 @keyframes pop-in { from { opacity: 0; scale: 0.85; } }
 /* Un ícono que se acomoda después de un toque (.tabbar__icon--pop) */
 @keyframes settle { from { scale: 0.9; } }
+/* Pulso de los esqueletos (components/Skeleton.tsx), con `alternate` */
+@keyframes skeleton-pulse { to { opacity: 0.45; } }
+/* Lo que llega a una lista, escalonado dentro de su tanda (components/useArrival.ts) */
+.arrive { animation: rise-in var(--dur-base) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * var(--stagger)); }
+@media (prefers-reduced-motion: reduce) { .arrive { animation-name: fade-in; animation-delay: 0s; } }
 @media (prefers-reduced-motion: reduce) { .page--forward, .page--back, .page--tab { animation: fade-in var(--dur-fast) var(--ease-out) backwards; } }
 
 /* ---------- Grupos ---------- */
@@ -473,6 +520,8 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 a.gcard { transition: background-color var(--dur-fast) var(--ease-out); }
 a.gcard:active { background: var(--surface); }
 @media (hover: hover) and (pointer: fine) { a.gcard:hover { background: var(--surface); } }
+/* Esqueleto de la lista de grupos: mismo margen que las tarjetas */
+.glist .skeleton-row { padding: 12px 16px; }
 .gcard__icon { width: 48px; height: 48px; border-radius: var(--radius-xl); flex: none; display: grid; place-items: center; font-family: var(--display); font-weight: 800; font-size: var(--title-xs); background: var(--surface-3); color: var(--text); }
 .gcard__icon--photo { object-fit: cover; }
 .gcard__icon--logo { display: flex; align-items: center; justify-content: center; background: var(--surface-3); }
@@ -483,6 +532,8 @@ a.gcard:active { background: var(--surface); }
 .group-photo__actions .row { justify-content: flex-start; align-items: center; }
 .group-photo__actions .row > .btn { flex: none; }
 .gcard__icon--big { width: 72px; height: 72px; font-size: var(--title-2xl); border-radius: var(--radius-3xl); }
+/* Esqueleto de la info de grupo (pages/GroupInfo.tsx): la foto grande */
+.skeleton--group-photo { width: 72px; height: 72px; border-radius: var(--radius-3xl); }
 .gcard__text { flex: 1; min-width: 0; }
 .gcard__details { display: block; }
 .gcard__details:hover b { text-decoration: underline; }
@@ -536,8 +587,9 @@ a.gcard:active { background: var(--surface); }
 /* La foto de la grilla se hunde apenas al tocarla */
 .tile:active { scale: 0.97; }
 @media (prefers-reduced-motion: reduce) { .tile:active { scale: none; opacity: 0.7; } }
-.tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.2s; }
-.tile:hover img { transform: scale(1.03); }
+/* La foto entra con un fundido al cargar (photoAppear) y crece apenas con el mouse encima */
+.tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .tile:hover img { transform: scale(1.03); } }
 .tile__empty { width: 100%; height: 100%; display: grid; place-items: center; font-family: var(--display); font-size: var(--display-md); font-weight: 800; color: var(--accent); background: var(--accent-soft); }
 .tile::after { content: ""; position: absolute; inset: 45% 0 0; background: linear-gradient(transparent, var(--scrim-fade)); pointer-events: none; }
 .tile__info { position: absolute; left: 7px; right: 7px; bottom: 6px; z-index: var(--z-raised); display: flex; flex-direction: column; line-height: 1.2; }

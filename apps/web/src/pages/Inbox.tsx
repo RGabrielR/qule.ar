@@ -7,6 +7,8 @@ import { FilterIcon } from "../components/Icons";
 import { countFilters, EMPTY, FilterSheet, toQuery, type Filters } from "./Nearby";
 import { albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { Avatar } from "../components/Avatar";
+import { Skeleton, SkeletonRows } from "../components/Skeleton";
+import { useArrival } from "../components/useArrival";
 import { useTabData } from "../features/navigation/tabData";
 import { useRememberScroll } from "../features/navigation/viewMemory";
 import { useTabTransition } from "../features/navigation/pageTransition";
@@ -81,6 +83,8 @@ export function Inbox() {
   const enter = useTabTransition();
   const pageRef = useRef<HTMLDivElement>(null);
   useRememberScroll(pageRef, list != null);
+  // Las filas entran escalonadas cuando llegan; las que ya estaban guardadas al volver a la pestaña, no
+  const arrival = useArrival(filtered?.map((c) => c.id));
 
   return (
     <div className={`page ${enter}`} ref={pageRef}>
@@ -103,7 +107,15 @@ export function Inbox() {
           </div>
         </div>
       )}
-      {list === null ? null : list.length === 0 ? (
+      {list === null ? (
+        <>
+          <div className="searchbar form skeleton-wait" aria-hidden>
+            <Skeleton className="skeleton--input" />
+            <div className="inbox-filters"><Skeleton className="skeleton--chip" /><Skeleton className="skeleton--chip" /><Skeleton className="skeleton--chip" /></div>
+          </div>
+          <InboxSkeleton />
+        </>
+      ) : list.length === 0 ? (
         <div className="empty">
           <p className="empty__title">Sin mensajes por ahora</p>
           <p className="muted">Tocá la foto de alguien en el chat general para ver su perfil y escribirle.</p>
@@ -113,9 +125,11 @@ export function Inbox() {
           <p className="empty__title">No hay conversaciones que coincidan.</p>
           {anyFilter && <button className="btn btn--small" onClick={() => setView({ unread: false, filters: EMPTY })}>Sacar filtros</button>}
         </div>
+      ) : filtered === undefined ? (
+        <InboxSkeleton />
       ) : (
         <ul className="inbox">
-          {filtered?.map((c) => {
+          {filtered.map((c) => {
             const mine = c.last.senderId === me?.user.id;
             const kind = albumNoticeKind(c.last, albumNoticeTime);
             const preview =
@@ -125,11 +139,12 @@ export function Inbox() {
               : c.last.expiring ? "⏱ Foto temporal"
               : kind === "photo" || c.last.photo ? "📷 Foto"
               : c.last.body;
+            const { className, style } = arrival(c.id);
             return (
-              <li key={c.id} className="inbox__row">
+              <li key={c.id} className={`inbox__row ${className}`} style={style}>
                 {c.other ? (
                   <Link to={`/perfil/${c.other.id}`} className="inbox__avatar" aria-label={`Ver perfil de ${c.other.name}`}>
-                    <Avatar src={c.other.photo ?? null} name={c.other.name} size={52} />
+                    <Avatar src={c.other.photo ?? null} name={c.other.name} size={52} appear />
                   </Link>
                 ) : (
                   <span className="inbox__avatar"><Avatar src={null} name="?" size={52} /></span>
@@ -155,4 +170,9 @@ export function Inbox() {
       }} />}
     </div>
   );
+}
+
+/** Mientras llegan los chats: filas con la forma de las de Mensajes (foto de 52 y dos líneas). */
+function InboxSkeleton() {
+  return <SkeletonRows count={8} avatar={52} />;
 }

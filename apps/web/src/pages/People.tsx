@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigationType } from "react-router";
 import { api, type Author, type Toque, type Viewer } from "../api";
 import { ReactionIcon } from "../components/Reactions";
 import { reactionLabel } from "../reactions";
@@ -8,6 +8,9 @@ import { BackIcon } from "../components/Icons";
 import { useSectionBack } from "../useSectionBack";
 import { useRememberScroll } from "../features/navigation/viewMemory";
 import { usePageTransition } from "../features/navigation/pageTransition";
+import { photoAppear } from "../components/photoAppear";
+import { SkeletonGrid } from "../components/Skeleton";
+import { useArrival } from "../components/useArrival";
 
 function ago(iso: string) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -22,6 +25,9 @@ function PeopleGrid({ title, people, empty, note }: { title: string; people: (Au
   const enter = usePageTransition();
   const pageRef = useRef<HTMLDivElement>(null);
   useRememberScroll(pageRef, people != null);
+  // Las fotos entran escalonadas cuando llegan; al volver de un perfil, no: la grilla vuelve a estar como estaba
+  const returning = useNavigationType() === "POP";
+  const arrival = useArrival(people?.map((p) => p.id), { quietFirst: returning });
   return (
     <div className={`page ${enter}`} ref={pageRef}>
       <header className="topbar topbar--thread">
@@ -29,13 +35,14 @@ function PeopleGrid({ title, people, empty, note }: { title: string; people: (Au
         <h1 className="topbar__title topbar__title--sm">{title}</h1>
       </header>
       {note && <p className="muted small page-note">{note}</p>}
+      {!people && <SkeletonGrid className="grid--spaced" />}
       {people && people.length === 0 && <div className="empty"><p className="muted">{empty}</p></div>}
       {people && people.length > 0 && (
         <ul className="grid grid--spaced">
           {people.map((p) => (
-            <li key={p.id}>
+            <li key={p.id} {...arrival(p.id)}>
               <Link to={`/perfil/${p.id}`} className="tile" aria-label={p.name}>
-                {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
+                {p.photo ? <img src={p.photo} alt="" loading="lazy" {...photoAppear} /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
                 {p.reaction && (
                   <span className={`tile__reaction ${p.isNew ? "tile__reaction--new" : ""}`} title={reactionLabel(p.reaction)}>
                     <ReactionIcon kind={p.reaction} size={26} />

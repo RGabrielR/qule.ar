@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { api, type Author } from "../api";
 import { Avatar } from "../components/Avatar";
 import { BackIcon } from "../components/Icons";
+import { SkeletonRows } from "../components/Skeleton";
 import { usePageTransition } from "../features/navigation/pageTransition";
 import { useSectionBack } from "../useSectionBack";
 
@@ -116,7 +117,7 @@ export function BlockedPeople() {
           <p className="muted">Si bloqueás a alguien, va a aparecer acá y lo vas a poder desbloquear cuando quieras.</p>
         </div>
       ) : list == null ? (
-        failed ? <ListError onRetry={() => void load(q, 0)} /> : null
+        failed ? <ListError onRetry={() => void load(q, 0)} /> : <SkeletonRows count={6} avatar={44} lines={1} className="blocked" />
       ) : list.rows.length === 0 && list.q ? (
         <div className="empty empty--in" role="status"><p className="empty__title">Nadie con ese nombre</p></div>
       ) : (
