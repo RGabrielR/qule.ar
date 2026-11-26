@@ -377,12 +377,12 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
             {people.map((p) => (
               <li key={p.id}>
                 <Link to={`/perfil/${p.id}`} state={{ nearbyEntry: entry }} className="tile" aria-label={`${p.name}${p.distance ? `, ${p.distance}` : ""}${p.online ? ", en línea" : ""}`}>
-                  {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
+                  {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <span className="tile__empty"><bdi>{p.name.charAt(0).toUpperCase()}</bdi></span>}
                   {p.favorite && <span className="tile__fav" aria-label="Favorito"><StarIcon filled size={14} /></span>}
                   <span className="tile__info">
                     <span className="tile__name">
                       {p.online ? <i className="dot dot--on" /> : p.recent ? <i className="dot dot--recent" /> : null}
-                      {p.name}
+                      <bdi>{p.name}</bdi>
                     </span>
                     {p.distance && <span className="tile__dist">{p.distance}</span>}
                   </span>

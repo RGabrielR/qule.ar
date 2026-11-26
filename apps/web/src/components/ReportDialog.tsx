@@ -56,13 +56,13 @@ export function ReportDialog({ userId, groupId, name, messageId, messageKind, on
           <>
             <h2 id="report-title">Gracias por avisar</h2>
             <p className="muted">
-              Vamos a revisar el reporte.{groupId ? " Si sos parte del grupo, también podés salir." : ` Si te hace sentir mejor, también podés bloquear a ${name}.`}
+              Vamos a revisar el reporte.{groupId ? " Si sos parte del grupo, también podés salir." : <> Si te hace sentir mejor, también podés bloquear a <bdi>{name}</bdi>.</>}
             </p>
             <button className="btn btn--primary" onClick={onClose}>Listo</button>
           </>
         ) : (
           <>
-            <h2 id="report-title">Reportar {groupId ? "el grupo " : messageId ? "mensaje de " : "a "}{name}</h2>
+            <h2 id="report-title">Reportar {groupId ? "el grupo " : messageId ? "mensaje de " : "a "}{groupId ? name : <bdi>{name}</bdi>}</h2>
             <div className="chips">
               {REPORT_REASONS.map((r) => (
                 <button key={r} className={`chip ${reason === r ? "chip--on" : ""}`} disabled={state === "sending"} onClick={() => { setReason(r); if (r === "menor de edad") setCapture(null); }}>

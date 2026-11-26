@@ -112,7 +112,7 @@ export function ReportSpamAlerts({ act, onSuspend, refresh }: {
             <div className="rcard__who">
               {a.reporter && <Avatar src={a.reporter.photo} name={a.reporter.name} size={40} />}
               <span>
-                <b>{name}</b>
+                <b><bdi>{name}</bdi></b>
                 <HistoryLine h={a.history} />
               </span>
             </div>
@@ -173,7 +173,7 @@ export function ReportSpamAlerts({ act, onSuspend, refresh }: {
                 <span className="rcard__who">
                   {m.reporter && <Avatar src={m.reporter.photo} name={m.reporter.name} size={32} />}
                   <span>
-                    <b>{m.reporter?.name ?? "Una cuenta"}</b> <span className="muted small">desde el {fmt(m.mutedAt)}</span>
+                    <b><bdi>{m.reporter?.name ?? "Una cuenta"}</bdi></b> <span className="muted small">desde el {fmt(m.mutedAt)}</span>
                     <HistoryLine h={m.history} />
                   </span>
                 </span>

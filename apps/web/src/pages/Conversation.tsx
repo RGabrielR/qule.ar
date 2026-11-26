@@ -356,7 +356,7 @@ function ConversationThread({ id }: { id: string }) {
             <span>
               <span className="chat-contact-name">
                 <ChatPresenceDot state={other.presence} />
-                <b>{other.name}</b>
+                <b><bdi>{other.name}</bdi></b>
               </span>
               {typing && <span className="typing-label">escribiendo…</span>}
             </span>
@@ -400,12 +400,12 @@ function ConversationThread({ id }: { id: string }) {
                   aria-label={`Ir al mensaje citado de ${quoted.authorName}`}
                   onClick={() => jumpTo(quoted.id)}
                 >
-                  <span className="quote__name">{quoted.authorName}</span>
+                  <span className="quote__name"><bdi>{quoted.authorName}</bdi></span>
                   <span className="quote__body">{quoted.body ?? "Mensaje borrado"}</span>
                 </button>
               ) : (
                 <div className="quote">
-                  <span className="quote__name">{quoted.authorName ?? "Mensaje borrado"}</span>
+                  <span className="quote__name">{quoted.authorName == null ? "Mensaje borrado" : <bdi>{quoted.authorName}</bdi>}</span>
                   {quoted.authorName && quoted.body && <span className="quote__body">{quoted.body}</span>}
                 </div>
               ))}
@@ -507,7 +507,7 @@ function ConversationThread({ id }: { id: string }) {
         {replyTo && (
           <div className="composer__reply">
             <div className="quote quote--static">
-              <span className="quote__name">Respondiendo a {replyTo.senderId === myId ? "tu mensaje" : other?.name ?? "ese mensaje"}</span>
+              <span className="quote__name">Respondiendo a {replyTo.senderId === myId ? "tu mensaje" : other ? <bdi>{other.name}</bdi> : "ese mensaje"}</span>
               <span className="quote__body">{replyPreview(replyTo)}</span>
             </div>
             <button

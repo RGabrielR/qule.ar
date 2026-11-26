@@ -148,7 +148,7 @@ export function Inbox() {
                 )}>
                 <div className="inbox__text">
                   <div className="inbox__top">
-                    <b className="chat-contact-name"><ChatPresenceDot state={c.other?.presence} /><span>{c.other?.name ?? "Cuenta borrada"}</span></b>
+                    <b className="chat-contact-name"><ChatPresenceDot state={c.other?.presence} /><span><bdi>{c.other?.name ?? "Cuenta borrada"}</bdi></span></b>
                     <time>{ago(c.last.createdAt)}</time>
                   </div>
                   <p className="inbox__preview">{mine && "Vos: "}{preview}</p>

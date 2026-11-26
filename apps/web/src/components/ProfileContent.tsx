@@ -20,7 +20,7 @@ export function ProfileCover({ photos, coverPhoto, displayName, age, status, bac
   const index = Math.min(selected, count - 1);
   const source = photos ? photos[index] : coverPhoto;
   const preview = source && source === coverPhoto ? `${source}?s=cover` : undefined;
-  const fallback = displayName && <div className="profile__nophoto">{displayName.charAt(0).toUpperCase()}</div>;
+  const fallback = displayName && <div className="profile__nophoto"><bdi>{displayName.charAt(0).toUpperCase()}</bdi></div>;
   return (
     <div className="profile__photo">
       {source || !photos ? (
@@ -51,7 +51,7 @@ export function ProfileCover({ photos, coverPhoto, displayName, age, status, bac
       {aside}
       {displayName && <div className={aside ? "profile__name profile__name--with-aside" : "profile__name"}>
         <div className="profile__nameline">
-          <h1>{displayName}</h1>
+          <h1><bdi>{displayName}</bdi></h1>
           {age != null && <span>{age}</span>}
         </div>
         {(status && (status.online || status.recent || status.distance)) && (

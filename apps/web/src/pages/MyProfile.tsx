@@ -1,3 +1,4 @@
+import { isolateText } from "../bidi";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router";
@@ -249,7 +250,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
   }
 
   function blockFromAlbum(g: AlbumGrant) {
-    if (!confirm(`¿Bloquear a ${g.name}? Pierde el acceso a todos tus álbumes y no van a poder verse ni escribirse.`)) return;
+    if (!confirm(`¿Bloquear a ${isolateText(g.name)}? Pierde el acceso a todos tus álbumes y no van a poder verse ni escribirse.`)) return;
     return changeMedia(async () => {
       await api("/blocks", { method: "POST", json: { userId: g.id } });
       setGrants((x) => x.filter((y) => y.id !== g.id));
@@ -456,7 +457,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
                 <li key={`${g.id}-${g.albumId}`}>
                   <Avatar src={g.photo} name={g.name} size={36} />
                   <span className="grants__who">
-                    <Link to={`/perfil/${g.id}`}>{g.name}</Link>
+                    <Link to={`/perfil/${g.id}`}><bdi>{g.name}</bdi></Link>
                     <small className="muted">{g.albumName} · {untilLabel(g.expiresAt)}</small>
                   </span>
                   <button className="linkbtn" disabled={mediaLocked} onClick={() => revoke(g)} aria-label={`Quitarle ${g.albumName} a ${g.name}`}>Quitar</button>
@@ -491,7 +492,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
         <h2 className="section__title">Sobre vos <span className="muted">{profile.age} años</span></h2>
         <label className="field">
           <span>Nombre</span>
-          <input className="input" required maxLength={40} value={form.displayName} onChange={(e) => set("displayName", e.target.value)} />
+          <input className="input" required maxLength={40} dir="auto" value={form.displayName} onChange={(e) => set("displayName", e.target.value)} />
         </label>
         <label className="field">
           <span>Sobre mí</span>

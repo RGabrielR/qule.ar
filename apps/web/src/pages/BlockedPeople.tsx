@@ -130,7 +130,7 @@ export function BlockedPeople() {
               >
                 <div className="blocked__inner">
                   <Avatar src={person.photo} name={person.name} size={44} appear />
-                  <span className="blocked__name">{person.name}</span>
+                  <span className="blocked__name"><bdi>{person.name}</bdi></span>
                   <button className="linkbtn" disabled={busyId === person.id || leaving.has(person.id)} onClick={() => void unblock(person)}>
                     Desbloquear
                   </button>

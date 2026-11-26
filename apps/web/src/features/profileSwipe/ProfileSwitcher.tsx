@@ -22,7 +22,7 @@ export function ProfileSwitcher({ swipe, className = "" }: { swipe: ProfileSwipe
   return (
     <nav className={`profile-switch ${className}`} aria-label="Perfiles de Gente">
       <p id={describedBy} className="sr-only">
-        {`Estás viendo a ${current.name}, ${position} de ${total}${hasMore ? " por ahora" : ""}. También podés deslizar o usar las flechas.`}
+        Estás viendo a <bdi>{current.name}</bdi>, {position} de {total}{hasMore ? " por ahora" : ""}. También podés deslizar o usar las flechas.
       </p>
       <button
         ref={prevRef}

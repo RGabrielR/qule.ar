@@ -42,13 +42,13 @@ export function StaffDialog({ userId, name, onClose }: { userId: string; name: s
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal aria-labelledby="staff-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
-        <h2 id="staff-title">Moderación: {name}</h2>
+        <h2 id="staff-title">Moderación: <bdi>{name}</bdi></h2>
         {state === "done" ? (
           <>
             <p className="muted">
               {perms.length
-                ? `Listo. ${name} ya puede entrar a Moderación con estos permisos.`
-                : `Listo. ${name} ya no tiene permisos de moderación.`}
+                ? <>Listo. <bdi>{name}</bdi> ya puede entrar a Moderación con estos permisos.</>
+                : <>Listo. <bdi>{name}</bdi> ya no tiene permisos de moderación.</>}
             </p>
             <button className="btn btn--primary" onClick={onClose}>Listo</button>
           </>
@@ -56,7 +56,7 @@ export function StaffDialog({ userId, name, onClose }: { userId: string; name: s
           error ? <p className="error" role="alert">{error}</p> : <p className="muted">Cargando…</p>
         ) : owner ? (
           <>
-            <p className="muted">{name} tiene administración general. Eso se cambia en la configuración del servidor, no desde acá.</p>
+            <p className="muted"><bdi>{name}</bdi> tiene administración general. Eso se cambia en la configuración del servidor, no desde acá.</p>
             <button className="btn" onClick={onClose}>Cerrar</button>
           </>
         ) : (

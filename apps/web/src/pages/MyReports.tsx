@@ -73,7 +73,7 @@ export function MyReports() {
                 <Link to={`/yo/reportes/${encodeURIComponent(report.id)}`} className="inbox__item">
                   <div className="inbox__text">
                     <div className="inbox__top">
-                      <strong>{report.targetName ?? report.reason}</strong>
+                      <strong>{report.targetName == null ? report.reason : <bdi>{report.targetName}</bdi>}</strong>
                       <time dateTime={report.respondedAt ?? report.createdAt}>{date(report.respondedAt ?? report.createdAt)}</time>
                     </div>
                     <p className="inbox__preview">
@@ -101,7 +101,7 @@ function ReportConversation({ id }: { id: string }) {
     <div className="page">
       <header className="topbar topbar--thread">
         <Link to="/yo/reportes" className="iconbtn" aria-label="Volver a Mis reportes"><BackIcon /></Link>
-        <h1 className="topbar__title topbar__title--sm">{report?.targetName ?? "Reporte"}</h1>
+        <h1 className="topbar__title topbar__title--sm">{report?.targetName == null ? "Reporte" : <bdi>{report.targetName}</bdi>}</h1>
       </header>
       {error ? <p className="notice notice--error" role="alert">{error}</p>
         : !report ? <p className="empty muted" role="status">Cargando…</p>

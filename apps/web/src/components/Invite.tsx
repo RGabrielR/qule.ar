@@ -172,7 +172,7 @@ export function InvitePeopleSheet({ groupId, groupName, onClose, onChange }: {
               <Link to={`/perfil/${p.id}`} className="member__who">
                 <Avatar src={p.photo} name={p.name} size={40} />
                 <span className="invite-who">
-                  <span><b>{p.name}</b></span>
+                  <span><b><bdi>{p.name}</bdi></b></span>
                   {(p.online || p.distance) && (
                     <span className="muted small">
                       {p.online && <><i className="dot dot--on" /> En línea</>}
@@ -228,8 +228,8 @@ export function InviteToGroups({ userId, name }: { userId: string; name: string 
         <div className="sheet-backdrop" onClick={() => setOpen(false)}>
           <div className="sheet sheet--list" role="dialog" aria-modal aria-labelledby="invite-groups-title" onClick={(e) => e.stopPropagation()}>
             <DialogFocus onClose={() => setOpen(false)} />
-            <h2 id="invite-groups-title">Invitar a {name}</h2>
-            <p className="muted small">Estos son los grupos que moderás. {name} recibe la invitación y elige si entra.</p>
+            <h2 id="invite-groups-title">Invitar a <bdi>{name}</bdi></h2>
+            <p className="muted small">Estos son los grupos que moderás. <bdi>{name}</bdi> recibe la invitación y elige si entra.</p>
             {error && <p className="error" role="alert">{error}</p>}
             <ul className="members invite-list">
               {groups.map((g) => (
@@ -291,7 +291,7 @@ export function MyInvites({ invites, onChange }: { invites: MyInvite[]; onChange
             {inv.group.description && <p className="gcard__desc">{inv.group.description}</p>}
             {inv.invitedBy && (
               <p className="muted small">
-                Te invitó <Link to={`/perfil/${inv.invitedBy.id}`}>{inv.invitedBy.name}</Link>
+                Te invitó <Link to={`/perfil/${inv.invitedBy.id}`}><bdi>{inv.invitedBy.name}</bdi></Link>
               </p>
             )}
             <div className="row">

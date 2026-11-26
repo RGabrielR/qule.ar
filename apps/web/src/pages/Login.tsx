@@ -108,7 +108,7 @@ export function Login({ callbackURL }: { callbackURL: string }) {
           {mode === "up" && (
             <label className="field">
               <span>Nombre</span>
-              <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" maxLength={40} />
+              <input className="input" dir="auto" value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" maxLength={40} />
             </label>
           )}
           <label className="field">

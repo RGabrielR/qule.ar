@@ -15,10 +15,10 @@ import { useMe } from "../../App";
 export function Watermark() {
   const { me } = useMe();
   const label = useMemo(() => {
-    if (!me) return "";
+    if (!me) return null;
     const name = me.profile?.displayName || me.user.name;
     const when = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-    return `${name} · ${me.user.id.slice(0, 8)} · ${when}`;
+    return <><bdi>{name}</bdi> · {me.user.id.slice(0, 8)} · {when}</>;
   }, [me]);
   if (!label) return null;
   return (

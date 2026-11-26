@@ -80,7 +80,7 @@ export function ReportPhotoActions({ report, path, reply, onReply, measure, onMe
       <div className="verify-photo__body">
         <section className="stack" aria-labelledby="report-photo-measure">
           <h3 id="report-photo-measure">Cuenta reportada</h3>
-          <p><strong>{report.target?.name ?? "Cuenta sin perfil"}</strong></p>
+          <p><strong><bdi>{report.target?.name ?? "Cuenta sin perfil"}</bdi></strong></p>
           {(measure === "suspended" || report.targetSuspendedAt) && <p className="small" role="status">Cuenta suspendida.</p>}
           {measure === "removed" && <p className="small" role="status">Mensaje borrado.</p>}
           {open && !matchedTarget && <p className="muted small">La copia verificada corresponde a otra cuenta.</p>}

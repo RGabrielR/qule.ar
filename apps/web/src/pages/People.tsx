@@ -34,14 +34,14 @@ function PeopleGrid({ title, people, empty, note, tabs }: { title: string; peopl
           {people.map((p) => (
             <li key={p.id}>
               <Link to={`/perfil/${p.id}`} className="tile" aria-label={p.name}>
-                {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <span className="tile__empty">{p.name.charAt(0).toUpperCase()}</span>}
+                {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <span className="tile__empty"><bdi>{p.name.charAt(0).toUpperCase()}</bdi></span>}
                 {p.reaction && (
                   <span className={`tile__reaction ${p.isNew ? "tile__reaction--new" : ""}`} title={reactionLabel(p.reaction)}>
                     <ReactionIcon kind={p.reaction} size={26} />
                   </span>
                 )}
                 <span className="tile__info">
-                  <span className="tile__name">{p.name}</span>
+                  <span className="tile__name"><bdi>{p.name}</bdi></span>
                   {p.sub && <span className="tile__dist">{p.sub}</span>}
                 </span>
               </Link>

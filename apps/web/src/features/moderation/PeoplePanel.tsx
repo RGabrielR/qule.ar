@@ -87,7 +87,7 @@ export function PeoplePanel({ onSuspend }: { onSuspend: (p: Person, done: () => 
               <div className="rcard__who">
                 <Avatar src={p.photo} name={p.name} size={40} />
                 <span>
-                  <b>{p.name}</b>
+                  <b><bdi>{p.name}</bdi></b>
                   <span className="muted small rcard__count">En qule.ar desde {day(p.joinedAt)}</span>
                 </span>
               </div>

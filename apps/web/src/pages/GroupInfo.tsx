@@ -173,7 +173,7 @@ export function GroupInfo() {
                   <Link to={`/perfil/${m.id}`} className="member__who">
                     <Avatar src={m.photo} name={m.name} size={40} />
                     <span>
-                      <b>{m.name}</b>{isMe && <span className="muted"> (vos)</span>}
+                      <b><bdi>{m.name}</bdi></b>{isMe && <span className="muted"> (vos)</span>}
                       {m.role !== "member" && <span className="pill pill--role">{ROLE_LABEL[m.role]}</span>}
                     </span>
                   </Link>

@@ -48,7 +48,7 @@ export function AccountSearch({ onSelect }: { onSelect: (account: SanctionMatch)
       {status && <p className="muted small" role="status">{status}</p>}
       {match && (
         <div className="rcard">
-          <p><b>{match.name}</b></p>
+          <p><b><bdi>{match.name}</bdi></b></p>
           <p className="muted small admin-account-detail">ID {match.id}</p>
           {match.suspendedAt ? <p className="small">Cuenta suspendida</p>
             : <button className="btn btn--small btn--danger" onClick={() => onSelect(match)}>Suspender cuenta</button>}

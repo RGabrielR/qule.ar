@@ -673,13 +673,13 @@ function GroupChatThread({ id }: { id: string }) {
               <div className="gmsg__content">
                 {!(grouped && !m.replyTo) && (
                   <div className="gmsg__meta">
-                    <Link to={`/perfil/${m.author.id}`} className="gmsg__name">{m.author.name}</Link>
+                    <Link to={`/perfil/${m.author.id}`} className="gmsg__name"><bdi>{m.author.name}</bdi></Link>
                     <time className="gmsg__time">{fmtTime(m.scheduledAt)}</time>
                   </div>
                 )}
                 {m.replyTo && (
                   <button type="button" className="quote" onClick={() => jumpTo(m.replyTo!)}>
-                    <span className="quote__name">{m.replyTo.authorName}</span>
+                    <span className="quote__name"><bdi>{m.replyTo.authorName}</bdi></span>
                     <span className="quote__body">{m.replyTo.body ?? "Mensaje borrado"}</span>
                   </button>
                 )}
@@ -770,7 +770,7 @@ function GroupChatThread({ id }: { id: string }) {
         {replyTo && !editing && (
           <div className="composer__reply">
             <div className="quote quote--static">
-              <span className="quote__name">Respondiendo a {replyTo.author.name}</span>
+              <span className="quote__name">Respondiendo a <bdi>{replyTo.author.name}</bdi></span>
               <span className="quote__body">{replyTo.body}</span>
             </div>
             <button type="button" className="iconbtn" aria-label="Cancelar respuesta" onClick={() => setReplyTo(null)}>✕</button>

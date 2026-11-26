@@ -34,7 +34,7 @@ function ProfileView({ id }: { id: string }) {
   const { refreshAfterBlock } = useTabData();
   const [params, setParams] = useSearchParams();
   const requestedAlbum = params.get("album");
-  const [viewing, setViewing] = useState<{ items: Media[]; start: number; title: string; fromChat?: boolean } | null>(null);
+  const [viewing, setViewing] = useState<{ items: Media[]; start: number; title: string; ownerName?: string; fromChat?: boolean } | null>(null);
   const [toquePicker, setToquePicker] = useState(false);
   const [toqueMsg, setToqueMsg] = useState("");
   const swipe = useProfileSwipe(id, viewing == null && !reporting && !staffing);
@@ -145,14 +145,14 @@ function ProfileView({ id }: { id: string }) {
               <LockIcon /> {a.name} · {albumCount(a.count, a.videos)}
             </h3>
             {!p.isMe && <p className="muted small album__until">Lo podés ver {untilLabel(a.expiresAt)}. Las fotos llevan tu nombre encima: no las compartas.</p>}
-            <AlbumGrid items={a.items} watermark={!p.isMe} onOpen={(start) => setViewing({ items: a.items, start, title: p.isMe ? a.name : `${a.name} · ${p.displayName}` })} />
+            <AlbumGrid items={a.items} watermark={!p.isMe} onOpen={(start) => setViewing({ items: a.items, start, title: a.name, ownerName: p.isMe ? undefined : p.displayName })} />
           </section>
         )) : (
           <section className="album">
             <h3 className="album__title">
               <LockIcon /> Álbum privado · {albumCount(p.privateAlbum.count, p.privateAlbum.videos)}
             </h3>
-            <p className="muted small">{p.displayName} todavía no te compartió ningún álbum.</p>
+            <p className="muted small"><bdi>{p.displayName}</bdi> todavía no te compartió ningún álbum.</p>
           </section>
         ))}
 
@@ -173,7 +173,7 @@ function ProfileView({ id }: { id: string }) {
           <div className="profile__safety">
             {confirmBlock ? (
               <div className="confirm">
-                <p>¿Bloquear a {p.displayName}? No van a poder verse ni escribirse, y dejás de ver sus mensajes en los grupos.</p>
+                <p>¿Bloquear a <bdi>{p.displayName}</bdi>? No van a poder verse ni escribirse, y dejás de ver sus mensajes en los grupos.</p>
                 <div className="row">
                   <button className="btn" onClick={() => setConfirmBlock(false)}>Cancelar</button>
                   <button className="btn btn--danger" onClick={doBlock}>Bloquear</button>
@@ -189,7 +189,7 @@ function ProfileView({ id }: { id: string }) {
           </div>
         )}
       </div>
-      {viewing && <AlbumViewer items={viewing.items} start={viewing.start} title={viewing.title} onClose={closeViewer} watermark={!p.isMe} />}
+      {viewing && <AlbumViewer items={viewing.items} start={viewing.start} title={viewing.title} ownerName={viewing.ownerName} onClose={closeViewer} watermark={!p.isMe} />}
       {reporting && <ReportDialog userId={p.id} name={p.displayName} onClose={() => setReporting(false)} />}
       {staffing && <StaffDialog userId={p.id} name={p.displayName} onClose={() => setStaffing(false)} />}
     </>

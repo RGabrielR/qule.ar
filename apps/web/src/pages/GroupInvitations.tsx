@@ -138,7 +138,7 @@ export function GroupInvitations() {
                   <li key={invite.id} className="member">
                     <Link to={`/perfil/${invite.user.id}`} className="member__who">
                       <Avatar src={invite.user.photo} name={invite.user.name} size={40} />
-                      <span><b>{invite.user.name}</b> <span className="muted small">· sin responder</span></span>
+                      <span><b><bdi>{invite.user.name}</bdi></b> <span className="muted small">· sin responder</span></span>
                     </Link>
                     <button type="button" className="linkbtn small" disabled={canceling !== null} onClick={() => cancelInvite(invite)}>
                       {canceling === invite.id ? "Cancelando…" : "Cancelar"}
