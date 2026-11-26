@@ -17,6 +17,7 @@ import { pushTo } from "../push.js";
 import { EXPIRING_GRACE_MS, EXPIRING_SECONDS } from "../expiring.js";
 import { deleteImageUnlessEvidence, isUrgent, notifyModeratorsUrgent, REPORT_REASONS } from "../moderation.js";
 import { limit } from "../ratelimit.js";
+import { chatPeopleMatching, parseNearbyFilters } from "./nearby.js";
 
 const { profile, photo, block, report, conversation, directMessage } = schema;
 
@@ -246,6 +247,16 @@ socialRoutes.get("/conversations", async (c) => {
       other: authors.get(otherIdFor(cv)), last: { ...serializeDm(last), ...states.get(last.id) }, unread: unreadById.get(cv.id) ?? 0,
     }] : [];
   }));
+});
+
+/**
+ * Filtros de Mensajes: de las personas con las que tenés chat, cuáles cumplen los filtros de perfil.
+ * Son los mismos de Gente; "en línea" y "no leídos" se miran en la app.
+ */
+socialRoutes.get("/conversations/matching", async (c) => {
+  const me = c.get("user");
+  await limit(me.id, "nearby");
+  return c.json({ ids: await chatPeopleMatching(me.id, parseNearbyFilters(c.req.query())) });
 });
 
 /** Abre (o crea) la conversación con alguien. */
