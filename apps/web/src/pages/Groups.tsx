@@ -6,6 +6,7 @@ import { GroupAvatar } from "../components/GroupAvatar";
 import { PhotoPicker } from "../components/GroupPhoto";
 import { preparePhotoForUpload } from "../features/photos/preparePhoto";
 import { GROUP_EVENTS, useTabData } from "../features/navigation/tabData";
+import { usePullToRefresh } from "../features/navigation/pullToRefresh";
 import { PlusIcon } from "../components/Icons";
 import { MyInvites } from "../components/Invite";
 import { JoinButton } from "../components/JoinButton";
@@ -58,6 +59,10 @@ export function Groups() {
     setLoadingMore(false);
   }
 
+  const pullRefresh = usePullToRefresh(pageRef, () =>
+    Promise.all([refreshGroups("refresh"), tab === "all" ? loadAll(q, shown) : undefined]),
+  );
+
   useEffect(() => {
     if (tab !== "all") return;
     const s = getSocket();
@@ -85,6 +90,7 @@ export function Groups() {
         <h1 className="topbar__title">Grupos</h1>
         <button className="btn btn--small btn--primary" onClick={() => setCreating(true)}><PlusIcon /> Crear</button>
       </header>
+      {pullRefresh}
 
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === "mine"} onClick={() => setParams({})}>Mis grupos</button>

@@ -7,6 +7,7 @@ import { FilterIcon } from "../components/Icons";
 import { countFilters, EMPTY, FilterSheet, toQuery, type Filters } from "./Nearby";
 import { albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { Avatar } from "../components/Avatar";
+import { usePullToRefresh } from "../features/navigation/pullToRefresh";
 import { useTabData } from "../features/navigation/tabData";
 import { useRememberScroll } from "../features/navigation/viewMemory";
 
@@ -53,7 +54,7 @@ function useMatchingPeople(filters: Filters, people: string) {
 
 export function Inbox() {
   const { me } = useMe();
-  const { conversations: list } = useTabData();
+  const { conversations: list, refreshConversations } = useTabData();
   const albumNoticeTime = useAlbumNoticeTime(list?.map(({ last }) => last) ?? []);
   const [query, setQuery] = useState("");
   const [{ unread, filters }, setView] = useState(loadInboxFilters);
@@ -79,10 +80,12 @@ export function Inbox() {
     && words.every((word) => normalize(chat.other?.name ?? "").includes(word)));
   const pageRef = useRef<HTMLDivElement>(null);
   useRememberScroll(pageRef, list != null);
+  const pullRefresh = usePullToRefresh(pageRef, () => refreshConversations("refresh"));
 
   return (
     <div className="page" ref={pageRef}>
       <header className="topbar"><h1 className="topbar__title">Mensajes</h1></header>
+      {pullRefresh}
       {!!list?.length && (
         <div className="searchbar form">
           <label className="field">
