@@ -1,0 +1,1 @@
+ALTER TABLE "profile" ADD COLUMN "show_age" boolean DEFAULT true NOT NULL;

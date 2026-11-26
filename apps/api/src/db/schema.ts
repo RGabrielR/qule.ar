@@ -61,6 +61,7 @@ export const profile = pgTable("profile", {
   userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
   displayName: text("display_name").notNull(),
   birthdate: date("birthdate").notNull(),
+  showAge: boolean("show_age").notNull().default(true),
   about: text("about"),
   heightCm: integer("height_cm"),
   weightKg: integer("weight_kg"),

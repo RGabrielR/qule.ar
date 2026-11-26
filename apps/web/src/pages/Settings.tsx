@@ -158,7 +158,7 @@ export function Settings() {
     }
   }
 
-  function updatePrivacy(json: { incognito?: boolean; showDistance?: boolean }) {
+  function updatePrivacy(json: { incognito?: boolean; showDistance?: boolean; showAge?: boolean }) {
     return change(async () => {
       await api("/me/privacy", { method: "PUT", json });
       await reload();
@@ -231,6 +231,15 @@ export function Settings() {
               onChange={(e) => updatePrivacy({ showDistance: e.currentTarget.checked })}
             />
             <span>Mostrar a qué distancia estoy. Si lo apagás, tampoco vas a ver la distancia de los demás.</span>
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={me.profile.showAge}
+              disabled={busy}
+              onChange={(e) => updatePrivacy({ showAge: e.currentTarget.checked })}
+            />
+            <span><b>Mostrar mi edad.</b> Si lo apagás, tu edad queda oculta y tu perfil aparece solo en búsquedas sin filtro de edad.</span>
           </label>
           {me.profile.hasLocation && (
             <button
