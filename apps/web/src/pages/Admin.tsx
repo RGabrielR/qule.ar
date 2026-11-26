@@ -6,6 +6,7 @@ import { Avatar } from "../components/Avatar";
 import { BackIcon } from "../components/Icons";
 import { DialogFocus } from "../components/DialogFocus";
 import { PERMISSION_LABELS } from "../staff";
+import { PeoplePanel } from "../features/moderation/PeoplePanel";
 import { ModerationNotices } from "../features/moderation/ModerationNotices";
 import { ReportSpamAlerts } from "../features/moderation/ReportSpamAlerts";
 import { ReportGroups } from "../features/moderation/ReportGroups";
@@ -16,11 +17,13 @@ type Suspended = Author & {
   suspendedAt: string;
   /** Suspensión preventiva (por menor de edad, con el permiso Reportes) que falta revisar. */
   preventive: boolean;
+  /** Suspensión automática (varias personas la reportaron por lo mismo y nadie lo revisó a tiempo) que falta revisar. */
+  automatic: boolean;
   suspendedByMe: boolean;
 };
 type RemovedGroup = { id: string; name: string; description: string | null; removedAt: string; reason: string | null; purgeAt: string };
 type Stats = { users: number; groups: number; openReports: number; suspended: number; openAppeals: number };
-type Tab = "open" | "closed" | "suspended" | "appeals" | "groups" | "team" | "log";
+type Tab = "open" | "closed" | "suspended" | "appeals" | "people" | "groups" | "team" | "log";
 
 type AdminAppeal = {
   id: string;
@@ -47,6 +50,7 @@ const TABS: { id: Tab; label: string; need: StaffAccess[] }[] = [
   { id: "closed", label: "Resueltos", need: ["reports", "sanctions"] },
   { id: "appeals", label: "Revisiones", need: ["appeals"] },
   { id: "suspended", label: "Suspendidas", need: ["sanctions", "appeals"] },
+  { id: "people", label: "Personas", need: ["owner"] },
   { id: "groups", label: "Grupos de baja", need: ["owner"] },
   { id: "team", label: "Equipo", need: ["owner"] },
   { id: "log", label: "Registro", need: ["owner"] },
@@ -88,6 +92,7 @@ export function Admin() {
       else if (tab === "appeals") setAppeals(await api<AdminAppeal[]>(`/admin/appeals?status=${appealsClosed ? "closed" : "open"}`));
       else if (tab === "team") setTeam(await api<TeamMember[]>("/admin/team"));
       else if (tab === "log") setLog(await api<LogEntry[]>("/admin/log"));
+      else if (tab === "people") { /* La pestaña Personas carga sus propios datos */ }
       else if (tab === "groups") setRemoved(await api<RemovedGroup[]>("/admin/groups/removed"));
       else setReports(await api<Report[]>(`/admin/reports?status=${tab}`));
     } catch (e) {
@@ -195,9 +200,14 @@ export function Admin() {
                     {s.suspendedByMe ? " La hiciste vos, así que la revisa otra persona del equipo." : " Mantenela o reactivá la cuenta."}
                   </p>
                 )}
+                {s.automatic && (
+                  <p className="small">
+                    <b>Automática, falta revisarla.</b> Varias personas la reportaron por lo mismo y nadie lo revisó a tiempo. Mantenela o reactivá la cuenta.
+                  </p>
+                )}
                 {has("sanctions") && (
                   <div className="rcard__actions">
-                    {s.preventive && !s.suspendedByMe && (
+                    {(s.preventive || s.automatic) && !s.suspendedByMe && (
                       <button className="btn btn--small btn--danger" onClick={() => act(() => api(`/admin/users/${s.id}/confirm-suspension`, { method: "POST" }))}>Mantener</button>
                     )}
                     <button className="btn btn--small" onClick={() => act(() => api(`/admin/users/${s.id}/unsuspend`, { method: "POST" }))}>Reactivar cuenta</button>
@@ -301,6 +311,10 @@ export function Admin() {
         </>
       )}
 
+      {tab === "people" && (
+        <PeoplePanel onSuspend={(p, done) => setSuspending({ url: `/admin/users/${p.id}/suspend`, name: p.name, reason: "", preventive: false, done })} />
+      )}
+
       {tab === "team" && team && <Team team={team} onChange={load} />}
 
       {tab === "log" && log && (
@@ -331,7 +345,7 @@ export function Admin() {
         <SuspendDialog
           target={suspending}
           onClose={() => setSuspending(null)}
-          onDone={() => { setSuspending(null); load(); }}
+          onDone={() => { suspending.done?.(); setSuspending(null); load(); }}
         />
       )}
       {removing && (
@@ -349,7 +363,7 @@ export function Admin() {
  * A quién se suspende: la persona reportada, o quien satura el canal de reportes (ver ReportSpamAlerts). `url` es la
  * ruta que suspende: en la alerta va con su identificador, porque el equipo no ve de qué cuenta es.
  */
-type SuspendTarget = { url: string; name: string; reason: string; preventive: boolean };
+type SuspendTarget = { url: string; name: string; reason: string; preventive: boolean; done?: () => void };
 
 function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onClose: () => void; onDone: () => void }) {
   const { preventive } = target;

@@ -14,6 +14,11 @@ test("abre una foto del chat para quien la manda y quien la recibe", async ({ pa
   const viewport = { width: 375, height: 700 };
   await page.setViewportSize(viewport);
   const recipientContext = await browser.newContext({ baseURL, viewport, hasTouch: true, isMobile: true });
+  const upload = gate();
+  await page.route("**/api/conversations/*/messages", async (route) => {
+    if (route.request().method() === "POST") await upload.wait;
+    await route.continue();
+  });
   try {
     const recipientPage = await recipientContext.newPage();
     await recipientPage.addInitScript(() => localStorage.setItem("mortero:tema", "penumbra"));
@@ -36,8 +41,11 @@ test("abre una foto del chat para quien la manda y quien la recibe", async ({ pa
     await page.keyboard.press("Escape");
     await expect(senderViewer).toHaveCount(0);
     await expect(sentPhoto).toBeFocused();
+    await expect(sentPhoto.locator("img")).toHaveAttribute("src", /^blob:/);
+    upload.release();
+    await expect(sentPhoto.locator("img")).toHaveAttribute("src", /^\/api\/files\//);
 
-    await recipientPage.getByRole("link", { name: new RegExp(sender.name) }).click();
+    await recipientPage.locator(".inbox__item").filter({ hasText: sender.name }).click();
     await expect(recipientPage.locator("html")).toHaveAttribute("data-theme", "penumbra");
     const receivedPhoto = recipientPage.getByRole("button", { name: "Abrir foto" });
     await receivedPhoto.tap();
@@ -53,6 +61,7 @@ test("abre una foto del chat para quien la manda y quien la recibe", async ({ pa
     await receivedPhoto.tap();
     await expect(recipientViewer).toBeVisible();
   } finally {
+    upload.release();
     await recipientContext.close();
   }
 });
@@ -72,7 +81,7 @@ test("entrega un mensaje a otra sesión y lo conserva al reabrir el chat", async
     await signIn(recipientPage, recipient);
     const inbox = recipientPage.getByRole("link", { name: "Mensajes", exact: true });
     await inbox.click();
-    const conversation = recipientPage.getByRole("link", { name: new RegExp(sender.name) });
+    const conversation = recipientPage.locator(".inbox__item").filter({ hasText: sender.name });
     await expect(recipientPage.getByText("Sin mensajes por ahora", { exact: true })).toBeVisible();
 
     await signIn(page, sender);
@@ -125,7 +134,7 @@ test("entrega un mensaje a otra sesión y lo conserva al reabrir el chat", async
     await recipientPage.unroute("**/summary");
     const otherTab = await recipientContext.newPage();
     await otherTab.goto("/mensajes");
-    const otherChat = otherTab.getByRole("link", { name: new RegExp(sender.name) });
+    const otherChat = otherTab.locator(".inbox__item").filter({ hasText: sender.name });
     await expect(otherChat.locator(".badge--inline")).toHaveText("2");
     const summaryCounts = [0, 0];
     const tabs = [recipientPage, otherTab];
@@ -454,4 +463,40 @@ test("la cita solo permite saltar si el original está cargado", async ({ page, 
   await expect(quote).toBeVisible();
   await expect(quote).toContainText(sender.name);
   await expect(jump).toHaveCount(0);
+});
+
+test("muestra el mensaje antes de confirmar y lo reintenta tras un corte", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 375, height: 700 });
+  const sender = await createAccount(baseURL!, "Luz Reintento");
+  const recipient = await createAccount(baseURL!, "Mar Reintento");
+  await signIn(page, sender);
+  await openProfile(page, recipient);
+  await page.getByRole("button", { name: "Mandar mensaje" }).click();
+  const release = gate();
+  const keys: string[] = [];
+  await page.route("**/api/conversations/*/messages", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    keys.push(route.request().headers()["idempotency-key"]);
+    if (keys.length === 1) {
+      await release.wait;
+      return route.abort("internetdisconnected");
+    }
+    return route.continue();
+  });
+  try {
+    await page.getByRole("textbox", { name: "Mensaje", exact: true }).fill("Mensaje con mala señal");
+    await page.getByRole("button", { name: "Mandar", exact: true }).click();
+    await expect(page.getByText("Mensaje con mala señal", { exact: true })).toHaveCount(1);
+    await expect.poll(() => keys.length).toBe(1);
+    release.release();
+    await page.getByRole("button", { name: "Reintentar" }).click();
+    await expect.poll(() => keys.length).toBe(2);
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBe(keys[0]);
+    await expect(page.getByRole("button", { name: "Reaccionar u opciones del mensaje" })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText("Mensaje con mala señal", { exact: true })).toHaveCount(1);
+  } finally {
+    release.release();
+  }
 });

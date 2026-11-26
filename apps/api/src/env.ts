@@ -8,6 +8,7 @@ export const env = {
   // URL pública de la web (en desarrollo, Vite en el 5173 hace de proxy al API)
   APP_URL: process.env.APP_URL ?? "http://localhost:5173",
   DATABASE_URL: process.env.DATABASE_URL,
+  MIGRATE_ON_STARTUP: process.env.MIGRATE_ON_STARTUP !== "false",
   DATA_DIR: process.env.DATA_DIR ?? path.join(root, "data"),
   BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? "solo-para-desarrollo-cambiar-en-produccion",
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,

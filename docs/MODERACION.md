@@ -24,6 +24,13 @@ En Argentina, una plataforma no responde por lo que publican otras personas **mi
 
 **Ocultamiento por precaución.** Si un perfil recibe reportes urgentes de **3 personas distintas** que todavía nadie revisó, deja de aparecer en "Cerca" y en las listas para invitar a grupos. No es una suspensión: la cuenta sigue funcionando. Vuelve a aparecer cuando moderación cierra esos reportes. Así se limita el daño si nadie llega a revisarlo enseguida.
 
+**Suspensión automática.** Si **5 personas distintas** reportan a la misma cuenta **por el mismo motivo** en **3 semanas** y esos reportes siguen abiertos, a quienes tienen el permiso Suspensiones (y a la administración general, siempre) les llega un aviso, y en el reporte aparece cuándo se suspende sola. Si en **24 horas** nadie descarta esos reportes ni actúa, la app suspende la cuenta. Queda en Suspendidas como "Automática, falta revisarla": alguien del equipo la **mantiene** o **reactiva la cuenta**, y la persona puede pedir una revisión como en cualquier suspensión.
+
+- **Qué no cuenta:** el motivo "otro", reportar varias veces a la misma persona, los reportes descartados, los de hace más de 3 semanas y los de cuentas con menos de 48 horas o suspendidas, y los de personas cuyos reportes no cuentan (ver más abajo). Así no sirve para atacar a alguien con cuentas recién creadas.
+- **Al equipo no lo suspende sola:** si pasa con alguien del equipo, le avisa a la administración general.
+- **Lo público se borra recién cuando una persona la mantiene.** Al suspender sola, la app guarda la prueba pero no borra los mensajes en grupos, las fotos ni los álbumes, por si fue un ataque. Se borran cuando alguien del equipo la **mantiene** (en Suspendidas o al responder una revisión).
+- **Si no corresponde:** descartá los reportes antes de que se cumplan las 24 horas, o reactivá la cuenta después.
+
 ## Grupos
 
 - **Se pueden reportar** al abrir la vista previa del grupo o desde **Ver detalles** si ya sos parte. Los motivos son los mismos que para las personas.
@@ -64,7 +71,7 @@ Hay quien reporta mucho y sin fundamento: para tapar los reportes de verdad, par
 
 Ninguna señal decide sola. Puede ser alguien que encontró varios problemas de verdad: mirá sus reportes antes de decidir. Las opciones son:
 
-- **Que sus reportes no cuenten.** Siguen entrando y se ven en la lista (marcados "no cuenta"), pero no ocultan perfiles ni grupos, no mandan avisos, no suman personas en las tarjetas y **no alcanzan para una suspensión preventiva**. Se puede deshacer ("Que vuelvan a contar").
+- **Que sus reportes no cuenten.** Siguen entrando y se ven en la lista (marcados "no cuenta"), pero no ocultan perfiles ni grupos, no mandan avisos, no suman personas en las tarjetas y **no alcanzan para una suspensión preventiva ni automática**. Se puede deshacer ("Que vuelvan a contar").
 - **Descartar sus reportes de la última hora** de una vez (pide confirmación). Los urgentes y los anteriores se revisan de a uno.
 - **Suspender** a quien reporta, con el diálogo de siempre.
 - **Ignorar** la tarjeta: vuelve solo cuando pasó una hora, la cuenta mandó reportes nuevos y sigue habiendo alguna señal. Si la tarjeta era por reportar a muchas personas en una hora, mientras está activa sus reportes urgentes no mandan avisos; ignorarla los devuelve.

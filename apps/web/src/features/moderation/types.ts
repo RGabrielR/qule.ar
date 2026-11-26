@@ -24,6 +24,8 @@ export type Report = {
   urgent: boolean;
   automatic: boolean;
   targetAutoHidden: boolean;
+  /** Varias personas la reportaron por lo mismo: si nadie lo revisa, se suspende sola en esta fecha. */
+  targetAutoSuspendAt: string | null;
   resolution: string | null;
   createdAt: string;
   messageId: string | null;
