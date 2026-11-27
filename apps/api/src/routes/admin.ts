@@ -1,6 +1,6 @@
 import { DM_EVENTS } from "@mortero/shared/realtime";
 // Notificaciones push y panel de moderación.
-import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -246,6 +246,91 @@ adminRoutes.get("/admin/reports/:id/history", requireAccess("reports", "sanction
   const items = rows.slice(0, 20);
   c.header("Cache-Control", "no-store");
   return c.json({ items, next: rows.length > items.length ? items.at(-1)?.id ?? null : null });
+});
+
+// Lo que el Registro anota cuando alguien de moderación mira las fotos de un reporte: es sobre moderación, no sobre la cuenta
+const NOT_ACCOUNT_HISTORY = ["Consultó las fotos para verificar un reporte", "Vio la captura adjunta a un reporte", "Vio una foto original para verificar un reporte"];
+// Los permisos del equipo los ve solo la administración general (como en Equipo)
+const TEAM_ACTIONS = ["Cambió permisos", "Sacó todos los permisos"];
+const HISTORY_LIMIT = 100;
+
+/**
+ * El historial de una cuenta, para la mesa de moderación: todos los reportes sobre ella (sin decir quién reportó), lo
+ * que hizo moderación (suspensiones, reactivaciones, revisiones, mensajes borrados…), sus pedidos de revisión y cuántos
+ * reportes hizo ella y cuántos se descartaron. Quién de moderación hizo cada cosa lo ve solo la administración general,
+ * como en el Registro; lo que escribió la persona al pedir la revisión, solo quien tiene el permiso Revisiones.
+ */
+adminRoutes.get("/admin/users/:id/history", requireAccess("reports", "sanctions"), async (c) => {
+  const id = c.req.param("id");
+  const access = await accessFor(c.get("user"));
+  const owner = access.includes("owner");
+  const canAppeals = access.includes("appeals");
+  const [p] = await db.select({ createdAt: profile.createdAt, suspendedAt: profile.suspendedAt, suspendReason: profile.suspendReason })
+    .from(profile).where(eq(profile.userId, id));
+  if (!p) throw new HTTPException(404, { message: "Esa cuenta ya no está" });
+
+  const reports = await db
+    .select({ id: report.id, reporterId: report.reporterId, reason: report.reason, details: report.details, status: report.status, resolution: report.resolution, messageKind: report.messageKind, createdAt: report.createdAt, resolvedAt: report.resolvedAt })
+    .from(report).where(eq(report.targetUserId, id)).orderBy(desc(report.createdAt)).limit(HISTORY_LIMIT + 1);
+  const [reportCount] = await db.select({ n: sql<number>`count(*)::int` }).from(report).where(eq(report.targetUserId, id));
+  const made = await db.select({ status: report.status, n: sql<number>`count(*)::int` }).from(report)
+    .where(eq(report.reporterId, id)).groupBy(report.status);
+  const [mute] = await db.select({ at: reportMute.createdAt }).from(reportMute).where(eq(reportMute.userId, id));
+
+  // Lo que hizo moderación sobre la cuenta o sobre alguno de sus reportes
+  const hidden = owner ? NOT_ACCOUNT_HISTORY : [...NOT_ACCOUNT_HISTORY, ...TEAM_ACTIONS];
+  const actions = await db.select().from(modAction)
+    .where(and(inArray(modAction.targetId, [id, ...reports.map((r) => r.id)]), notInArray(modAction.action, hidden)))
+    .orderBy(desc(modAction.createdAt)).limit(HISTORY_LIMIT + 1);
+  const actors = owner ? await authorsFor(actions.flatMap((a) => (a.actorId ? [a.actorId] : [])), { realAge: true }) : new Map();
+  const appeals = await db.select().from(appeal).where(eq(appeal.userId, id)).orderBy(desc(appeal.createdAt)).limit(20);
+
+  c.header("Cache-Control", "no-store");
+  return c.json({
+    createdAt: p.createdAt.toISOString(),
+    suspendedAt: p.suspendedAt?.toISOString() ?? null,
+    suspendReason: p.suspendReason,
+    reportCount: reportCount?.n ?? 0,
+    reports: reports.slice(0, HISTORY_LIMIT).map((r) => ({
+      id: r.id,
+      reason: r.reason,
+      details: r.details,
+      status: r.status,
+      resolution: r.resolution,
+      messageKind: r.messageKind,
+      automatic: !r.reporterId && (r.details ?? "").startsWith(AUTO_DETAILS_PREFIX),
+      createdAt: r.createdAt.toISOString(),
+      resolvedAt: r.resolvedAt?.toISOString() ?? null,
+    })),
+    // Los reportes que hizo esta cuenta: muchos descartados pueden ser reportes de mala fe (ver reportSpam.ts)
+    reportsMade: {
+      total: made.reduce((n, m) => n + m.n, 0),
+      dismissed: made.find((m) => m.status === "dismissed")?.n ?? 0,
+      mutedAt: mute?.at.toISOString() ?? null,
+    },
+    actions: actions.slice(0, HISTORY_LIMIT).map((a) => ({
+      id: a.id,
+      action: a.action,
+      details: a.details,
+      // Si fue sobre uno de sus reportes (descartarlo, borrar el mensaje…), cuál
+      reportId: a.targetId && a.targetId !== id ? a.targetId : null,
+      // null: no se dice quién (no es de la administración general)
+      actor: !owner ? null : a.actorId ? actors.get(a.actorId)?.name ?? "Cuenta sin perfil" : a.action.startsWith(AUTO_SUSPENDED) ? "La app" : "Cuenta borrada",
+      createdAt: a.createdAt.toISOString(),
+    })),
+    appeals: appeals.map((a) => ({
+      id: a.id,
+      status: a.status,
+      suspendReason: a.suspendReason,
+      suspendedAt: a.suspendedAt.toISOString(),
+      createdAt: a.createdAt.toISOString(),
+      reviewedAt: a.reviewedAt?.toISOString() ?? null,
+      body: canAppeals ? a.body : null,
+      extra: canAppeals ? a.extra : null,
+      response: canAppeals ? a.response : null,
+    })),
+    more: reports.length > HISTORY_LIMIT || actions.length > HISTORY_LIMIT,
+  });
 });
 
 async function closeReports(ids: string[], adminId: string, status: "dismissed" | "actioned", resolution: string) {

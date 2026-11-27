@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { api, type StaffAccess } from "../../api";
 import { Avatar } from "../../components/Avatar";
 import { ChevronLeftIcon, ChevronRightIcon } from "../../components/Icons";
 import { GroupCard, NoReports, ReportFilterBar, useReportFilters } from "./ReportGroups";
 import type { ReportGroup } from "./groupReports";
-import type { Report } from "./types";
+import type { AccountHistory, Report } from "./types";
 
 const fmt = (iso: string) =>
   new Date(iso).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" });
 
 /** "hace 5 min", "hace 3 h", o la fecha si pasó más de un día. */
 function ago(iso: string) {
@@ -57,6 +58,16 @@ export function ReportDesk({ reports, status, has, act, onSuspend, onRemoveGroup
   useEffect(() => {
     if (index >= 0) lastIndex.current = index;
   });
+
+  // Los temas borrados conservan los reportes resueltos que todavía se pueden asociar.
+  const [closed, setClosed] = useState<Report[] | null>(null);
+  const needsClosed = status === "open" && !!selected && !selected.first.target?.id && !selected.first.group?.id;
+  useEffect(() => {
+    if (!needsClosed) return;
+    let alive = true;
+    api<Report[]>("/admin/reports?status=closed").then((r) => alive && setClosed(r)).catch(() => alive && setClosed([]));
+    return () => { alive = false; };
+  }, [needsClosed, reports]);
 
   function select(i: number) {
     const g = visible[i];
@@ -145,7 +156,7 @@ export function ReportDesk({ reports, status, has, act, onSuspend, onRemoveGroup
               </button>
             </div>
             <GroupCard key={selected.key} g={selected} as="section" has={has} act={act} onSuspend={onSuspend} onRemoveGroup={onRemoveGroup} onRefresh={onRefresh} />
-            <History key={selected.first.id} g={selected} showSent={has("owner")} />
+            <History g={selected} closed={status === "open" ? closed : null} version={reports} showSent={has("owner")} />
           </>
         ) : (
           <div className="empty"><p className="muted">Elegí un tema de la lista.</p></div>
@@ -155,23 +166,177 @@ export function ReportDesk({ reports, status, has, act, onSuspend, onRemoveGroup
   );
 }
 
-function History({ g, showSent }: { g: ReportGroup; showSent: boolean }) {
+/** Lo que ya se sabe del tema: el historial completo de la cuenta o, si es un grupo, su estado y los reportes resueltos. */
+function History({ g, closed, version, showSent }: { g: ReportGroup; closed: Report[] | null; version: unknown; showSent: boolean }) {
+  const id = g.first.target?.id;
+  return id ? <AccountHistoryCard key={id} id={id} g={g} version={version} showSent={showSent} /> : <SubjectHistory g={g} closed={closed} />;
+}
+
+const TIMELINE_START = 12;
+
+const appealStatus = { open: "Sin responder todavía", upheld: "Se mantuvo la suspensión", lifted: "Se levantó la suspensión" } as const;
+
+/**
+ * El historial de una cuenta (GET /admin/users/:id/history): cuándo se creó, cómo está, los reportes que recibió y los
+ * que hizo, y una línea de tiempo con los reportes ya resueltos, lo que hizo moderación y sus pedidos de revisión.
+ * Se vuelve a pedir cuando cambia la lista (por ejemplo, después de suspender o descartar).
+ */
+function AccountHistoryCard({ id, g, version, showSent }: { id: string; g: ReportGroup; version: unknown; showSent: boolean }) {
+  const [h, setHistory] = useState<AccountHistory | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [all, setAll] = useState(false);
+  const [retry, setRetry] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    api<AccountHistory>(`/admin/users/${encodeURIComponent(id)}/history`)
+      .then((data) => { if (alive) { setHistory(data); setFailed(false); } })
+      .catch(() => alive && setFailed(true));
+    return () => { alive = false; };
+  }, [id, version, retry]);
+
   const r = g.first;
+
+  const current = new Set(g.reports.map((report) => report.id));
+  const timeline = h ? buildTimeline(h) : [];
+  const shown = all ? timeline : timeline.slice(0, TIMELINE_START);
+  const open = h?.reports.filter((x) => x.status === "open").length ?? 0;
+
+  return (
+    <section className="rcard desk__history" aria-label="Historial" aria-busy={!h && !failed}>
+      <h2 className="small"><b>Historial</b></h2>
+      <ul className="desk__facts small">
+        {h && <li>Cuenta creada el {fmtDay(h.createdAt)}</li>}
+        <li>
+          {plural(h?.reportCount ?? r.targetReportCount, "reporte", "reportes")} en total sobre esta cuenta
+          {open > 0 && `, ${plural(open, "abierto", "abiertos")}`}
+        </li>
+        <li>
+          {r.targetSuspendedAt ? `Suspendida desde el ${fmt(r.targetSuspendedAt)}${h?.suspendReason ? `: ${h.suspendReason}` : ""}`
+            : r.targetAutoHidden ? "Oculta de la grilla hasta que alguien lo revise"
+            : "La cuenta está activa"}
+        </li>
+        {r.targetAutoSuspendAt && !r.targetSuspendedAt && <li><b>Se suspende sola el {fmt(r.targetAutoSuspendAt)} si nadie lo revisa</b></li>}
+        {h && (
+          <li>
+            {h.reportsMade.total === 0 ? "No reportó a nadie"
+              : `Hizo ${plural(h.reportsMade.total, "reporte", "reportes")}${h.reportsMade.dismissed ? `, ${h.reportsMade.dismissed} descartados` : ""}`}
+            {h.reportsMade.mutedAt && <b>. Sus reportes no cuentan desde el {fmtDay(h.reportsMade.mutedAt)}</b>}
+          </li>
+        )}
+      </ul>
+
+      {failed && !h ? (
+        <div className="desk__state">
+          <p className="muted small">No pudimos traer el historial.</p>
+          <button type="button" className="btn btn--small" onClick={() => setRetry((n) => n + 1)}>Probar de nuevo</button>
+        </div>
+      ) : !h ? (
+        <p className="muted small">Trayendo el historial…</p>
+      ) : timeline.length === 0 ? (
+        <p className="muted small">Nada más: no tiene reportes resueltos, medidas ni pedidos de revisión.</p>
+      ) : (
+        <>
+          <ol className="desk__timeline small">
+            {shown.map((item) => (
+              <li key={item.key} className={`desk__event desk__event--${item.kind}`}>
+                <time className="muted" dateTime={item.at}>{fmt(item.at)}</time>
+                {item.body}
+              </li>
+            ))}
+          </ol>
+          {timeline.length > TIMELINE_START && (
+            <button type="button" className="btn btn--small btn--ghost" aria-expanded={all} onClick={() => setAll((v) => !v)}>
+              {all ? "Ver menos" : `Ver todo el historial (${timeline.length})`}
+            </button>
+          )}
+          {all && h.more && <p className="muted small">Se ven los últimos 100 reportes y las últimas 100 medidas.</p>}
+        </>
+      )}
+
+      <details key={r.id} className="rcard__notes">
+        <summary className="muted small">Ver reportes recibidos</summary>
+        <HistoryList reportId={r.id} direction="received" current={current} />
+      </details>
+      {showSent && <HistoryList key={r.id} reportId={r.id} direction="sent" current={current} />}
+
+      <div className="rcard__actions">
+        <Link className="btn btn--small" to={`/perfil/${id}`} target="_blank" rel="noopener">Abrir el perfil en otra pestaña</Link>
+      </div>
+    </section>
+  );
+}
+
+type TimelineItem = { key: string; at: string; kind: "report" | "action" | "appeal"; body: ReactNode };
+
+/** Junta reportes resueltos, medidas y pedidos de revisión en una sola línea, de lo más nuevo a lo más viejo. */
+function buildTimeline(h: AccountHistory): TimelineItem[] {
+  const byReport = new Map<string, AccountHistory["actions"]>();
+  for (const a of h.actions) if (a.reportId) byReport.set(a.reportId, [...(byReport.get(a.reportId) ?? []), a]);
+  const by = (actor: string | null) => (actor ? ` · por ${actor}` : "");
+  const items: TimelineItem[] = [];
+  // Los abiertos son el tema de arriba
+  for (const x of h.reports) {
+    if (x.status === "open") continue;
+    const done = byReport.get(x.id) ?? [];
+    items.push({
+      key: `r:${x.id}`, at: x.createdAt, kind: "report",
+      body: (
+        <div>
+          <span className="desk__what">
+            <span className="pill pill--reason">{x.reason}</span>
+            {x.automatic ? "Alerta de la app" : x.messageKind ? "Reporte de un mensaje" : "Reporte"}
+          </span>
+          {x.details && <q className="muted">{x.details}</q>}
+          <span className={x.status === "actioned" ? "rcard__resolution" : "muted"}>
+            {x.status === "dismissed" ? "Descartado" : x.resolution ?? "Resuelto"}
+            {done.map((a) => a.details && a.action !== "Descartó un reporte" ? ` · ${a.details}` : "").join("")}
+            {done[0]?.actor && by(done[0].actor)}
+          </span>
+        </div>
+      ),
+    });
+  }
+  for (const a of h.actions) {
+    if (a.reportId) continue;
+    items.push({
+      key: `a:${a.id}`, at: a.createdAt, kind: "action",
+      body: (
+        <div>
+          <b>{a.action}</b>
+          {a.details && <span className="muted">{a.details}</span>}
+          {a.actor && <span className="muted">Por {a.actor}</span>}
+        </div>
+      ),
+    });
+  }
+  for (const ap of h.appeals) {
+    items.push({
+      key: `p:${ap.id}`, at: ap.createdAt, kind: "appeal",
+      body: (
+        <div>
+          <b>Pidió revisar la suspensión</b>
+          {ap.body && <q>{ap.body}</q>}
+          {ap.extra && <q>{ap.extra}</q>}
+          <span className={ap.status === "lifted" ? "rcard__resolution" : "muted"}>
+            {appealStatus[ap.status]}{ap.reviewedAt ? ` el ${fmtDay(ap.reviewedAt)}` : ""}
+          </span>
+          {ap.response && <span className="muted">Respuesta: {ap.response}</span>}
+        </div>
+      ),
+    });
+  }
+  return items.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** Un grupo o una cuenta borrada: lo que dice el reporte y los reportes anteriores ya resueltos sobre lo mismo. */
+function SubjectHistory({ g, closed }: { g: ReportGroup; closed: Report[] | null }) {
+  const r = g.first;
+  const before = closed?.filter((x) => x.subject === g.key) ?? [];
   const current = new Set(g.reports.map((report) => report.id));
   return (
     <section className="rcard desk__history" aria-label="Historial">
       <h2 className="small"><b>Historial</b></h2>
-      {r.target && (
-        <ul className="desk__facts small">
-          <li>{plural(r.targetReportCount, "reporte", "reportes")} en total sobre esta cuenta</li>
-          <li>
-            {r.targetSuspendedAt ? `Suspendida desde el ${fmt(r.targetSuspendedAt)}`
-              : r.targetAutoHidden ? "Oculta de la grilla hasta que alguien lo revise"
-              : "La cuenta está activa"}
-          </li>
-          {r.targetAutoSuspendAt && !r.targetSuspendedAt && <li><b>Se suspende sola el {fmt(r.targetAutoSuspendAt)} si nadie lo revisa</b></li>}
-        </ul>
-      )}
       {r.group && (
         <ul className="desk__facts small">
           <li>{r.group.id ? plural(r.group.memberCount, "miembro", "miembros") : "Ya se borró del todo"}</li>
@@ -179,16 +344,26 @@ function History({ g, showSent }: { g: ReportGroup; showSent: boolean }) {
           {r.group.autoHidden && !r.group.removedAt && <li>Oculto hasta que alguien lo revise</li>}
         </ul>
       )}
-      {(r.target?.id || r.group?.id) && (
-        <HistoryList reportId={r.id} direction="received" current={current} />
-      )}
-      {showSent && r.target?.id && (
-        <HistoryList reportId={r.id} direction="sent" current={current} />
-      )}
-      {r.target?.id && (
-        <div className="rcard__actions">
-          <Link className="btn btn--small" to={`/perfil/${r.target.id}`} target="_blank" rel="noopener">Abrir el perfil en otra pestaña</Link>
-        </div>
+      {r.target && !r.target.id && <p className="muted small">La cuenta se borró: queda lo que guardaron los reportes.</p>}
+      {r.group?.id ? (
+        <HistoryList key={r.id} reportId={r.id} direction="received" current={current} />
+      ) : closed && (
+        before.length === 0 ? (
+          <p className="muted small">No tiene reportes anteriores ya resueltos.</p>
+        ) : (
+          <>
+            <p className="muted small">{plural(before.length, "reporte anterior ya resuelto", "reportes anteriores ya resueltos")}</p>
+            <ul className="desk__before small">
+              {before.slice(0, 8).map((x) => (
+                <li key={x.id}>
+                  <span className="pill pill--reason">{x.reason}</span>
+                  <span className="muted">{fmt(x.createdAt)}</span>
+                  <span>{x.status === "dismissed" ? "Descartado" : x.resolution ?? "Resuelto"}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )
       )}
     </section>
   );

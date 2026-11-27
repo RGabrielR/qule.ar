@@ -1282,11 +1282,21 @@ button.quote:hover { background: var(--surface-3); }
   .desk__nav > span:first-child { margin-right: auto; }
   .desk__keys { margin-right: 8px; }
   .desk__facts, .desk__before { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-  .desk__before li { padding-block: 6px; border-bottom: 1px solid var(--line); }
-  .desk__before p { margin-top: 4px; overflow-wrap: anywhere; }
+  .desk__history-list li { padding-block: 6px; border-bottom: 1px solid var(--line); }
+  .desk__history-list li p { margin-top: 4px; overflow-wrap: anywhere; }
   .desk__history-entry { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .desk__history-list { display: grid; gap: 6px; }
   .desk__history-list .btn { justify-self: start; }
+  .desk__history > .desk__before > li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .desk__state { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .desk__timeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+  .desk__event { position: relative; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+  .desk__event::before { content: ""; position: absolute; left: -20px; top: 4px; width: 10px; height: 10px; border-radius: var(--radius-pill); background: var(--line); border: 2px solid var(--surface); }
+  .desk__event--action::before { background: var(--accent); }
+  .desk__event--appeal::before { background: var(--muted); }
+  .desk__event > div { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+  .desk__event q { font-style: italic; }
+  .desk__what { display: flex; align-items: center; gap: 8px; }
 }
 @media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
   .desk__row:hover { background: var(--surface); }
