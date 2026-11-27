@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { PublicProfile } from "../api";
 import { hasPlaceLabel } from "../features/place/hasPlace";
 import { ProfileCoverImage } from "../features/profile/ProfileCoverImage";
+import { usePreloadPhotos } from "../features/profile/usePreloadPhotos";
 import { ExplicitVeil } from "../features/explicit/ExplicitVeil";
 
 type CoverProps = {
@@ -28,6 +29,9 @@ export function ProfileCover({ photos, coverPhoto, photosBlur, coverBlur, displa
   const blurred = photos ? Boolean(photosBlur?.[index]) && !revealed.has(index) : Boolean(coverBlur);
   const preview = source && source === coverPhoto ? `${source}?s=cover` : undefined;
   const fallback = displayName && <div className="profile__nophoto">{displayName.charAt(0).toUpperCase()}</div>;
+  // Las demás fotos se bajan por detrás cuando ya se ve la primera
+  const [coverReady, setCoverReady] = useState(false);
+  usePreloadPhotos(photos, index, coverReady);
   return (
     <div className="profile__photo">
       {source || !photos ? (
@@ -38,6 +42,7 @@ export function ProfileCover({ photos, coverPhoto, photosBlur, coverBlur, displa
           alt={displayName ? `Foto de ${displayName}` : ""}
           fallback={fallback}
           blur={blurred}
+          onReady={() => setCoverReady(true)}
         />
       ) : (
         fallback

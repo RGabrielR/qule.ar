@@ -1,14 +1,15 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /** blur: la foto va borrosa (foto explícita, si eligió taparlas; ver features/explicit). */
-type Props = { photo?: string; preview?: string; alt: string; fallback: ReactNode; blur?: boolean };
+type Props = { photo?: string; preview?: string; alt: string; fallback: ReactNode; blur?: boolean; onReady?: () => void };
 
 /** Guarda, la primera vez que se monta la imagen, si ya estaba cargada (venía de caché). */
 const rememberCached = (cached: { current: boolean | undefined }) => (img: HTMLImageElement | null) => {
   if (img && cached.current === undefined) cached.current = img.complete;
 };
 
-export function ProfileCoverImage({ photo, preview, alt, fallback, blur = false }: Props) {
+/** onReady: avisa cuando la foto ya se ve (o no se pudo cargar), para empezar a bajar las demás. */
+export function ProfileCoverImage({ photo, preview, alt, fallback, blur = false, onReady }: Props) {
   const [previewReady, setPreviewReady] = useState(false);
   const [photoState, setPhotoState] = useState<"loading" | "ready" | "failed">("loading");
   const showPhoto = photoState === "ready";
@@ -19,6 +20,17 @@ export function ProfileCoverImage({ photo, preview, alt, fallback, blur = false 
   const photoCached = useRef<boolean>(undefined);
   const photoFade = useRef<boolean>(undefined);
   if (showPhoto && photoFade.current === undefined) photoFade.current = !photoCached.current && !previewReady;
+  // Si la foto ya estaba bajada (ver usePreloadPhotos), se muestra antes de pintar: sin un cuadro de esqueleto
+  const photoRef = useRef<HTMLImageElement>(null);
+  useLayoutEffect(() => {
+    const img = photoRef.current;
+    if (img?.complete && img.naturalWidth) setPhotoState("ready");
+  }, []);
+  useEffect(() => {
+    if (photoState !== "loading") onReady?.();
+    // Solo cuando cambia el estado de la foto
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoState]);
 
   return (
     <div className={blur ? "profile__cover-media profile__cover-media--blur" : "profile__cover-media"}>
@@ -36,7 +48,10 @@ export function ProfileCoverImage({ photo, preview, alt, fallback, blur = false 
           src={photo}
           alt={alt}
           hidden={!showPhoto}
-          ref={rememberCached(photoCached)}
+          ref={(img) => {
+            photoRef.current = img;
+            rememberCached(photoCached)(img);
+          }}
           className={photoFade.current ?? !photoCached.current ? "profile__cover-fade" : undefined}
           onLoad={(event) => {
             void event.currentTarget.decode().then(() => setPhotoState("ready"), () => setPhotoState("failed"));
