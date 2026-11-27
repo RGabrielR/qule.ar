@@ -43,3 +43,42 @@ export type Report = {
   targetSuspendedAt: string | null;
   targetReportCount: number;
 };
+
+/** El historial de una cuenta para la mesa de moderación (GET /admin/users/:id/history). */
+export type AccountHistory = {
+  createdAt: string;
+  suspendedAt: string | null;
+  suspendReason: string | null;
+  /** Todos los reportes sobre la cuenta, también los que no vinieron en `reports` */
+  reportCount: number;
+  /** Sin quién reportó */
+  reports: {
+    id: string;
+    reason: string;
+    details: string | null;
+    status: "open" | "dismissed" | "actioned";
+    resolution: string | null;
+    messageKind: "group" | "dm" | null;
+    automatic: boolean;
+    createdAt: string;
+    resolvedAt: string | null;
+  }[];
+  /** Los reportes que hizo esta cuenta; mutedAt: desde cuándo no cuentan */
+  reportsMade: { total: number; dismissed: number; mutedAt: string | null };
+  /** Lo que hizo moderación sobre la cuenta o sobre uno de sus reportes (reportId). actor null: solo lo ve la administración general */
+  actions: { id: string; action: string; details: string | null; reportId: string | null; actor: string | null; createdAt: string }[];
+  /** Pedidos de revisión. body, extra y response: solo con el permiso Revisiones */
+  appeals: {
+    id: string;
+    status: "open" | "upheld" | "lifted";
+    suspendReason: string | null;
+    suspendedAt: string;
+    createdAt: string;
+    reviewedAt: string | null;
+    body: string | null;
+    extra: string | null;
+    response: string | null;
+  }[];
+  /** Hay más reportes o acciones que los que vinieron */
+  more: boolean;
+};
