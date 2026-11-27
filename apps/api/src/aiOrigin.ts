@@ -3,14 +3,27 @@ import { AI_ORIGINS, detectAiProvenance, type AiOrigin } from "@mortero/shared/a
 export type { AiOrigin };
 
 /**
- * Si una foto o video está hecho con IA, según sus propios metadatos (ver packages/shared/src/aiProvenance.ts).
+ * Si una foto está hecha con IA, según sus propios metadatos (ver packages/shared/src/aiProvenance.ts). Los videos no
+ * pasan por acá: pueden pesar hasta 80 MB y recorrerlos enteros traba el proceso del API.
  *
  * `declared` es lo que la web detectó en el archivo original antes de recortarlo (el recorte lo vuelve a codificar
  * y los metadatos no llegan hasta acá). Se acepta sin verificar: solo puede marcar como IA una foto propia, nunca
  * sacarle la marca a una que la trae. Gana la señal más fuerte.
+ *
+ * Si la detección falla con un archivo raro, la foto se sube igual, sin marca (o con la que mandó la web). `detect`
+ * se cambia solo en las pruebas.
  */
-export async function aiOriginOf(bytes: ArrayBuffer | Uint8Array, declared?: unknown): Promise<AiOrigin | null> {
-  const detected = (await detectAiProvenance(bytes))?.origin ?? null;
+export async function aiOriginOf(
+  bytes: ArrayBuffer | Uint8Array,
+  declared?: unknown,
+  detect: typeof detectAiProvenance = detectAiProvenance,
+): Promise<AiOrigin | null> {
+  let detected: AiOrigin | null = null;
+  try {
+    detected = (await detect(bytes))?.origin ?? null;
+  } catch {
+    // Sin marca: una imagen que el detector no entiende no puede frenar la subida
+  }
   const claimed = typeof declared === "string" && (AI_ORIGINS as readonly string[]).includes(declared) ? (declared as AiOrigin) : null;
   if (detected === "generated" || claimed === "generated") return "generated";
   return detected ?? claimed;

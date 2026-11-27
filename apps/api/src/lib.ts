@@ -1,7 +1,7 @@
-import { aiOut, type AiOrigin } from "./aiOrigin.js";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
+import { aiOut, type AiOrigin } from "./aiOrigin.js";
 import { auth, type AuthUser } from "./auth.js";
 import { db, schema } from "./db/index.js";
 
@@ -72,7 +72,6 @@ export async function firstPublicPhotos(ids: string[]): Promise<Map<string, { ke
 export async function firstPublicPhotoKeys(ids: string[]): Promise<Map<string, string>> {
   return new Map([...await firstPublicPhotos(ids)].map(([id, p]) => [id, p.key]));
 }
-
 
 /**
  * ¿Tapar esta foto para quien la mira? Solo si está marcada como explícita, quien mira eligió taparlas y no es suya.

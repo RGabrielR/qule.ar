@@ -26,7 +26,7 @@ Para todo lo demás están las [Discusiones del proyecto](https://github.com/RGa
 
 - Descripción, altura, peso, tipo de cuerpo, posición, tribus, qué buscás, situación sentimental y pronombres.
 - **Estado serológico y fecha del último test.** Es un dato de salud: mirá el punto 3.
-- Fotos y videos. Al subirlos les borramos los metadatos, incluida la ubicación GPS. Antes de borrarlos nos fijamos si el archivo dice que fue creado con inteligencia artificial (como hacen ChatGPT, Gemini o Firefly) y, si es así, guardamos solo eso para mostrar el aviso "Hecha con IA". No se analiza el contenido de la imagen ni se manda a nadie.
+- Fotos y videos. Al subirlos les borramos los metadatos, incluida la ubicación GPS. Antes de borrarlos, en las fotos nos fijamos si el archivo dice que fue creado con inteligencia artificial (como hacen ChatGPT, Gemini o Firefly) y, si es así, guardamos solo eso para mostrar el aviso "Hecha con IA". No se analiza el contenido de la imagen ni se manda a nadie.
 
 **Tu ubicación:** para mostrarte gente cerca, el celu nos manda tu ubicación, pero **nunca guardamos la posición exacta**: la redondeamos al centro de una zona de unos 500 metros. Mientras tenés la app abierta, esa zona se actualiza cada unos minutos para que la grilla siga donde estás; con la app cerrada no nos llega nada. Podés ocultar la distancia o usar el modo incógnito. Si la ocultás, no se usa para nada: ni para mostrarla, ni para ordenar la grilla, ni para filtrar por kilómetros.
 

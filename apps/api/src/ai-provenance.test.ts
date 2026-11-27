@@ -219,4 +219,14 @@ describe("aiOriginOf: detectado + lo que manda la web", () => {
     // La web no puede sacarle la marca a un archivo que la trae
     assert.equal(await aiOriginOf(fixture("c2pa-generated.jpg"), ""), "generated");
   });
+
+  test("si la detección falla, sigue sin marca (o con la que mandó la web) y no frena la subida", async () => {
+    const broken = async (): Promise<never> => {
+      throw new RangeError("Offset is outside the bounds of the DataView");
+    };
+    const plain = new Uint8Array([1, 2, 3]);
+    assert.equal(await aiOriginOf(plain, undefined, broken), null);
+    assert.equal(await aiOriginOf(plain, "generated", broken), "generated");
+    assert.equal(await aiOriginOf(plain, "edited", broken), "edited");
+  });
 });

@@ -21,6 +21,7 @@ import { batchReadReceipts } from "../features/messages/readReceipts";
 import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
 import { Watermark } from "../features/photos/Watermark";
+import { AiChip } from "../features/photos/AiChip";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
 import { useNewArrivals } from "../features/messages/useNewArrivals";
 import { useConversationActions } from "../features/messages/ConversationActions";
@@ -30,7 +31,6 @@ import { chatDateFormat, chatDay, useChatToday } from "../features/messages/chat
 function addMessage(list: Dm[], message: Dm) {
   return list.some((m) => m.id === message.id) ? list : [...list, message].sort(compareDmOrder);
 }
-import { AiChip } from "../features/photos/AiChip";
 
 /** Texto corto para la cita en el composer y en la burbuja. */
 function replyPreview(m: Dm) {

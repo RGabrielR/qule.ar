@@ -201,6 +201,8 @@ export type GroupMessage = {
   status: "queued" | "published" | "cancelled" | "deleted";
   scheduledAt: string;
   photo?: "available" | "hidden" | null;
+  /** Si la foto está hecha con IA. */
+  photoAi?: AiOrigin;
   // En los grupos solo se muestra nombre y foto, sin la edad
   author: Pick<Author, "id" | "name" | "photo">;
   replyTo: { id: string; authorName: string; body: string | null } | null;

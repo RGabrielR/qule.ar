@@ -1,8 +1,8 @@
-import { aiOriginOf, aiOut } from "../aiOrigin.js";
 import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { aiOriginOf, aiOut } from "../aiOrigin.js";
 import { nextSlot } from "../antispam.js";
 import { db, schema } from "../db/index.js";
 import { DEFAULT_SPAM_RULES } from "../db/schema.js";
@@ -1170,7 +1170,8 @@ groupRoutes.post("/groups/:id/messages/photo", async (c) => {
     throw new HTTPException(403, { message: `Las cuentas nuevas no pueden mandar fotos en grupos durante las primeras ${newAccountHours} h` });
   }
   await limit(u.id, "upload");
-  const file = (await c.req.parseBody()).file;
+  const form = await c.req.parseBody();
+  const file = form.file;
   if (!(file instanceof File) || file.type.startsWith("video/")) {
     throw new HTTPException(400, { message: "Elegí una foto" });
   }
@@ -1178,9 +1179,12 @@ groupRoutes.post("/groups/:id/messages/photo", async (c) => {
   // Primero un control sin bloqueo, para no procesar la imagen si ya se sabe que no entra en la cola
   const early = await nextSlot({ groupId: g.id, userId: u.id, userCreatedAt: new Date(u.createdAt), rules: g.spamRules });
   if (!early.ok) throw new HTTPException(429, { message: early.error });
+  const bytes = await file.arrayBuffer();
+  // Antes de guardarla, que le borra los metadatos. `ai` lo manda la web si convirtió la foto (HEIC a JPG).
+  const photoAi = await aiOriginOf(bytes, form.ai);
   let photoKey: string;
   try {
-    photoKey = await saveImage(await file.arrayBuffer());
+    photoKey = await saveImage(bytes);
   } catch {
     throw new HTTPException(400, { message: "No pudimos leer esa imagen" });
   }
@@ -1198,7 +1202,7 @@ groupRoutes.post("/groups/:id/messages/photo", async (c) => {
     const now = new Date();
     const publishNow = slot.at.getTime() <= now.getTime();
     const [message] = await tx.insert(groupMessage).values({
-      id: newId(), groupId: g.id, userId: u.id, body: "", photoKey,
+      id: newId(), groupId: g.id, userId: u.id, body: "", photoKey, photoAi,
       status: publishNow ? "published" : "queued", scheduledAt: publishNow ? now : slot.at,
     }).returning();
     return message;

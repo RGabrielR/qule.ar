@@ -330,6 +330,8 @@ export const groupMessage = pgTable("group_message", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
   photoKey: text("photo_key"),
+  // Si la foto está hecha con IA (como photo.ai)
+  photoAi: text("photo_ai"),
   photoHiddenAt: timestamp("photo_hidden_at", { withTimezone: true }),
   // Mensaje citado al responder (del mismo grupo)
   replyToId: text("reply_to_id"),

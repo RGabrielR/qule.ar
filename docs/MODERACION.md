@@ -92,10 +92,11 @@ A quien reporta no se le dice nada, ni a quien reporta de buena fe ni a quien qu
 
 ## Fotos hechas con IA
 
-Las fotos y videos que **dicen en su propio archivo** que los creó una inteligencia artificial muestran un aviso "Hecha con IA" donde se vean: la grilla, el perfil, los álbumes, el chat y la foto del grupo. **No se bloquean ni se esconden**: solo se avisa.
+Las fotos que **dicen en su propio archivo** que las creó una inteligencia artificial muestran un aviso "Hecha con IA" donde se vean: la grilla, el perfil, los álbumes, el chat privado, las fotos del chat de grupo y la foto del grupo. **No se bloquean ni se esconden**: solo se avisa.
 
 - **Qué se mira:** las marcas que ponen los mismos generadores. Content Credentials (C2PA) de ChatGPT, Gemini, Firefly, Bing, Flux, Ideogram y otros; el campo IPTC `DigitalSourceType` (Midjourney, Meta AI, Apple); y los datos que guardan Stable Diffusion, ComfyUI o NovelAI. Se leen antes de borrar los metadatos y queda guardado solo el resultado.
 - **Qué no se mira:** el contenido de la imagen. No hay ningún modelo que "adivine" si una foto es de IA: los que existen se equivocan con muchas fotos reales, y marcar como falsa la foto de una persona real hace daño.
+- **Los videos no se revisan:** pueden pesar hasta 80 MB y recorrerlos enteros traba el servidor para todo el mundo.
 - **El límite:** una captura de pantalla o una foto reenviada por WhatsApp pierde la marca. Que una foto no tenga el aviso **no prueba que sea real**.
 - **Fotos reales retocadas con IA** (por ejemplo, con el borrador mágico del celu) quedan registradas como "retocada", pero no llevan el aviso.
 - Si alguien usa fotos hechas con IA para hacerse pasar por otra persona, se reporta como **perfil falso**.

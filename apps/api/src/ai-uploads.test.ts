@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { promisify } from "node:util";
 import { Hono } from "hono";
 import sharp from "sharp";
 import { detectAiProvenance } from "@mortero/shared/aiProvenance";
@@ -23,6 +25,7 @@ test("fotos hechas con IA: se marcan al subirlas y la marca viaja a la web", asy
   process.env.VAPID_PUBLIC_KEY = "";
   process.env.VAPID_PRIVATE_KEY = "";
   process.env.BETTER_AUTH_SECRET = "clave-local-de-pruebas-de-ia-qule";
+  process.env.GROUP_PHOTO_PILOT_IDS = "piloto-ia";
   let close: (() => Promise<void>) | undefined;
   t.after(async () => {
     try {
@@ -40,7 +43,8 @@ test("fotos hechas con IA: se marcan al subirlas y la marca viaja a la web", asy
   const { meRoutes } = await import("./routes/me.js");
   const { socialRoutes } = await import("./routes/social.js");
   const { groupRoutes } = await import("./routes/groups.js");
-  const { readImage } = await import("./storage.js");
+  const { readImage, videoEnabled } = await import("./storage.js");
+  const { eq } = await import("drizzle-orm");
 
   const app = new Hono<AppEnv>();
   app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
@@ -70,7 +74,8 @@ test("fotos hechas con IA: se marcan al subirlas y la marca viaja a la web", asy
 
   const upload = (url: string, who: Account, file: Buffer, name: string, fields: Record<string, string> = {}) => {
     const form = new FormData();
-    form.set("file", new File([Uint8Array.from(file)], name, { type: name.endsWith(".png") ? "image/png" : "image/jpeg" }));
+    const type = name.endsWith(".mp4") ? "video/mp4" : name.endsWith(".png") ? "image/png" : "image/jpeg";
+    form.set("file", new File([Uint8Array.from(file)], name, { type }));
     for (const [k, v] of Object.entries(fields)) form.set(k, v);
     return request(url, who, { method: "POST", body: form });
   };
@@ -130,4 +135,44 @@ test("fotos hechas con IA: se marcan al subirlas y la marca viaja a la web", asy
   assert.equal((await request(`/api/groups/${groupId}/photo`, ana, { method: "DELETE" })).status, 200);
   const cleared = await (await request(`/api/groups/${groupId}`, ana)).json() as { photoAi: string | null };
   assert.equal(cleared.photoAi, null);
+
+  // Fotos del chat de grupo (piloto): como en el chat privado, el servidor lee la marca del archivo
+  await db.update(schema.user).set({ createdAt: new Date(Date.now() - 3 * 24 * 3_600_000) }).where(eq(schema.user.id, ana.id));
+  await db.insert(schema.group).values({ id: "piloto-ia", name: "Piloto" });
+  await db.insert(schema.groupMember).values([{ groupId: "piloto-ia", userId: ana.id, role: "owner" }, { groupId: "piloto-ia", userId: beto.id }]);
+  type GroupPhotoMessage = { id: string; status: string; photoAi: string | null };
+  const groupSent = await upload("/api/groups/piloto-ia/messages/photo", ana, fixture("c2pa-generated.jpg"), "ia.jpg");
+  assert.equal(groupSent.status, 200);
+  const { message: groupMessage } = await groupSent.json() as { message: GroupPhotoMessage };
+  assert.equal(groupMessage.photoAi, "generated");
+  // Si la web convirtió la foto (HEIC a JPG), avisa con `ai`
+  const groupDeclared = await upload("/api/groups/piloto-ia/messages/photo", ana, plain, "convertida.png", { ai: "generated" });
+  assert.equal(((await groupDeclared.json()) as { message: GroupPhotoMessage }).message.photoAi, "generated");
+  const groupPlain = await upload("/api/groups/piloto-ia/messages/photo", ana, plain, "normal.png");
+  assert.equal(((await groupPlain.json()) as { message: GroupPhotoMessage }).message.photoAi, null);
+  const groupList = await (await request("/api/groups/piloto-ia/messages", beto)).json() as { messages: GroupPhotoMessage[] };
+  assert.equal(groupList.messages.find((m) => m.id === groupMessage.id)?.photoAi, "generated");
+
+  // Videos: no se revisan (pueden pesar 80 MB y recorrerlos traba el API). Aunque el archivo traiga la marca, no se guarda.
+  if (!videoEnabled) {
+    t.diagnostic("sin ffmpeg: no se prueba la subida de videos");
+    return;
+  }
+  const clip = path.join(dataDir, "clip.mp4");
+  await promisify(execFile)("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=gray:s=32x32:d=1", "-pix_fmt", "yuv420p", clip]);
+  const xmp = '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+    + '<rdf:Description rdf:about="" xmlns:Iptc4xmpExt="http://iptc.org/std/Iptc4xmpExt/2008-02-29/" '
+    + 'Iptc4xmpExt:DigitalSourceType="http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"/></rdf:RDF></x:xmpmeta>';
+  // Caja `free` al final del MP4: los reproductores la ignoran y el detector la encuentra
+  const freeBox = Buffer.alloc(8 + Buffer.byteLength(xmp));
+  freeBox.writeUInt32BE(freeBox.length, 0);
+  freeBox.write("free", 4, "latin1");
+  freeBox.write(xmp, 8, "utf8");
+  const video = Buffer.concat([await readFile(clip), freeBox]);
+  assert.equal((await detectAiProvenance(video))?.origin, "generated");
+  const sentVideo = await upload("/api/me/photos", ana, video, "ia.mp4", { private: "1" });
+  assert.equal(sentVideo.status, 200);
+  const savedVideo = await sentVideo.json() as { kind: string; ai: string | null };
+  assert.equal(savedVideo.kind, "video");
+  assert.equal(savedVideo.ai, null);
 });

@@ -694,6 +694,7 @@ a.gcard:active { background: var(--surface); }
 .ai-chip--cover { top: calc(28px + env(safe-area-inset-top, 0px)); left: auto; right: 16px; }
 .ai-chip--viewer { top: 12px; left: 16px; }
 .ai-chip--inline { position: static; margin-top: 8px; }
+.ai-chip--row { position: static; align-self: center; }
 .photos__item .ai-chip { top: 46px; }
 .album__until { margin-bottom: 8px; }
 .photos__open { position: absolute; inset: 0; padding: 0; border: 0; background: none; cursor: zoom-in; }
