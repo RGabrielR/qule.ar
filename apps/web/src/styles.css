@@ -169,7 +169,9 @@ html:has(.shell--thread), body:has(.shell--thread) { overflow: hidden; overscrol
 .tabbar__item.active { color: var(--accent); }
 .tabbar__item .badge { position: absolute; top: 8px; left: calc(50% + 6px); }
 
-.page { flex: 1; overflow-y: auto; padding-bottom: 24px; }
+/* Las pantallas tampoco rebotan por dentro al llegar arriba o abajo: el encabezado va pegado adentro de la pantalla
+   y se movería con el rebote, y en el perfil se vería el fondo arriba de la foto. */
+.page { flex: 1; overflow-y: auto; padding-bottom: 24px; overscroll-behavior: none; }
 html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .nearby-refresh {
   display: flex; align-items: center; justify-content: center; overflow: clip;
@@ -820,7 +822,10 @@ button.quote:hover { background: var(--surface-3); }
 
 /* Términos y privacidad */
 .legal { min-height: 100%; max-width: 680px; margin: 0 auto; padding: 0 16px 48px; }
+/* Términos y Privacidad se desplazan con el documento: sin rebote, y su encabezado tampoco se arrastra */
+html:has(.legal) { overscroll-behavior: none; }
 .legal__top {
+  touch-action: none;
   position: sticky; top: 0; z-index: var(--z-sticky); display: flex; align-items: center; gap: 8px;
   padding: calc(10px + env(safe-area-inset-top, 0px)) 0 10px; background: var(--bg); border-bottom: 1px solid var(--line);
 }
