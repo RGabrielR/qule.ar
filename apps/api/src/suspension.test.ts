@@ -41,11 +41,17 @@ test("suspender borra mensajes en grupos y archivos, y conserva la prueba de los
   const { eq } = await import("drizzle-orm");
   const { auth } = await import("./auth.js");
   const { adminRoutes } = await import("./routes/admin.js");
+  const { meRoutes } = await import("./routes/me.js");
+  const { nearbyRoutes } = await import("./routes/nearby.js");
+  const { socialRoutes } = await import("./routes/social.js");
   const { saveImage } = await import("./storage.js");
 
   const app = new Hono<AppEnv>();
   app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
   app.route("/api", adminRoutes);
+  app.route("/api", meRoutes);
+  app.route("/api", nearbyRoutes);
+  app.route("/api", socialRoutes);
 
   type Account = { id: string; cookie: string };
   const request = (url: string, account?: Account, init?: RequestInit) => {
@@ -175,4 +181,53 @@ test("suspender borra mensajes en grupos y archivos, y conserva la prueba de los
   const [r4] = await db.select().from(schema.report).where(eq(schema.report.id, "r4"));
   assert.deepEqual([...r4.evidenceKeys].sort(), [leoPublic, leoPrivate, leoDm].sort());
   for (const key of [leoPublic, leoPrivate, leoDm]) assert.equal(await stored(key), true, "queda en el servidor como prueba");
+  await t.test("la suspensión temporal vence sin borrar contenido ni esperar una tarea del servidor", async () => {
+    const target = await account("Luz");
+    const key = await image(90);
+    await db.insert(schema.photo).values({ id: "p5", userId: target.id, key, position: 0 });
+    await db.insert(schema.report).values({ id: "r5", reporterId: ana.id, targetUserId: target.id, reason: "acoso" });
+    const url = `/api/admin/users/${target.id}/suspend`;
+    const measure = json("POST", { reason: "Acoso en el chat", duration: { unit: "hours", amount: 2 } });
+    assert.equal((await request(url, mod, measure)).status, 200);
+    assert.equal((await request(url, mod, measure)).status, 409);
+    const [suspension] = await db.select().from(schema.profile).where(eq(schema.profile.userId, target.id));
+    assert.equal(suspension.suspendedUntil!.getTime() - suspension.suspendedAt!.getTime(), 7_200_000);
+    assert.equal(await stored(key), true);
+    const [closed] = await db.select().from(schema.report).where(eq(schema.report.id, "r5"));
+    assert.equal(closed.status, "actioned");
+
+    assert.equal((await request("/api/me", target)).status, 401, "la sesión anterior se revoca");
+    const login = await request("/api/auth/sign-in/email", undefined, json("POST", {
+      email: "luz@example.test", password: "una frase sintética de prueba",
+    }));
+    assert.equal(login.status, 200);
+    const renewed = { ...target, cookie: login.headers.getSetCookie().map((value) => value.split(";", 1)[0]).join("; ") };
+    const me = await request("/api/me", renewed);
+    assert.equal(me.status, 200);
+    const view = await me.json() as { profile: { suspendedUntil: string } };
+    assert.equal(view.profile.suspendedUntil, suspension.suspendedUntil!.toISOString());
+    assert.equal((await request("/api/nearby", renewed)).status, 403);
+    assert.equal((await request(`/api/users/${target.id}`, ana)).status, 404);
+    const before = await request("/api/admin/suspended", mod);
+    assert.ok((await before.json() as { id: string }[]).some((entry) => entry.id === target.id));
+
+    await db.update(schema.profile).set({ suspendedUntil: new Date(Date.now() - 1_000) }).where(eq(schema.profile.userId, target.id));
+    const expired = await request("/api/me", renewed);
+    assert.equal(expired.status, 200);
+    assert.equal((await expired.json() as { profile: { suspendedAt: string | null } }).profile.suspendedAt, null);
+    assert.equal((await request("/api/nearby", renewed)).status, 200);
+    assert.equal((await request(`/api/users/${target.id}`, ana)).status, 200);
+    const after = await request("/api/admin/suspended", mod);
+    assert.ok(!(await after.json() as { id: string }[]).some((entry) => entry.id === target.id));
+    assert.equal(await stored(key), true);
+  });
+
+});
+
+test("los días duran 24 horas y los meses respetan el último día del mes de destino", async () => {
+  const { suspensionEnd } = await import("./suspensionStatus.js");
+  const start = new Date("2028-01-31T23:30:00Z");
+  assert.equal(suspensionEnd(start, { unit: "days", amount: 2 }).toISOString(), "2028-02-02T23:30:00.000Z");
+  assert.equal(suspensionEnd(start, { unit: "months", amount: 1 }).toISOString(), "2028-02-29T23:30:00.000Z");
+  assert.equal(suspensionEnd(start, { unit: "months", amount: 2 }).toISOString(), "2028-03-31T23:30:00.000Z");
 });

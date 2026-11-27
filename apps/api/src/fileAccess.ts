@@ -1,3 +1,4 @@
+import { isSuspended } from "./suspensionStatus.js";
 import { eq } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
@@ -33,9 +34,10 @@ export const requireUserForFiles = createMiddleware<AppEnv>(async (c, next) => {
       if (token) sessions.delete(token);
       throw new HTTPException(401, { message: "Tenés que iniciar sesión" });
     }
-    const [p] = await db.select({ suspendedAt: schema.profile.suspendedAt }).from(schema.profile)
+    const [p] = await db.select({ suspendedAt: schema.profile.suspendedAt, suspendedUntil: schema.profile.suspendedUntil }).from(schema.profile)
       .where(eq(schema.profile.userId, found.user.id));
-    s = { user: found.user, suspended: Boolean(p?.suspendedAt), until: now + SESSION_MS };
+    const suspended = isSuspended(p, now);
+    s = { user: found.user, suspended, until: Math.min(now + SESSION_MS, suspended && p?.suspendedUntil ? p.suspendedUntil.getTime() : Infinity) };
     if (token) remember(sessions, token, s);
   }
   if (s.suspended) throw new HTTPException(403, { message: "Tu cuenta está suspendida" });

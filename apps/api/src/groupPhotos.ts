@@ -1,3 +1,4 @@
+import { activeSuspension } from "./suspensionStatus.js";
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { db, schema } from "./db/index.js";
 import { env } from "./env.js";
@@ -30,7 +31,7 @@ export async function canOpenGroupPhoto(groupId: string, messageId: string, view
   const [row] = await db.select({ author: m.userId, key: m.photoKey }).from(m)
     .innerJoin(group, and(eq(group.id, m.groupId), isNull(group.removedAt), eq(group.isGeneral, false)))
     .innerJoin(groupMember, and(eq(groupMember.groupId, group.id), eq(groupMember.userId, viewer)))
-    .innerJoin(profile, and(eq(profile.userId, m.userId), isNull(profile.suspendedAt)))
+    .innerJoin(profile, and(eq(profile.userId, m.userId), sql`not ${activeSuspension()}`))
     .where(and(eq(m.groupId, groupId), eq(m.id, messageId), eq(m.status, "published"), isNull(m.photoHiddenAt), isNotNull(m.photoKey)));
   if (!row?.key) return null;
   const [blocked] = await db.select({ id: block.blockerId }).from(block).where(

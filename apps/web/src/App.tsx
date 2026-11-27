@@ -134,7 +134,7 @@ function RequireAuth({ children, needProfile }: { children: React.ReactNode; nee
   const onboarding = loc.pathname === "/bienvenida";
   const groupId = onboarding ? groupIdFromSearch(loc.search) : groupIdFromPath(loc.pathname);
   if (!me) return <Navigate to={groupAuthPath("/entrar", groupId)} replace state={{ from: loc.pathname }} />;
-  if (me.profile?.suspendedAt) return <Suspended me={me} onSignedOut={reload} />;
+  if (me.profile?.suspendedAt) return <Suspended me={me} onReload={reload} />;
   if (needProfile && !me.profile) return <Navigate to={groupAuthPath("/bienvenida", groupId)} replace />;
   if (onboarding && me.profile) return <Navigate to={groupId ? groupPath(groupId) : "/yo/editar?nuevo=1"} replace />;
   return <>{children}</>;

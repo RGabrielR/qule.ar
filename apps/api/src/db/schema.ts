@@ -90,6 +90,7 @@ export const profile = pgTable("profile", {
   notifyPrefs: jsonb("notify_prefs").$type<Partial<Record<string, boolean>>>().notNull().default({}),
   // Moderación: una cuenta suspendida no puede usar la app y no aparece en ningún lado
   suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+  suspendedUntil: timestamp("suspended_until", { withTimezone: true }),
   suspendReason: text("suspend_reason"),
   // Quién suspendió (para que la apelación la revise, si se puede, otra persona). null en las suspensiones viejas.
   suspendedBy: text("suspended_by"),

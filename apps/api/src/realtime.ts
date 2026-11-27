@@ -1,6 +1,7 @@
+import { activeSuspension, isSuspended } from "./suspensionStatus.js";
 import { DM_EVENTS, SOCKET_ERRORS } from "@mortero/shared/realtime";
 import type { Server as HttpServer } from "node:http";
-import { and, eq, inArray, lte } from "drizzle-orm";
+import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import { createAdapter } from "@socket.io/cluster-adapter";
 import { Server } from "socket.io";
 import { auth } from "./auth.js";
@@ -56,9 +57,9 @@ export function attachRealtime(server: HttpServer, opts: { publishQueued: boolea
     } catch {
       return next(new Error(SOCKET_ERRORS.tooManyAttempts));
     }
-    const [p] = await db.select({ suspendedAt: schema.profile.suspendedAt }).from(schema.profile)
+    const [p] = await db.select({ suspendedAt: schema.profile.suspendedAt, suspendedUntil: schema.profile.suspendedUntil }).from(schema.profile)
       .where(eq(schema.profile.userId, s.user.id));
-    if (!p || p.suspendedAt) return next(new Error(SOCKET_ERRORS.noProfile));
+    if (!p || isSuspended(p)) return next(new Error(SOCKET_ERRORS.noProfile));
     const release = await reserveSocket(s.user.id);
     if (!release) return next(new Error(SOCKET_ERRORS.tooManySockets));
     if (socket.conn.readyState !== "open") {
@@ -194,7 +195,13 @@ async function publishDue() {
   const due = await db
     .update(groupMessage)
     .set({ status: "published" })
-    .where(and(eq(groupMessage.status, "queued"), lte(groupMessage.scheduledAt, new Date())))
+    .where(and(
+      eq(groupMessage.status, "queued"), lte(groupMessage.scheduledAt, new Date()),
+      sql`not exists (
+        select 1 from ${schema.profile}
+        where ${schema.profile.userId} = ${groupMessage.userId} and ${activeSuspension()}
+      )`,
+    ))
     .returning();
   if (!due.length) return;
   const out = await serializeGroupMessages(due);

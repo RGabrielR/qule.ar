@@ -1,3 +1,4 @@
+import { isSuspended } from "./suspensionStatus.js";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
@@ -19,11 +20,12 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
   // Cuenta suspendida: solo puede ver su estado (GET /api/me), borrar su cuenta (DELETE /api/me) y pedir que
   // se revise la suspensión (/api/appeal, ver routes/appeals.ts)
   const allowed = (c.req.path === "/api/me" && ["GET", "DELETE"].includes(c.req.method)) || c.req.path === "/api/appeal" || c.req.path.startsWith("/api/appeal/");
-  if (p?.suspendedAt && !allowed) {
+  const suspended = isSuspended(p);
+  if (suspended && !allowed) {
     throw new HTTPException(403, { message: "Tu cuenta está suspendida" });
   }
   c.set("user", s.user);
-  c.set("profile", p ?? null);
+  c.set("profile", p?.suspendedAt && !suspended ? { ...p, suspendedAt: null, suspendedUntil: null, suspendReason: null, suspendedBy: null } : p ?? null);
   await next();
 });
 
@@ -96,14 +98,14 @@ export async function authorsFor(ids: string[], options: { presence?: boolean; r
   const [profiles, firstPhoto] = await Promise.all([
     db.select({
       userId: profile.userId, displayName: profile.displayName, birthdate: profile.birthdate, showAge: profile.showAge,
-      ...(options.presence && { incognito: profile.incognito, suspendedAt: profile.suspendedAt, lastSeenAt: profile.lastSeenAt }),
+      ...(options.presence && { incognito: profile.incognito, suspendedAt: profile.suspendedAt, suspendedUntil: profile.suspendedUntil, lastSeenAt: profile.lastSeenAt }),
     })
       .from(profile).where(inArray(profile.userId, unique)),
     firstPublicPhotoKeys(unique),
   ]);
   for (const p of profiles) {
     let presence: "online" | "recent" | undefined;
-    if (options.presence && p.incognito === false && !p.suspendedAt && p.lastSeenAt) {
+    if (options.presence && p.incognito === false && !isSuspended(p) && p.lastSeenAt) {
       if (isOnline(p.userId)) presence = "online";
       else if (Date.now() - p.lastSeenAt.getTime() < 15 * 60_000) presence = "recent";
     }

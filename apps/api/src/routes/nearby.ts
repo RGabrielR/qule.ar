@@ -1,3 +1,4 @@
+import { activeSuspension } from "../suspensionStatus.js";
 import { eq, inArray, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -191,7 +192,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
   const conds = [
     sql`p.user_id <> ${u.id}`,
     sql`p.incognito = false`, // en incógnito no se aparece en la grilla
-    sql`p.suspended_at is null`,
+    sql`not ${activeSuspension(sql`p.suspended_at`, sql`p.suspended_until`)}`,
     // Bloqueos en los dos sentidos, en dos condiciones: con un "o" adentro, Postgres comparaba cada perfil contra
     // cada bloqueo; separadas, usa un hash por lado (de 75 a 50 ms con 20.000 perfiles)
     sql`not exists (select 1 from block b where b.blocker_id = ${u.id} and b.blocked_id = p.user_id)`,

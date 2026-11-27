@@ -24,7 +24,7 @@ export function VerifyReportPhoto({ reports, canSuspend, onClose }: {
   const currentReport = reports.find((report) => report.id === reportId) ?? reports[0];
 
   function recordMeasure(measure: Measure) {
-    const affected = measure === "suspended"
+    const affected = measure.kind === "suspended"
       ? reports.filter((report) => report.target?.id === currentReport.target?.id)
       : [currentReport];
     setMeasures((previous) => ({ ...previous, ...Object.fromEntries(affected.map((report) => [report.id, measure])) }));

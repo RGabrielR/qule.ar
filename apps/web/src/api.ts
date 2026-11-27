@@ -129,6 +129,7 @@ export type Me = {
     /** Avisos que apagó (false). Lo que no está cuenta como prendido. */
     notifyPrefs: Partial<Record<NotifyKind, boolean>>;
     suspendedAt: string | null;
+    suspendedUntil: string | null;
     suspendReason: string | null;
     /** Versión de los términos que aceptó (null: cuenta anterior a los términos) */
     termsVersion: string | null;

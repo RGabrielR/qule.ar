@@ -1,3 +1,4 @@
+import { SuspensionTiming } from "./SuspensionTiming";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api, type Author } from "../../api";
@@ -11,6 +12,7 @@ export type Person = Author & {
   owner: boolean;
   permissions: string[];
   suspendedAt: string | null;
+  suspendedUntil: string | null;
   suspendReason: string | null;
   /** Oculta de la app por reportes urgentes de varias personas, mientras nadie los revise. */
   hidden: boolean;
@@ -102,6 +104,7 @@ export function PeoplePanel({ onSuspend }: { onSuspend: (p: Person, done: () => 
                 {p.hidden && <span className="pill pill--urgent">Oculta por reportes</span>}
                 {p.openReports > 0 && <span className="pill">{p.openReports === 1 ? "1 reporte abierto" : `${p.openReports} reportes abiertos`}</span>}
               </div>}
+              {p.suspendedAt && <p className="small"><SuspensionTiming suspendedAt={p.suspendedAt} suspendedUntil={p.suspendedUntil} /></p>}
               {p.suspendReason && p.suspendedAt && <p className="rcard__details">{p.suspendReason}</p>}
               <div className="rcard__actions">
                 {!p.suspendedAt && <Link className="btn btn--small" to={`/perfil/${p.id}`}>Ver perfil</Link>}
