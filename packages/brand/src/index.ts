@@ -208,6 +208,11 @@ export const motion = {
   "dur-page": "280ms",
   /** Hojas y diálogos. */
   "dur-sheet": "320ms",
+  /**
+   * Lo que hay que mantener apretado algo para abrir su menú (y lo que tarda en achicarse mientras tanto).
+   * 400 ms es lo que usa Android (ViewConfiguration.DEFAULT_LONG_PRESS_TIMEOUT); iOS no publica un valor fijo.
+   */
+  "dur-hold": "400ms",
   /** Separación entre elementos que entran escalonados. */
   stagger: "35ms",
   /** Pulso de los esqueletos mientras se espera (una ida; vuelve con `alternate`). */

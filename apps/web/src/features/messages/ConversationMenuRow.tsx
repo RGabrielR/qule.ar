@@ -3,8 +3,10 @@ import { Link } from "react-router";
 import type { ConversationSummary } from "../../api";
 import type { ConversationAction } from "./ConversationActions";
 import { ConversationMenu } from "./ConversationMenu";
+import { motionMs } from "../../motion";
 
-const HOLD_MS = 500;
+// Lo que hay que mantener apretado para abrir el menú (--dur-hold). La fila se achica durante ese tiempo
+// (.inbox__row--pressing) y así anticipa que se va a abrir algo, como el menú de contexto de iOS.
 const MOVE_TOLERANCE = 10;
 
 export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAction, className, style }: {
@@ -19,6 +21,11 @@ export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAc
   onAction: (action: ConversationAction) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Cómo se abrió: con el teclado el foco va a la primera opción; con el dedo, al menú (ver ConversationMenu)
+  const [byKeyboard, setByKeyboard] = useState(false);
+  // Dónde se apoyó el dedo: el menú se abre ahí (ver ConversationMenu)
+  const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
+  const [pressing, setPressing] = useState(false);
   const link = useRef<HTMLAnchorElement>(null);
   const press = useRef<{ pointerId: number; x: number; y: number; timer: number } | null>(null);
   const swallowClick = useRef(false);
@@ -28,12 +35,13 @@ export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAc
     if (!press.current || (pointerId !== undefined && press.current.pointerId !== pointerId)) return;
     window.clearTimeout(press.current.timer);
     press.current = null;
+    setPressing(false);
   }
 
   useEffect(() => () => cancelPress(), []);
 
   return (
-    <li className={`inbox__row ${className ?? ""}`} style={style}>
+    <li className={`inbox__row ${pressing ? "inbox__row--pressing" : ""} ${open ? "inbox__row--menu" : ""} ${className ?? ""}`} style={style}>
       {avatar}
       <Link
         ref={link}
@@ -50,10 +58,17 @@ export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAc
           const { pointerId, clientX, clientY } = event;
           const timer = window.setTimeout(() => {
             press.current = null;
+            setPoint({ x: clientX, y: clientY });
             swallowClick.current = true;
+            setPressing(false);
+            setByKeyboard(false);
             setOpen(true);
-          }, HOLD_MS);
+            // Un toque corto en los celus que vibran (Android); en iPhone no hace nada
+            navigator.vibrate?.(10);
+          }, motionMs("--dur-hold"));
           press.current = { pointerId, x: clientX, y: clientY, timer };
+          // Solo con el dedo: con el mouse no hace falta anticipar nada
+          if (event.pointerType === "touch") setPressing(true);
         }}
         onPointerMove={(event) => {
           const active = press.current;
@@ -70,6 +85,8 @@ export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAc
         onKeyDown={(event) => {
           if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
             event.preventDefault();
+            setByKeyboard(true);
+            setPoint(null);
             setOpen(true);
           }
         }}
@@ -81,7 +98,7 @@ export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAc
       >
         {children}
       </Link>
-      {open && <ConversationMenu id={menuId} className="menu--inbox" anchor={link}
+      {open && <ConversationMenu id={menuId} className="menu--inbox" anchor={link} focusFirst={byKeyboard} point={point}
         muted={chat.muted} canModerate={Boolean(chat.other)} positionMenu={positionMenu}
         onAction={onAction} onClose={() => setOpen(false)} />}
     </li>

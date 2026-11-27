@@ -318,6 +318,8 @@ html:has(.pull-refresh), .page:has(> .pull-refresh) { overscroll-behavior-y: non
 
 /* El menú crece desde la esquina del botón que lo abrió (arriba a la derecha salvo que diga otra cosa) */
 .menu { position: absolute; right: 8px; top: 34px; z-index: var(--z-menu); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 6px; min-width: 180px; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); transform-origin: top right; animation: menu-in var(--dur-base) var(--ease-out) backwards; }
+/* El menú recibe el foco al abrirse con el dedo (no una opción): no lleva anillo, porque no es algo que se elija */
+.menu:focus { outline: none; }
 .menu > * { text-align: left; padding: 10px 12px; border-radius: var(--radius-sm); background: none; border: 0; font-size: var(--text-md); }
 .menu > *:hover { background: var(--surface-3); }
 @media (prefers-reduced-motion: reduce) { .menu { animation-name: fade-in; } }
@@ -350,12 +352,24 @@ html:has(.pull-refresh), .page:has(> .pull-refresh) { overscroll-behavior-y: non
 /* ---------- Mensajes privados ---------- */
 .inbox { list-style: none; margin: 0; padding: 4px 0; }
 /* La foto abre el perfil y el resto de la fila abre el chat. Mantener apretada la fila abre sus acciones. */
-.inbox__row { position: relative; display: flex; align-items: center; transition: background-color var(--dur-fast) var(--ease-out); }
+.inbox__row { position: relative; display: flex; align-items: center; transition: background-color var(--dur-fast) var(--ease-out), scale var(--dur-press) var(--ease-sheet); }
 /* Fila ancha: al tocarla se ilumina el fondo en vez de achicarse (achicar una fila entera se ve raro) */
 .inbox__row:active, .inbox__row:focus-within { background: var(--surface); }
 @media (hover: hover) and (pointer: fine) { .inbox__row:hover { background: var(--surface); } }
 .inbox__avatar { flex: none; align-self: stretch; display: flex; align-items: center; padding: 10px 0 10px 16px; }
-.inbox__item { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 12px; user-select: none; -webkit-touch-callout: none; }
+/* Mantener apretado abre el menú: el texto (nombre, mensaje, hora) no se tiene que seleccionar. Safari en iPhone
+   solo respeta la versión con prefijo. */
+.inbox__item { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 12px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+/* Mientras se mantiene apretada, la fila entera (foto y texto juntos) se achica despacio (--dur-hold, lo mismo que hay que mantener apretado); cuando se
+   abre el menú vuelve a su tamaño con la curva de las hojas, y el menú crece desde la esquina de la fila */
+/* La fila con el menú abierto va por encima de las demás. Si no, mientras vuelve a su tamaño (scale la hace una capa
+   propia) las filas de abajo se dibujaban encima del menú, y de golpe quedaban detrás */
+.inbox__row--menu { z-index: var(--z-menu); }
+.inbox__row--pressing { scale: 0.97; transition: background-color var(--dur-fast) var(--ease-out), scale var(--dur-hold) linear; }
+@media (prefers-reduced-motion: reduce) {
+  .inbox__row, .inbox__row--pressing { scale: none; transition: none; }
+  .menu--inbox, .menu--inbox > * { animation: none; }
+}
 .inbox__muted { display: flex; color: var(--muted); }
 .inbox__text { flex: 1; min-width: 0; }
 .chat-contact-name { display: inline-flex; align-items: center; align-self: center; gap: 6px; vertical-align: middle; }
@@ -553,6 +567,20 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 @keyframes drop-in { from { opacity: 0; transform: translateY(-8px); } }
 /* Menús flotantes: crecen desde el botón que los abrió (con transform-origin) */
 @keyframes menu-in { from { opacity: 0; transform: scale(0.95); } }
+/* Menú de contexto (mantener apretado), como Material 3: opaco, se despliega en vertical desde el borde que toca la
+   fila (sin fundirse: fundido, se veía lo de atrás a través del fondo). Termina con el recorte más grande que el
+   menú, así la sombra no aparece de golpe cuando se va la animación. Si se abre para arriba (.menu--above), desde abajo */
+@keyframes menu-unfold {
+  from { clip-path: inset(0 0 100% 0 round var(--radius-lg)); }
+  to { clip-path: inset(-40px round var(--radius-lg)); }
+}
+@keyframes menu-unfold-up {
+  from { clip-path: inset(100% 0 0 0 round var(--radius-lg)); }
+  to { clip-path: inset(-40px round var(--radius-lg)); }
+}
+/* El círculo termina más grande que el menú (con su sombra): así no aparece nada de golpe al terminar */
+@keyframes menu-reveal { from { clip-path: circle(0 at var(--menu-ox, 50%) 0); } to { clip-path: circle(150% at var(--menu-ox, 50%) 0); } }
+@keyframes menu-reveal-up { from { clip-path: circle(0 at var(--menu-ox, 50%) 100%); } to { clip-path: circle(150% at var(--menu-ox, 50%) 100%); } }
 /* Foto que se abre a pantalla completa */
 @keyframes photo-in { from { opacity: 0; transform: scale(0.96); } }
 /* Hojas de abajo, como en iOS */
@@ -762,7 +790,13 @@ a.gcard:active { background: var(--surface); }
 .bubble:hover .bubble__more, .bubble__more:focus-visible { opacity: 1; }
 @media (hover: none) { .bubble__more { opacity: 0.6; } }
 .menu--bubble { top: 28px; right: 0; color: var(--text); }
-.menu--inbox { top: 100%; }
+.menu--inbox { top: 100%; animation: menu-unfold var(--dur-base) var(--ease-sheet) backwards; }
+.menu--inbox.menu--above { animation-name: menu-unfold-up; }
+/* Abierto con el dedo: se despliega como un círculo desde donde se apoyó (--menu-ox, en el borde que toca la fila) */
+.menu--inbox[data-at-point] { animation-name: menu-reveal; }
+.menu--inbox[data-at-point].menu--above { animation-name: menu-reveal-up; }
+/* Las opciones aparecen apenas después de que el menú empezó a abrirse */
+.menu--inbox > * { animation: fade-in var(--dur-base) var(--ease-out) var(--stagger) backwards; }
 .menu--conversation-header { top: 100%; right: 0; }
 .menu--above { top: auto; bottom: 100%; transform-origin: bottom right; }
 .typing-label { display: block; font-size: var(--text-xs); color: var(--ok); }
