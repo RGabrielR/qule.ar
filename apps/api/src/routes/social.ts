@@ -86,6 +86,8 @@ socialRoutes.get("/users/:id", async (c) => {
     online: on,
     recent: !p.incognito && (on || Date.now() - p.lastSeenAt.getTime() < 15 * 60_000),
     favorite: Boolean(fav),
+    // Tu nota privada sobre esta persona, si es favorita (nadie más la ve)
+    favoriteNote: fav?.note ?? null,
     // Álbumes privados: cuántas fotos y videos hay en total y, de los que te compartieron, el contenido y hasta cuándo
     // los ves. Los nombres de los álbumes que no te compartieron no se muestran.
     // items junta lo de todos los álbumes que ves (null si no ves ninguno); expiresAt es el del primero.

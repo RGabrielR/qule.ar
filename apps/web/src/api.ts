@@ -154,6 +154,8 @@ export type PublicProfile = Omit<Profile, "birthdate" | "age"> & {
   recent: boolean;
   distance: string | null;
   favorite: boolean;
+  /** Tu nota privada sobre esta persona, si es favorita. */
+  favoriteNote: string | null;
   // count y videos suman todos sus álbumes; albums son solo los que te compartió (items junta su contenido, null si ninguno)
   privateAlbum: { count: number; videos: number; items: Media[] | null; expiresAt: string | null; albums: SharedAlbum[] } | null;
   iSharedAlbum: boolean;

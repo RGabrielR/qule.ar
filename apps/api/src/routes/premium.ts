@@ -71,6 +71,22 @@ premiumRoutes.put("/favorites/:userId", async (c) => {
   return c.json({ ok: true });
 });
 
+/** Largo máximo de la nota de un favorito. */
+export const MAX_FAVORITE_NOTE = 300;
+const noteInput = z.object({ note: z.string().max(MAX_FAVORITE_NOTE, `La nota puede tener hasta ${MAX_FAVORITE_NOTE} caracteres`) });
+
+/** La nota privada de un favorito: solo la ve quien la escribe. Vacía, se borra. */
+premiumRoutes.put("/favorites/:userId/note", async (c) => {
+  const u = c.get("user");
+  const { note } = parse(noteInput, await c.req.json().catch(() => ({})));
+  const text = note.trim() || null;
+  const [row] = await db.update(favorite).set({ note: text })
+    .where(and(eq(favorite.userId, u.id), eq(favorite.favoriteId, c.req.param("userId"))))
+    .returning({ note: favorite.note });
+  if (!row) throw new HTTPException(404, { message: "Primero agregala a favoritos" });
+  return c.json({ note: row.note });
+});
+
 premiumRoutes.delete("/favorites/:userId", async (c) => {
   const u = c.get("user");
   await db.delete(favorite).where(and(eq(favorite.userId, u.id), eq(favorite.favoriteId, c.req.param("userId"))));

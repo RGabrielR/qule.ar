@@ -982,6 +982,44 @@ button.quote:hover { background: var(--surface-3); }
 .btn--toque-sent { border-color: var(--accent-line); background: var(--accent-soft); }
 .toque-picker { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
 .toque-picker .reaction-picker { grid-template-columns: repeat(4, 1fr); justify-items: center; }
+/* Favorito y su nota privada, como un solo grupo (features/favorites/FavoriteNote): la estrella se vuelve una pestaña
+   que baja y se funde con el recuadro de la nota, con el mismo borde y fondo amarillos */
+/* El amarillo suave es translúcido: va sobre el fondo de la pantalla para que, donde se juntan, no se note una raya */
+.btn--fav-tab, .btn--fav-tab::after, .fav-card { background: linear-gradient(var(--queue-soft), var(--queue-soft)) var(--bg); }
+.btn--fav-tab { position: relative; z-index: var(--z-raised); border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom-color: transparent; }
+/* Baja hasta tapar el borde de arriba del recuadro (1 px del botón + 10 px de separación + 1 px del recuadro). El
+   lado izquierdo lo dibuja la curva de abajo (::before) */
+.btn--fav-tab::after {
+  content: ""; position: absolute; top: 100%; left: 0; right: -1px; height: 12px;
+  border-right: 1px solid var(--queue-strong);
+}
+/* La esquina de adentro, donde la pestaña se junta con el borde de arriba del recuadro: curva hacia adentro (11 px),
+   como las pestañas de un navegador. Cuadrado de 11 px a la izquierda de la pestaña, apoyado en ese borde: el arco
+   es el borde, adentro del arco queda el fondo de la pantalla y afuera, el amarillo */
+.btn--fav-tab::before {
+  content: ""; position: absolute; top: calc(100% + 1px); right: 100%; width: 11px; height: 11px;
+  background:
+    radial-gradient(circle at 0 0, transparent 10px, var(--queue-strong) 10px, var(--queue-strong) 11px, transparent 11px),
+    radial-gradient(circle at 0 0, transparent 11px, var(--queue-soft) 11px),
+    var(--bg);
+}
+/* Recién marcada como favorita: la pestaña aparece con un fundido (al abrir el perfil de un favorito, ya está) */
+.btn--fav-tab-in::before, .btn--fav-tab-in::after { animation: fade-in var(--dur-base) var(--ease-out); }
+.btn--fav-tab:active:not(:disabled) { scale: none; }
+.fav-card {
+  display: grid; gap: 6px; margin-top: -8px; padding: 10px 12px 12px 14px;
+  border-radius: var(--radius-lg) 0 var(--radius-lg) var(--radius-lg); border: 1px solid var(--queue-strong);
+  overflow: hidden;
+}
+/* La nota guardada, con el lápiz para editarla a la derecha */
+.fav-card__noted { display: flex; align-items: flex-start; gap: 8px; }
+.fav-card__edit { flex: none; margin: -8px -6px -8px auto; }
+.fav-card__note { margin: 0; padding-block: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fav-card__form { display: grid; gap: 6px; }
+.fav-card__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+/* Al aparecer crece desde la estrella (lo anima FavoriteNote); con movimiento reducido, solo un fundido */
+@media (prefers-reduced-motion: reduce) { .fav-card--in { animation: fade-in var(--dur-base) var(--ease-out); } }
+.fav-card__add { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 0; text-align: left; color: var(--text); font: inherit; background: none; border: 0; cursor: pointer; }
 .tile__reaction { position: absolute; top: 6px; right: 6px; z-index: var(--z-raised); width: 38px; height: 38px; border-radius: var(--radius-pill); background: var(--scrim); display: grid; place-items: center; }
 .tile__reaction--new { outline: 2px solid var(--accent); }
 

@@ -6,6 +6,7 @@ import { useMe } from "../App";
 import { useTabData } from "../features/navigation/tabData";
 import { InviteToGroups } from "../components/Invite";
 import { ReportDialog } from "../components/ReportDialog";
+import { FavoriteNote } from "../features/favorites/FavoriteNote";
 import { StaffDialog } from "../components/StaffDialog";
 import { albumCount, AlbumGrid, AlbumViewer, untilLabel } from "../components/AlbumViewer";
 import { ProfileCover, ProfileStats } from "../components/ProfileContent";
@@ -34,6 +35,8 @@ function ProfileView({ id }: { id: string }) {
   const [missing, setMissing] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [confirmBlock, setConfirmBlock] = useState(false);
+  // A quién se acaba de marcar como favorito (al pasar a otro perfil, ya no cuenta)
+  const [favAddedFor, setFavAddedFor] = useState<string | null>(null);
   const [staffing, setStaffing] = useState(false);
   const { me } = useMe();
   const isOwner = Boolean(me?.user.access?.includes("owner"));
@@ -77,8 +80,11 @@ function ProfileView({ id }: { id: string }) {
   async function toggleFavorite() {
     if (!p) return;
     const fav = !p.favorite;
-    setP({ ...p, favorite: fav });
-    await api(`/favorites/${id}`, { method: fav ? "PUT" : "DELETE" }).catch(() => setP({ ...p, favorite: !fav }));
+    // La pestaña y la nota se animan al marcarla, no cada vez que se abre el perfil de un favorito
+    setFavAddedFor(fav ? p.id : null);
+    // Sacarla de favoritos borra también su nota
+    setP({ ...p, favorite: fav, favoriteNote: fav ? p.favoriteNote : null });
+    await api(`/favorites/${id}`, { method: fav ? "PUT" : "DELETE" }).catch(() => setP(p));
   }
 
   /** Mandar un toque: a la otra persona le llega un aviso. Uno cada 12 horas por persona. */
@@ -128,7 +134,7 @@ function ProfileView({ id }: { id: string }) {
               {p.myToque ? <ReactionIcon kind={p.myToque.kind} size={24} /> : <img src="/reacciones/toque.svg" alt="" width={24} height={24} />}
             </button>
             <button
-              className={`btn btn--icon ${p.favorite ? "btn--fav" : ""}`}
+              className={`btn btn--icon ${p.favorite ? `btn--fav btn--fav-tab ${favAddedFor === p.id ? "btn--fav-tab-in" : ""}` : ""}`}
               onClick={toggleFavorite}
               aria-pressed={p.favorite}
               aria-label={p.favorite ? "Sacar de favoritos" : "Agregar a favoritos"}
@@ -137,6 +143,10 @@ function ProfileView({ id }: { id: string }) {
               <StarIcon filled={p.favorite} />
             </button>
           </div>
+        )}
+        {/* Pegada a la estrella: la nota es parte de tenerla en favoritos */}
+        {!p.isMe && p.favorite && (
+          <FavoriteNote userId={p.id} note={p.favoriteNote} appear={favAddedFor === p.id} onSaved={(favoriteNote) => setP({ ...p, favoriteNote })} />
         )}
         {toquePicker && (
           <div className="toque-picker">
