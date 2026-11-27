@@ -90,7 +90,8 @@ export function Inbox() {
   const enter = useTabTransition();
   const { act, dialog, errorNotice } = useConversationActions();
   const pageRef = useRef<HTMLDivElement>(null);
-  const positionMenu = useMessageMenuPosition(pageRef);
+  // El menú de un chat se abre para arriba siempre que entre
+  const positionMenu = useMessageMenuPosition(pageRef, undefined, true);
   useRememberScroll(pageRef, list != null);
   // Las filas entran escalonadas cuando llegan; las que ya estaban guardadas al volver a la pestaña, no
   const arrival = useArrival(filtered?.map((c) => c.id));

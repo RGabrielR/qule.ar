@@ -107,7 +107,7 @@ Tamaños (`font-size: var(--…)`):
 
 ## Movimiento
 
-Las animaciones hacen que la app se sienta fluida, como una app instalada y no como una web. Las curvas y duraciones están en `motion` (`packages/brand`): `--ease-out`, `--ease-in-out`, `--ease-sheet`, `--dur-press`, `--dur-fast`, `--dur-base`, `--dur-page`, `--dur-sheet`, `--stagger` y `--dur-pulse` (el pulso de los esqueletos). No se escriben curvas ni duraciones sueltas.
+Las animaciones hacen que la app se sienta fluida, como una app instalada y no como una web. Las curvas y duraciones están en `motion` (`packages/brand`): `--ease-out`, `--ease-in-out`, `--ease-sheet`, `--dur-press`, `--dur-fast`, `--dur-base`, `--dur-page`, `--dur-sheet`, `--stagger`, `--dur-pulse` (el pulso de los esqueletos) y `--dur-hold` (mantener apretado para abrir un menú). No se escriben curvas ni duraciones sueltas.
 
 - **Cambio de pantalla:** el encabezado queda quieto y solo aparece su contenido (título, flecha) con un fundido. Lo de abajo entra desde la derecha (`.page--forward`); al volver con el botón de la app, desde la izquierda y sin fundido (`.page--back`). Lo arma `usePageTransition()` en `features/navigation/pageTransition.ts`; la clase se saca sola al terminar la entrada. El gesto de volver del sistema no se anima: Safari ya hace el suyo.
 - **Cambio de pestaña:** no desliza. El encabezado, las solapas y la barra de abajo quedan quietos; el título y los botones del encabezado aparecen con un fundido y el contenido se asienta con un fundido y un acercamiento mínimo (`.page--tab`, `tab-in`; `useTabTransition()`). Entre solapas de la misma pestaña (Gente: Cerca y Toques) el encabezado no se funde.
