@@ -24,7 +24,11 @@ test("permite elegir, cambiar y borrar el signo y filtrar perfiles en Gente", as
   const viewerContext = await browser.newContext({ baseURL, viewport: { width: 375, height: 812 } });
   try {
     const grid = await viewerContext.newPage();
-    await grid.addInitScript(() => localStorage.setItem("mortero:tema", "penumbra"));
+    await grid.addInitScript(() => {
+      localStorage.setItem("mortero:tema", "penumbra");
+      // La persona ya eligió «Ahora no» en el aviso de notificaciones.
+      localStorage.setItem("mortero:avisos-oculto", String(Date.now()));
+    });
     await signIn(grid, viewer);
     await grid.goto("/cerca");
     await expect(grid.locator("html")).toHaveAttribute("data-theme", "penumbra");
