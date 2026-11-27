@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api";
 import { useMe } from "../App";
-import { BellOffIcon, FilterIcon } from "../components/Icons";
+import { BellOffIcon, FilterIcon, StarIcon } from "../components/Icons";
 import { countFilters, EMPTY, FilterSheet, toQuery, type Filters } from "./Nearby";
 import { albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { Avatar } from "../components/Avatar";
@@ -156,8 +156,11 @@ export function Inbox() {
               <ConversationMenuRow key={c.id} chat={c} positionMenu={positionMenu} onAction={(action) => void act(action, c)}
                 className={className} style={style}
                 avatar={c.other ? (
-                  <Link to={`/perfil/${c.other.id}`} className="inbox__avatar" aria-label={`Ver perfil de ${c.other.name}`}>
-                    <Avatar src={c.other.photo ?? null} name={c.other.name} size={52} appear />
+                  <Link to={`/perfil/${c.other.id}`} className="inbox__avatar" aria-label={`Ver perfil de ${c.other.name}${c.favorite ? ", en favoritos" : ""}`}>
+                    <span className="inbox__photo">
+                      <Avatar src={c.other.photo ?? null} name={c.other.name} size={52} appear />
+                      {c.favorite && <span className="inbox__fav" aria-hidden="true"><StarIcon filled size={18} /></span>}
+                    </span>
                   </Link>
                 ) : (
                   <span className="inbox__avatar"><Avatar src={null} name="?" size={52} /></span>

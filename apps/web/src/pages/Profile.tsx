@@ -37,7 +37,7 @@ function ProfileView({ id }: { id: string }) {
   const [staffing, setStaffing] = useState(false);
   const { me } = useMe();
   const isOwner = Boolean(me?.user.access?.includes("owner"));
-  const { refreshAfterBlock } = useTabData();
+  const { refreshAfterBlock, refreshConversations } = useTabData();
   const [params, setParams] = useSearchParams();
   const requestedAlbum = params.get("album");
   const [viewing, setViewing] = useState<{ items: Media[]; start: number; title: string; fromChat?: boolean } | null>(null);
@@ -78,7 +78,13 @@ function ProfileView({ id }: { id: string }) {
     if (!p) return;
     const fav = !p.favorite;
     setP({ ...p, favorite: fav });
-    await api(`/favorites/${id}`, { method: fav ? "PUT" : "DELETE" }).catch(() => setP({ ...p, favorite: !fav }));
+    try {
+      await api(`/favorites/${id}`, { method: fav ? "PUT" : "DELETE" });
+      // La estrellita de Mensajes sale de la lista de chats: se actualiza por detrás
+      void refreshConversations("refresh");
+    } catch {
+      setP({ ...p, favorite: !fav });
+    }
   }
 
   /** Mandar un toque: a la otra persona le llega un aviso. Uno cada 12 horas por persona. */
