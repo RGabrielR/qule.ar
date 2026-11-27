@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Link } from "react-router";
+import { NavLink } from "react-router";
 import type { ConversationSummary } from "../../api";
 import type { ConversationAction } from "./ConversationActions";
 import { ConversationMenu } from "./ConversationMenu";
@@ -35,7 +35,8 @@ export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAc
   return (
     <li className={`inbox__row ${className ?? ""}`} style={style}>
       {avatar}
-      <Link
+      {/* NavLink: en compu la charla abierta queda marcada en la lista (ver features/desktop/SplitView.tsx) */}
+      <NavLink
         ref={link}
         to={`/mensajes/${chat.id}`}
         className={`inbox__item ${chat.unread ? "inbox__item--unread" : ""}`}
@@ -80,7 +81,7 @@ export function ConversationMenuRow({ chat, avatar, children, positionMenu, onAc
         }}
       >
         {children}
-      </Link>
+      </NavLink>
       {open && <ConversationMenu id={menuId} className="menu--inbox" anchor={link}
         muted={chat.muted} canModerate={Boolean(chat.other)} positionMenu={positionMenu}
         onAction={onAction} onClose={() => setOpen(false)} />}

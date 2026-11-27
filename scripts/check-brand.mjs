@@ -56,7 +56,7 @@ for (const dir of ["apps/web/src", "apps/api/src", "packages"]) {
 // Las variables de la marca se definen en packages/brand, no en el CSS (solo se permiten las de layout y las que
 // eligen la entrada de cada pantalla, que toman sus valores de los tokens de movimiento)
 const LAYOUT_VARS = new Set([
-  "--tabbar-h", "--tabbar-inset", "--safe-b", "--composer-action-height", "--people-grid-columns",
+  "--tabbar-h", "--tabbar-inset", "--safe-b", "--composer-action-height", "--people-grid-columns", "--sidebar-w", "--split-list-w",
   "--enter", "--enter-time", "--enter-ease",
 ]);
 for (const name of readdirSync(join(root, "apps/web/src"))) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, NavLink, useNavigate, useSearchParams } from "react-router";
 import { loadedCount, useRememberScroll } from "../features/navigation/viewMemory";
 import { api, getSocket, ROLE_LABEL, upload, type GroupListing } from "../api";
 import { GroupAvatar } from "../components/GroupAvatar";
@@ -127,7 +127,7 @@ export function Groups() {
         <ul className="glist">
           {ordered?.map((g, index) => (
             <li key={g.id} {...arriveMine(g.id)}>
-              <Link to={`/grupos/${g.id}`} className="gcard">
+              <NavLink to={`/grupos/${g.id}`} className="gcard">
                 <GroupAvatar name={g.name} photo={g.photo} general={g.isGeneral} appear />
                 <div className="gcard__text">
                   <div className="gcard__top">
@@ -138,7 +138,7 @@ export function Groups() {
                   <p className="gcard__meta">{g.memberCount} {g.memberCount === 1 ? "miembro" : "miembros"}</p>
                 </div>
                 {g.pendingCount > 0 && <span className="badge badge--inline" title="Solicitudes pendientes">{g.pendingCount}</span>}
-              </Link>
+              </NavLink>
               {ordering && (
                 <div className="row searchbar">
                   <button type="button" className="btn btn--small" aria-label={`Subir ${g.name}`} disabled={index === 0} onClick={() => move(index, -1)}>Subir</button>

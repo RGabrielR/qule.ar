@@ -8,6 +8,7 @@ Así se ve, se llama y se siente qule.ar. Esta es la guía oficial: todo lo nuev
 - **Discreto.** Se tiene que poder abrir en el colectivo sin que se note qué app es: sin fotos gigantes de entrada, notificaciones que no dicen nada.
 - **Pocas cosas, bien hechas.** Cuatro pestañas (Cerca, Grupos, Mensajes, Yo). Si algo nuevo no entra ahí, probablemente vaya dentro de una.
 - **Pensada para el celular.** Se diseña primero para una pantalla de 375 px de ancho y una mano.
+- **Y que se pueda usar en la compu.** Desde 1024 px de ancho las pestañas van en una barra lateral, y Mensajes, Grupos y Moderación muestran la lista y lo abierto lado a lado. Los diagramas están en [`docs/escritorio`](escritorio/README.md).
 
 ## Dónde vive la marca
 
@@ -35,7 +36,7 @@ Las controla `npm run lint` (stylelint + `scripts/check-brand.mjs`) y corre en c
 
 1. **En el CSS no hay valores sueltos** de color, radio, sombra, capa (`z-index`), familia o tamaño de letra. Se usa la variable: `var(--danger)`, `var(--radius-xl)`, `var(--text-sm)`.
 2. **Si falta una variable, se agrega en `packages/brand`**, con un nombre por uso (`--queue-soft`), no por valor (`--amarillo-claro`). Y se suma a esta guía.
-3. **Las variables de la marca no se definen en el CSS.** En `styles.css` solo hay variables de layout (`--tabbar-h`, `--tabbar-inset`, `--safe-b`, `--composer-action-height`, `--people-grid-columns`) y las que eligen la entrada de cada pantalla (`--enter`, `--enter-time`, `--enter-ease`), que toman sus valores de los tokens de movimiento. El alto de las acciones del chat coincide con el mínimo del campo de mensaje. La cantidad de columnas de Gente se usa también para calcular cuántos perfiles cargar.
+3. **Las variables de la marca no se definen en el CSS.** En `styles.css` solo hay variables de layout (`--tabbar-h`, `--tabbar-inset`, `--safe-b`, `--composer-action-height`, `--people-grid-columns`, y en compu `--sidebar-w` y `--split-list-w`) y las que eligen la entrada de cada pantalla (`--enter`, `--enter-time`, `--enter-ease`), que toman sus valores de los tokens de movimiento. El alto de las acciones del chat coincide con el mínimo del campo de mensaje. La cantidad de columnas de Gente se usa también para calcular cuántos perfiles cargar.
 4. **Sin colores en TS/TSX.** La única excepción es la "G" de Google (`components/GoogleMark.tsx`).
 5. **Sin `style={{ … }}` para cosas fijas.** Un margen va en una clase de `styles.css`. `style` queda para valores que se calculan en el momento (el tamaño de un avatar, una barra de progreso).
 6. **Pesos de letra que se cargan:** Inter 400, 500, 600 y 700; Bricolage Grotesque 600 y 800. Si hace falta otro, se agrega en `fonts` (`packages/brand`) para que se cargue de verdad.
