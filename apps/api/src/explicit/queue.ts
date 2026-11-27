@@ -58,10 +58,19 @@ export type QueueOptions = { detect: Detector; perMinute: number; minScore?: num
 export async function runQueue({ detect, perMinute, minScore, signal }: QueueOptions) {
   const gap = 60_000 / Math.max(1, perMinute);
   const idle = Math.max(gap, 1_000);
+  // El tope se mide en el modelo mismo, no en la vuelta del bucle: entre el inicio de la vuelta y el modelo hay una
+  // consulta a la base que tarda distinto cada vez, y medirlo antes dejaba pasar dos fotos con menos de `gap`.
+  let lastDetect = -Infinity;
+  const throttled: Detector = async (image) => {
+    const wait = lastDetect + gap - Date.now();
+    if (wait > 0) await sleep(wait, signal);
+    lastDetect = Date.now();
+    return detect(image);
+  };
   let done = 0;
   while (!signal?.aborted) {
     const started = Date.now();
-    const did = await checkNext(detect, minScore).catch((e) => {
+    const did = await checkNext(throttled, minScore).catch((e) => {
       console.error("Fotos explícitas: error en la cola", e);
       return false;
     });
