@@ -1,0 +1,1 @@
+CREATE INDEX "gm_due_idx" ON "group_message" USING btree ("scheduled_at") WHERE "group_message"."status" = 'queued';

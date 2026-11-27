@@ -225,6 +225,13 @@
       "when": 1795721905290,
       "tag": "0031_fotos_explicitas",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795784644001,
+      "tag": "0032_mensajes_en_cola_y_avisos",
+      "breakpoints": true
     }
   ]
 }

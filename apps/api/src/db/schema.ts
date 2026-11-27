@@ -338,6 +338,9 @@ export const groupMessage = pgTable("group_message", {
   // Al borrar una cuenta se borran sus mensajes: sin esto había que recorrer la tabla entera
   index("gm_author_idx").on(t.userId),
   index("gm_photo_idx").on(t.photoKey).where(sql`${t.photoKey} is not null`),
+  // publishDue (realtime.ts) busca cada segundo los mensajes en cola que ya tienen que salir: sin esto recorría
+  // la tabla entera
+  index("gm_due_idx").on(t.scheduledAt).where(sql`${t.status} = 'queued'`),
 ]);
 
 /**
