@@ -223,6 +223,14 @@ async function albumNoticeStates(
   return states;
 }
 
+/** De estas personas, cuáles marcó `meId` como favoritas (para la estrellita de Mensajes). */
+async function favoritesAmong(meId: string, ids: string[]) {
+  if (!ids.length) return new Set<string>();
+  const rows = await db.select({ id: schema.favorite.favoriteId }).from(schema.favorite)
+    .where(and(eq(schema.favorite.userId, meId), inArray(schema.favorite.favoriteId, ids)));
+  return new Set(rows.map((r) => r.id));
+}
+
 /**
  * La bandeja, de a INBOX_LIMIT chats, del más reciente al más viejo. Con `before` y `beforeId` (la fecha y el id del
  * último chat de la página anterior) trae los que siguen. Los bloqueos y los chats sin mensajes se filtran en la
@@ -266,17 +274,19 @@ socialRoutes.get("/conversations", async (c) => {
   }));
   if (!visible.length) return c.json([]);
   const ids = visible.map((cv) => cv.id);
-  const [authors, unreadCounts] = await Promise.all([
+  const [authors, unreadCounts, favorites] = await Promise.all([
     authorsFor(visible.map((cv) => cv.otherId), { presence: true }),
     db.select({ id: directMessage.conversationId, unread: sql<number>`count(*)::int` }).from(directMessage)
       .where(and(inArray(directMessage.conversationId, ids), ne(directMessage.senderId, me.id), isNull(directMessage.readAt), visibleDm(me.id)))
       .groupBy(directMessage.conversationId),
+    favoritesAmong(me.id, visible.map((cv) => cv.otherId)),
   ]);
   const unreadById = new Map(unreadCounts.map((r) => [r.id, r.unread]));
   const states = await albumNoticeStates(me.id, visible.map((cv) => ({ message: cv.last, otherId: cv.otherId })));
   return c.json(visible.map((cv) => ({
     id: cv.id, lastMessageAt: cv.lastMessageAt.toISOString(), muted: cv.muted,
     other: authors.get(cv.otherId), last: { ...serializeDm(cv.last), ...states.get(cv.last.id) }, unread: unreadById.get(cv.id) ?? 0,
+    favorite: favorites.has(cv.otherId),
   })));
 });
 
@@ -367,13 +377,15 @@ socialRoutes.get("/conversations/:id/summary", async (c) => {
     .orderBy(desc(directMessage.createdAt), desc(directMessage.id))
     .limit(1);
   if (!last) return c.json(null);
-  const [states, authors] = await Promise.all([
+  const [states, authors, favorites] = await Promise.all([
     albumNoticeStates(me.id, [{ message: last.message, otherId }]),
     authorsFor([otherId], { presence: true }),
+    favoritesAmong(me.id, [otherId]),
   ]);
   return c.json({
     id: conv.id, lastMessageAt: new Date(Math.max(conv.lastMessageAt.getTime(), last.message.createdAt.getTime())).toISOString(),
     other: authors.get(otherId), last: { ...serializeDm(last.message), ...states.get(last.message.id) }, unread: last.unread, muted: last.muted ?? false,
+    favorite: favorites.has(otherId),
   });
 });
 

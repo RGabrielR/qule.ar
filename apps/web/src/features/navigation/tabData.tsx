@@ -86,6 +86,8 @@ type TabData = {
   conversations: ConversationSummary[] | null;
   refreshGroups: (mode?: Refresh) => Promise<void>;
   refreshConversations: (mode?: Refresh) => Promise<void>;
+  /** Cambia la estrellita del chat con esa persona en la bandeja ya cargada, sin pedirla de nuevo. */
+  setConversationFavorite: (userId: string, favorite: boolean) => void;
   refreshAfterBlock: () => void;
 };
 
@@ -133,13 +135,21 @@ export function TabDataProvider({ children, onUnauthorized, userId }: { children
     };
   }, [loadConversations, refreshGroups]);
 
+  function setConversationFavorite(userId: string, favorite: boolean) {
+    // Si justo estaba llegando la bandeja, puede traer la estrellita de antes: que se vuelva a pedir al terminar
+    inbox.invalidatePendingLoad();
+    const list = inbox.currentData.current;
+    if (!list?.some((chat) => chat.other?.id === userId && Boolean(chat.favorite) !== favorite)) return;
+    inbox.update(list.map((chat) => (chat.other?.id === userId ? { ...chat, favorite } : chat)));
+  }
+
   function refreshAfterBlock() {
     loadInvites("clear");
     resetInbox();
   }
 
   return (
-    <TabDataContext.Provider value={{ groups, invites, conversations, refreshGroups, refreshConversations: loadConversations, refreshAfterBlock }}>
+    <TabDataContext.Provider value={{ groups, invites, conversations, refreshGroups, refreshConversations: loadConversations, setConversationFavorite, refreshAfterBlock }}>
       {children}
     </TabDataContext.Provider>
   );

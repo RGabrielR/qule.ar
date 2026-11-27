@@ -355,6 +355,12 @@ html:has(.pull-refresh), .page:has(> .pull-refresh) { overscroll-behavior-y: non
 .inbox__row:active, .inbox__row:focus-within { background: var(--surface); }
 @media (hover: hover) and (pointer: fine) { .inbox__row:hover { background: var(--surface); } }
 .inbox__avatar { flex: none; align-self: stretch; display: flex; align-items: center; padding: 10px 0 10px 16px; }
+/* Estrellita de favorito sobre el borde de la foto, arriba a la derecha, amarilla como en la grilla de Gente (.tile__fav).
+   Centrada sobre el borde del círculo a 45°: 50% ± 35,4% del diámetro, menos media estrellita. Aparece con el mismo
+   "pop" que los contadores, por ejemplo al marcar a alguien como favorito desde su perfil */
+.inbox__photo { position: relative; display: grid; }
+.inbox__fav { position: absolute; top: calc(14.6% - 9px); left: calc(85.4% - 9px); z-index: var(--z-raised); display: grid; color: var(--queue); filter: drop-shadow(var(--shadow-icon)); animation: pop-in var(--dur-fast) var(--ease-out) backwards; }
+@media (prefers-reduced-motion: reduce) { .inbox__fav { animation-name: fade-in; } }
 .inbox__item { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 12px; user-select: none; -webkit-touch-callout: none; }
 .inbox__muted { display: flex; color: var(--muted); }
 .inbox__text { flex: 1; min-width: 0; }
