@@ -6,6 +6,7 @@ import { useMe } from "../App";
 import { useTabData } from "../features/navigation/tabData";
 import { InviteToGroups } from "../components/Invite";
 import { ReportDialog } from "../components/ReportDialog";
+import { ConversationActionDialog } from "../features/messages/ConversationActionDialog";
 import { StaffDialog } from "../components/StaffDialog";
 import { albumCount, AlbumGrid, AlbumViewer, untilLabel } from "../components/AlbumViewer";
 import { ProfileCover, ProfileStats } from "../components/ProfileContent";
@@ -178,26 +179,18 @@ function ProfileView({ id }: { id: string }) {
 
         {!p.isMe && (
           <div className="profile__safety">
-            {confirmBlock ? (
-              <div className="confirm">
-                <p>¿Bloquear a {p.displayName}? No van a poder verse ni escribirse, y dejás de ver sus mensajes en los grupos.</p>
-                <div className="row">
-                  <button className="btn" onClick={() => setConfirmBlock(false)}>Cancelar</button>
-                  <button className="btn btn--danger" onClick={doBlock}>Bloquear</button>
-                </div>
-              </div>
-            ) : (
-              <div className="row">
-                <button className="btn btn--ghost" onClick={() => setConfirmBlock(true)}>Bloquear</button>
-                <button className="btn btn--ghost" onClick={() => setReporting(true)}>Reportar</button>
-                {isOwner && <button className="btn btn--ghost" onClick={() => setStaffing(true)}>Moderación</button>}
-              </div>
-            )}
+            <div className="row">
+              <button className="btn btn--ghost" onClick={() => setConfirmBlock(true)}>Bloquear</button>
+              <button className="btn btn--ghost" onClick={() => setReporting(true)}>Reportar</button>
+              {isOwner && <button className="btn btn--ghost" onClick={() => setStaffing(true)}>Moderación</button>}
+            </div>
           </div>
         )}
       </div>
       {viewing && <AlbumViewer items={viewing.items} start={viewing.start} title={viewing.title} onClose={closeViewer} watermark={!p.isMe} />}
       {reporting && <ReportDialog userId={p.id} name={p.displayName} onClose={() => setReporting(false)} />}
+      {/* La misma hoja de abajo que al bloquear desde Mensajes */}
+      {confirmBlock && <ConversationActionDialog action="block" name={p.displayName} onConfirm={doBlock} onClose={() => setConfirmBlock(false)} />}
       {staffing && <StaffDialog userId={p.id} name={p.displayName} onClose={() => setStaffing(false)} />}
     </>
   );
