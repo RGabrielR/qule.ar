@@ -220,7 +220,12 @@ export const report = pgTable("report", {
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   resolution: text("resolution"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index("report_status_idx").on(t.status, t.createdAt)]);
+}, (t) => [
+  index("report_status_idx").on(t.status, t.createdAt),
+  index("report_target_history_idx").on(t.targetUserId, t.createdAt, t.id),
+  index("report_group_history_idx").on(t.groupId, t.createdAt, t.id),
+  index("report_reporter_history_idx").on(t.reporterId, t.createdAt, t.id),
+]);
 
 /** Suscripciones de notificaciones push (una por navegador o dispositivo). */
 export const pushSubscription = pgTable("push_subscription", {

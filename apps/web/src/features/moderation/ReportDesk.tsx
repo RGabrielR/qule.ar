@@ -145,7 +145,7 @@ export function ReportDesk({ reports, status, has, act, onSuspend, onRemoveGroup
               </button>
             </div>
             <GroupCard key={selected.key} g={selected} as="section" has={has} act={act} onSuspend={onSuspend} onRemoveGroup={onRemoveGroup} onRefresh={onRefresh} />
-            <History key={selected.key} g={selected} showSent={has("owner")} reports={reports} />
+            <History key={selected.first.id} g={selected} showSent={has("owner")} />
           </>
         ) : (
           <div className="empty"><p className="muted">Elegí un tema de la lista.</p></div>
@@ -155,7 +155,7 @@ export function ReportDesk({ reports, status, has, act, onSuspend, onRemoveGroup
   );
 }
 
-function History({ g, showSent, reports }: { g: ReportGroup; showSent: boolean; reports: Report[] }) {
+function History({ g, showSent }: { g: ReportGroup; showSent: boolean }) {
   const r = g.first;
   const current = new Set(g.reports.map((report) => report.id));
   return (
@@ -180,10 +180,10 @@ function History({ g, showSent, reports }: { g: ReportGroup; showSent: boolean; 
         </ul>
       )}
       {(r.target?.id || r.group?.id) && (
-        <HistoryList reportId={r.id} direction="received" reports={reports} current={current} />
+        <HistoryList reportId={r.id} direction="received" current={current} />
       )}
       {showSent && r.target?.id && (
-        <HistoryList reportId={r.id} direction="sent" reports={reports} current={current} />
+        <HistoryList reportId={r.id} direction="sent" current={current} />
       )}
       {r.target?.id && (
         <div className="rcard__actions">
@@ -199,10 +199,9 @@ type HistoryEntry = Pick<Report, "id" | "reason" | "details" | "status" | "resol
 };
 type HistoryPage = { items: HistoryEntry[]; next: string | null };
 
-function HistoryList({ reportId, direction, reports, current }: {
+function HistoryList({ reportId, direction, current }: {
   reportId: string;
   direction: "received" | "sent";
-  reports: Report[];
   current: Set<string>;
 }) {
   const [page, setPage] = useState<HistoryPage | null>(null);
@@ -213,7 +212,6 @@ function HistoryList({ reportId, direction, reports, current }: {
     const controller = new AbortController();
     active.current = controller;
     setRequest({ before, failed: false });
-    if (!before) setPage(null);
     const params = new URLSearchParams({ direction });
     if (before) params.set("before", before);
     try {
@@ -228,7 +226,7 @@ function HistoryList({ reportId, direction, reports, current }: {
   useEffect(() => {
     void load(null);
     return () => active.current?.abort();
-  }, [load, reports]);
+  }, [load]);
 
   return (
     <div className="desk__history-list">
