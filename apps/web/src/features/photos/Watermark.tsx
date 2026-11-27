@@ -8,9 +8,10 @@ import { useMe } from "../../App";
  * hacer es que la captura lleve escrito quién la sacó. Así difundir una foto privada deja de ser gratis y, si se filtra,
  * se sabe de qué cuenta salió.
  *
- * Va encima de las fotos privadas ajenas: álbumes privados, fotos que te mandan por privado y temporales. Se dibuja
- * en el navegador, sin tocar la foto guardada ni el servidor. Lleva el nombre, un ID corto (el nombre se puede repetir
- * o cambiar) y la fecha y hora.
+ * En las fotos privadas ajenas (álbumes, las que te mandan por privado, temporales y de grupos) la escribe el
+ * servidor en los píxeles (apps/api/src/viewerMark.ts): dibujada solo acá encima, arrastrar la imagen a otra app o
+ * guardarla se llevaba la foto limpia. Este componente queda para los videos de los álbumes, que el servidor no marca.
+ * Lleva el nombre, un ID corto (el nombre se puede repetir o cambiar) y la fecha y hora.
  */
 export function Watermark() {
   const { me } = useMe();

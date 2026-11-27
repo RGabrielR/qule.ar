@@ -13,6 +13,8 @@ import { issueChallenge } from "../botCheck.js";
 import { isListed } from "../verification.js";
 import { hasAlbumAccess } from "./premium.js";
 import { markAlbumImage, parseWatermarkKey, type Watermark } from "../albumWatermark.js";
+import { burnViewerMark } from "../viewerMark.js";
+import { viewerLabel } from "../viewerLabel.js";
 import { defaultAlbum, MAX_ALBUM_ITEMS, myAlbums, renumberPhotos } from "../albums.js";
 
 import { accessFor } from "../staff.js";
@@ -106,18 +108,24 @@ meRoutes.get("/files/:key", requireUserForFiles, async (c) => {
   const watermark = albumWatermarkKey && ph?.isPrivate && ph.kind === "photo" && ph.userId !== viewer
     ? { secret: albumWatermarkKey, fileKey: key, viewerId: viewer, thumb: variant === "thumb" }
     : undefined;
+  // Foto privada ajena (de álbum, miniatura de un video, o que te mandaron por privado): lleva escrito quién la mira
+  const visibleMark = (ph?.isPrivate && ph.userId !== viewer) || (dm && dm.senderId !== viewer)
+    ? await viewerLabel(viewer)
+    : undefined;
   // La portada es para perfiles. En un álbum compartido servimos la variante completa
   // marcada para que la señal corresponda a una referencia que Moderación puede verificar.
-  return sendImage(c, key, watermark && variant === "cover" ? undefined : variant, noStore, watermark);
+  return sendImage(c, key, watermark && variant === "cover" ? undefined : variant, noStore || Boolean(visibleMark), watermark, visibleMark);
 });
 
 async function sendImage(
   c: Context<AppEnv>, key: string, variant: Parameters<typeof readImage>[1], noStore: boolean,
-  watermark?: Watermark,
+  watermark?: Watermark, visibleMark?: string,
 ) {
   const buf = await readImage(key, variant);
   if (!buf) return c.notFound();
-  const body = watermark ? await markAlbumImage(buf, watermark) : buf;
+  // Primero la marca visible con quién mira y después la invisible de Moderación (que tiene que quedar intacta)
+  const marked = visibleMark ? await burnViewerMark(buf, visibleMark) : buf;
+  const body = watermark ? await markAlbumImage(marked, watermark) : marked;
   return c.body(new Uint8Array(body), 200, {
     "Content-Type": "image/webp",
     "Cache-Control": noStore ? "no-store" : "private, max-age=31536000, immutable",
