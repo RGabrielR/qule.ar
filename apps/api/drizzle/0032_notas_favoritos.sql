@@ -1,0 +1,1 @@
+ALTER TABLE "favorite" ADD COLUMN "note" text;

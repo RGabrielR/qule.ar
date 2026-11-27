@@ -33,7 +33,7 @@ Para todo lo demás están las [Discusiones del proyecto](https://github.com/RGa
 **Lo que hacés en la app:**
 
 - Tus mensajes privados y en grupos, las fotos que mandás y tus álbumes privados, con la lista de quién los puede ver.
-- Favoritos, bloqueos, reportes y quién vio tu perfil.
+- Favoritos (con la nota que les dejes, que solo ves vos y se borra si lo sacás de favoritos), bloqueos, reportes y quién vio tu perfil.
 
 **Datos técnicos:**
 
