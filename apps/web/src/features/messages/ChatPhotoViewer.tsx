@@ -1,8 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { CloseIcon } from "../../components/Icons";
-import { Watermark } from "../photos/Watermark";
 
-/** Visor de una foto del chat privado. `watermark`: la foto te la mandaron (lleva la marca de quién mira). */
+/** Visor de una foto del chat. `watermark`: la foto te la mandaron (el servidor ya le escribió quién la mira). */
 export function ChatPhotoViewer({ src, onClose, watermark = false }: { src: string; onClose: () => void; watermark?: boolean }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -21,9 +20,9 @@ export function ChatPhotoViewer({ src, onClose, watermark = false }: { src: stri
       </header>
       <div className="lightbox__stage">
         <div className="lightbox__slide">
-          <img src={src} alt="Foto del chat" />
+          {/* La foto ajena ya trae escrito quién la mira (lo hace el servidor) */}
+          <img src={src} alt="Foto del chat" draggable={false} onContextMenu={watermark ? (e) => e.preventDefault() : undefined} />
         </div>
-        {watermark && <Watermark />}
       </div>
     </dialog>
   );

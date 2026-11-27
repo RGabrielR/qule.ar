@@ -5,6 +5,8 @@ const BLOCK = 8;
 const MIN_STRENGTH = 2;
 const MAX_STRENGTH = 5;
 const MAX_EDGE = 1200;
+/** Al verificar, una diferencia de brillo mayor a esto en un píxel es la marca visible (u otro cambio), no esta. */
+const VISIBLE_MARK_SKIP = 16;
 const MAX_PIXELS = MAX_EDGE ** 2;
 const DCT = Array.from({ length: BLOCK }, (_, y) =>
   Array.from({ length: BLOCK }, (_, x) =>
@@ -104,8 +106,12 @@ export async function verifyAlbumImage(original: Buffer, copy: Buffer, mark: Wat
           const i = ((by + y) * width + bx + x) * 4;
           const j = ((by - top + y) * cropWidth + bx - left + x) * 4;
           if (reference[i + 3] < 250 || candidate[j + 3] < 250) continue;
+          const difference = luma(candidate, j) - luma(reference, i);
+          // La marca visible con quién mira (viewerMark.ts) cambia mucho los píxeles del texto; esta, apenas unos
+          // niveles. Lo que cambió de más no es esta señal: se saltea
+          if (Math.abs(difference) > VISIBLE_MARK_SKIP) continue;
           const basis = DCT[y][x];
-          coefficient += (luma(candidate, j) - luma(reference, i)) * basis;
+          coefficient += difference * basis;
           weight += basis * basis;
         }
       }

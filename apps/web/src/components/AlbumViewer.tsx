@@ -230,7 +230,8 @@ export function AlbumViewer({ items, start = 0, title, onClose, watermark = fals
             );
           })}
         </div>
-        {watermark && <Watermark />}
+        {/* Las fotos ya traen escrito quién mira (lo hace el servidor); a los videos se les dibuja encima */}
+        {watermark && items[i]?.kind === "video" && <Watermark />}
       </div>
       {i > 0 && (
         <button className="lightbox__nav lightbox__nav--prev" onClick={() => go(-1)} aria-label="Anterior">‹</button>
@@ -252,7 +253,6 @@ export function AlbumGrid({ items, onOpen, watermark = false }: { items: Media[]
           {m.kind === "video" && <span className="album__play">▶ {duration(m.seconds)}</span>}
         </button>
       ))}
-      {watermark && <Watermark />}
     </div>
   );
 }

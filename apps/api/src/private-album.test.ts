@@ -196,7 +196,9 @@ test("accesos al álbum privado", async (t) => {
     assert.equal((await request(`${photoItem.url}?s=cover`, undefined)).status, 401);
     const ownerPoster = await request(videoItem.thumb, owner);
     const sharedPoster = await request(videoItem.thumb, person);
-    assert.deepEqual(await sharedPoster.arrayBuffer(), await ownerPoster.arrayBuffer());
+    // La miniatura de un video privado es un cuadro del video: a quien no es dueño le llega con su nombre escrito
+    // (marca visible, ver viewerMark.ts); la invisible de Moderación es solo para fotos
+    assert.notDeepEqual(Buffer.from(await sharedPoster.arrayBuffer()), Buffer.from(await ownerPoster.arrayBuffer()));
   });
 
   await t.test("quitar un acceso conserva los demás", async () => {

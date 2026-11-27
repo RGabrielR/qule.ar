@@ -16,6 +16,8 @@ import { broadcast, onBroadcast } from "../shared.js";
 import { pushTo } from "../push.js";
 import { notifyGroupMessage } from "../groupNotify.js";
 import { canOpenGroupPhoto, groupPhotoPilot } from "../groupPhotos.js";
+import { burnViewerMark } from "../viewerMark.js";
+import { viewerLabel } from "../viewerLabel.js";
 import { forgetFile } from "../fileCache.js";
 import { dropPolls, POLL_QUESTION_MAX, pollOptionsInput, pollTotals } from "../polls.js";
 
@@ -1217,7 +1219,10 @@ groupRoutes.get("/groups/:id/messages/:mid/photo", async (c) => {
   const image = await readImage(key);
   // El estado puede cambiar mientras se obtiene el archivo del almacenamiento.
   if (!image || await canOpenGroupPhoto(groupId, messageId, viewer) !== key) return c.notFound();
-  return c.body(new Uint8Array(image), 200, { "Content-Type": "image/webp" });
+  // A quien no la mandó le llega con su nombre escrito en la foto (ver viewerMark.ts)
+  const [sent] = await db.select({ userId: groupMessage.userId }).from(groupMessage).where(eq(groupMessage.id, messageId));
+  const body = sent?.userId === viewer ? image : await burnViewerMark(image, await viewerLabel(viewer));
+  return c.body(new Uint8Array(body), 200, { "Content-Type": "image/webp" });
 });
 
 /** Editar un mensaje propio mientras está en cola. */

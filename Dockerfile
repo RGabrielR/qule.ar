@@ -19,8 +19,9 @@ ENV APP_URL=$APP_URL
 RUN npm run build --workspace web
 
 FROM node:24-bookworm-slim
-# ffmpeg (el paquete oficial de Debian) procesa los videos del álbum: los corta, los achica y les borra los metadatos
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+# ffmpeg (el paquete oficial de Debian) procesa los videos del álbum: los corta, los achica y les borra los metadatos.
+# fonts-dejavu-core: la letra de la marca de agua que el servidor escribe en las fotos privadas (viewerMark.ts)
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production \
     PORT=3001 \
     DATA_DIR=/data

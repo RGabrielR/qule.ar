@@ -20,7 +20,6 @@ import { MessageText } from "../features/chat/MessageText";
 import { batchReadReceipts } from "../features/messages/readReceipts";
 import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
-import { Watermark } from "../features/photos/Watermark";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
 import { useNewArrivals } from "../features/messages/useNewArrivals";
 import { useConversationActions } from "../features/messages/ConversationActions";
@@ -449,8 +448,8 @@ function ConversationThread({ id }: { id: string }) {
                 <>
                   {entry?.failure && !entry.failure.retryable && m.kind === "photo" ? <p>Foto</p> : m.photo && (
                     <button type="button" className={`bubble__photo-button${mine ? "" : " private-media"}`} aria-label="Abrir foto" onClick={() => setPhotoMessageId(m.id)}>
-                      <img className="bubble__photo" src={m.photo} alt="" loading="lazy" onLoad={followLatestMessage} />
-                      {!mine && <Watermark />}
+                      {/* La foto que te mandan ya trae escrito quién la mira (lo hace el servidor): no se dibuja encima */}
+                      <img className="bubble__photo" src={m.photo} alt="" loading="lazy" draggable={false} onLoad={followLatestMessage} />
                     </button>
                   )}
                   {m.body && <p>{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>}
@@ -602,7 +601,6 @@ function ExpiringViewer({ src, seconds, onClose }: { src: string; seconds: numbe
       <div className="viewer__bar"><span style={{ width: `${(left / seconds) * 100}%` }} /></div>
       <div className="viewer__photo">
         <img src={src} alt="Foto temporal" onContextMenu={(e) => e.preventDefault()} draggable={false} />
-        <Watermark />
       </div>
       <p className="viewer__note">Se cierra en {Math.max(left, 0)} s y no se puede volver a abrir. Tocá para cerrar.</p>
     </div>
