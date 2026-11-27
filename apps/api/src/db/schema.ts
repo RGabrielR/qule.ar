@@ -183,7 +183,8 @@ export const favorite = pgTable("favorite", {
   favoriteId: text("favorite_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // Nota privada sobre esa persona (como en Grindr): solo la ve quien la escribió. Se va con el favorito.
-  note: text("note"),
+  // Cifrada (ver src/crypt.ts), como el estado serológico: habla de otra persona y puede decir cosas muy sensibles.
+  note: encryptedText("note"),
 }, (t) => [primaryKey({ columns: [t.userId, t.favoriteId] }), index("favorite_favorite_idx").on(t.favoriteId)]);
 
 // ---------- Seguridad ----------
