@@ -12,6 +12,7 @@ import { preparePhotoForCrop } from "../features/photos/preparePhoto";
 import { HasPlaceSelect } from "../features/place/hasPlace";
 import { AlbumHeader, MoveTo, NewAlbum } from "../features/photos/AlbumHeader";
 import { useEditorKeyboard } from "../features/profile/useEditorKeyboard";
+import { EXPLICIT_PHOTOS_HELP, ExplicitPhotoNote } from "../features/explicit/ExplicitPhotoNote";
 import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 import { BODY_TYPES, HIV_STATUS, LOOKING_FOR, POSITIONS, PRONOUNS, RELATIONSHIP, TRIBES } from "../options";
 
@@ -200,6 +201,14 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
     }
   }
 
+  /** Pedir que moderación revise una foto que el modelo marcó como explícita. */
+  function requestExplicitReview(photoId: string) {
+    return changeMedia(async () => {
+      await api(`/me/photos/${photoId}/explicit-review`, { method: "POST" });
+      await reload();
+    });
+  }
+
   /** Pasar un archivo a un álbum, al álbum por defecto ("private") o al perfil público ("public"). */
   function moveMedia(photoId: string, target: string) {
     if (target === "public" && !confirm("¿Mostrar esta foto en tu perfil público?")) return;
@@ -371,6 +380,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
       <section className="section">
         <h2 className="section__title">Fotos <span className="muted">{publicPhotos.length}/6</span></h2>
         <p className="muted small lead">Los cambios en fotos y en el álbum se aplican en el momento.</p>
+        {publicPhotos.some((p) => p.explicit) && <p className="muted small lead">{EXPLICIT_PHOTOS_HELP}</p>}
         <div className="photos">
           {publicPhotos.map((p, i) => (
             <div key={p.id}>
@@ -382,6 +392,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
                 <button className="photos__remove" aria-label="Borrar foto" disabled={mediaLocked} onClick={() => removePhoto(p.id)}>✕</button>
                 <button className="photos__lock" aria-label="Pasar al álbum privado" title="Pasar al álbum privado" disabled={mediaLocked} onClick={() => moveMedia(p.id, albums[0]?.id ?? "private")}><LockIcon /></button>
               </div>
+              <ExplicitPhotoNote photo={p} disabled={mediaLocked} onRequest={() => requestExplicitReview(p.id)} />
               <PhotoOrder index={i} total={publicPhotos.length} disabled={mediaLocked} onMove={(step) => reorder(publicPhotos, i, i + step)} />
             </div>
           ))}

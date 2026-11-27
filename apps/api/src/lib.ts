@@ -55,14 +55,26 @@ export const mediaOut = (x: { key: string; kind: string; posterKey: string | nul
 
 export type Author = { id: string; name: string; age: number | null; photo: string | null };
 
-/** Clave de la primera foto pública, por persona. */
-export async function firstPublicPhotoKeys(ids: string[]): Promise<Map<string, string>> {
+/** Primera foto pública por persona: la clave y si está marcada como explícita (ver src/explicit/). */
+export async function firstPublicPhotos(ids: string[]): Promise<Map<string, { key: string; explicit: boolean }>> {
   if (!ids.length) return new Map();
-  const photos = await db.selectDistinctOn([photo.userId], { userId: photo.userId, key: photo.key }).from(photo)
+  const photos = await db.selectDistinctOn([photo.userId], { userId: photo.userId, key: photo.key, explicit: photo.explicit }).from(photo)
     .where(and(inArray(photo.userId, ids), eq(photo.isPrivate, false)))
     .orderBy(asc(photo.userId), asc(photo.position));
-  return new Map(photos.map((p) => [p.userId, p.key]));
+  return new Map(photos.map((p) => [p.userId, { key: p.key, explicit: p.explicit }]));
 }
+
+/** Clave de la primera foto pública, por persona. */
+export async function firstPublicPhotoKeys(ids: string[]): Promise<Map<string, string>> {
+  return new Map([...await firstPublicPhotos(ids)].map(([id, p]) => [id, p.key]));
+}
+
+/**
+ * ¿Tapar esta foto para quien la mira? Solo si está marcada como explícita, quien mira eligió taparlas y no es suya.
+ * La marca no se usa para nada más: ni para ordenar, ni para filtrar, ni en moderación.
+ */
+export const blurFor = (viewer: { userId: string; hideExplicit: boolean }, ownerId: string, explicit: boolean) =>
+  explicit && viewer.hideExplicit && viewer.userId !== ownerId;
 
 /**
  * Los links de un mensaje se pueden tocar solo si la cuenta que lo mandó tenía más de 24 horas en ese momento.

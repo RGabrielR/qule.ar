@@ -131,7 +131,7 @@ async function reference(me: { userId: string; cellLat: number | null; cellLng: 
     hasMore: list.length > f.offset + 60,
     total: list.length,
     people: page.map(({ p, km, age }) => ({
-      id: p.userId, name: p.displayName, age, photo: thumbUrl(first.get(p.userId)), coverPhoto: imageUrl(first.get(p.userId)), online: false,
+      id: p.userId, name: p.displayName, age, photo: thumbUrl(first.get(p.userId)), coverPhoto: imageUrl(first.get(p.userId)), blur: false, online: false,
       recent: Date.now() - p.lastSeenAt.getTime() < 15 * 60_000, favorite: favs.has(p.userId),
       distance: km != null ? distanceLabel(km) : null,
     })),

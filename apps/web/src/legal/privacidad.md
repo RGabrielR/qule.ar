@@ -56,6 +56,8 @@ Solo para que la app funcione: mostrar tu perfil, la gente cerca y los grupos, m
 
 **Cuidado de menores:** qule.ar es solo para mayores de 18. Para detectar a tiempo si entra alguien menor, la app revisa automáticamente los nombres y las descripciones de los perfiles y los grupos, y busca señales como "+14" o "15 años". Si encuentra una, no borra ni oculta nada: manda el caso a moderación para que lo revise una persona.
 
+**Fotos explícitas:** para que quien no quiera verlas pueda taparlas (Configuración → Fotos), un modelo abierto (NudeNet) revisa las fotos de tu perfil y marca las que muestran genitales o culo al descubierto. Corre en nuestro servidor: **ninguna foto sale a otra empresa ni a una IA externa**. La marca solo sirve para mostrar esa foto borrosa a quien eligió taparlas: no baja la foto, no cambia dónde aparecés en la grilla y no es una sanción. No se revisan los álbumes privados ni las fotos de los mensajes. Si el modelo se equivoca, podés pedir que moderación lo revise desde Editar perfil.
+
 **No** vendemos datos, **no** mostramos publicidad y **no** armamos perfiles para terceros.
 
 ## 5. Dónde están y quién más los ve

@@ -6,7 +6,7 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { db, schema } from "../db/index.js";
 import {
-  ageFrom, authorsFor, canOpenLinks, messageKey, imageUrl, isBlocked, mediaOut, newId, reactionsFor, requireProfile, requireUser, serializeDm, type AppEnv, type ReactionSummary,
+  ageFrom, authorsFor, blurFor, canOpenLinks, messageKey, imageUrl, isBlocked, mediaOut, newId, reactionsFor, requireProfile, requireUser, serializeDm, type AppEnv, type ReactionSummary,
 } from "../lib.js";
 import { emitToGroupRoom, emitToUser, isOnline } from "../realtime.js";
 import { distanceLabel, visibleKm } from "../geo.js";
@@ -80,6 +80,8 @@ socialRoutes.get("/users/:id", async (c) => {
     hivStatus: p.hivStatus,
     lastTested: p.lastTested,
     photos: photos.map((x) => imageUrl(x.key)),
+    // Cuáles se ven borrosas, en el mismo orden (si eligió tapar las fotos explícitas; las propias nunca)
+    photosBlur: photos.map((x) => blurFor(mine, id, x.explicit)),
     isMe: id === me.id,
     online: on,
     recent: !p.incognito && (on || Date.now() - p.lastSeenAt.getTime() < 15 * 60_000),

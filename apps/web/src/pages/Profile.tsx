@@ -206,7 +206,9 @@ function ProfileView({ id }: { id: string }) {
     <div className={`page profile ${enter}${swipeClass}`} {...swipeProps}>
       <ProfileCover
         photos={p?.photos}
+        photosBlur={p?.photosBlur}
         coverPhoto={swipe.current?.coverPhoto}
+        coverBlur={swipe.current?.blur}
         displayName={p?.displayName}
         age={p?.age}
         status={p ?? undefined}

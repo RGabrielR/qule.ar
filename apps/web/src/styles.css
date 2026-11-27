@@ -1183,3 +1183,22 @@ button.quote:hover { background: var(--surface-3); }
 @media (prefers-reduced-motion: reduce) { .poll__bar { transition: none; } }
 
 .admin-account-detail { overflow-wrap: anywhere; }
+
+/* Fotos explícitas tapadas (features/explicit): borrosas para quien eligió taparlas, con "Ver foto" en el perfil */
+.tile--blur img, .tile--blur:hover img { filter: blur(var(--explicit-blur-tile)); transform: scale(1.2); }
+.tile__veil { position: absolute; inset: 0; display: grid; place-items: center; color: var(--on-media); pointer-events: none; }
+.tile__veil svg { filter: drop-shadow(var(--shadow-icon)); }
+.profile__cover-media--blur { overflow: hidden; }
+.profile__cover-media--blur img { filter: blur(var(--explicit-blur-cover)); transform: scale(1.2); }
+.explicit-veil { position: absolute; inset: 0; z-index: var(--z-sticky); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--on-media); text-align: center; pointer-events: none; }
+.explicit-veil svg { filter: drop-shadow(var(--shadow-icon)); }
+.explicit-veil p { font-weight: 600; font-size: var(--text-md); }
+.explicit-veil__btn { pointer-events: auto; background: var(--scrim); border-color: var(--on-media-dim); color: var(--on-media); backdrop-filter: blur(8px); }
+.explicit-veil__btn:hover:not(:disabled) { background: var(--scrim-strong); }
+.explicit-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 6px; padding-top: 4px; font-size: var(--text-2xs); }
+.explicit-note__label { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); }
+.explicit-note__label svg { width: 13px; height: 13px; }
+.explicit-note__ask { font-size: var(--text-2xs); padding: 2px; }
+.explicit-reviews__help { padding: 12px 16px 0; }
+.explicit-reviews__photo { position: relative; aspect-ratio: 4 / 5; max-width: 240px; width: 100%; border-radius: var(--radius-lg); overflow: hidden; background: var(--surface-2); }
+.explicit-reviews__photo img { width: 100%; height: 100%; object-fit: cover; }

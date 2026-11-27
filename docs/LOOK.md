@@ -101,6 +101,7 @@ Tamaños (`font-size: var(--…)`):
 
 - **Radios** (`border-radius: var(--radius-…)`): `hair` 3 · `xs` 6 · `sm` 8 · `md` 10 · `lg` 12 · `xl` 14 · `2xl` 18 · `3xl` 20 · `4xl` 22 · `pill` 999. Tarjetas en `xl`; botones, chips y contadores en `pill`; hojas modales en `4xl`.
 - **Sombras**: `--shadow-pop` (menús, toasts, carteles flotantes), `--shadow-icon` (íconos sobre fotos, con `filter: drop-shadow()`), `--shadow-ring-ok` (el puntito de en línea).
+- **Desenfoque de fotos explícitas** (`filter: blur(var(--…))`): `--explicit-blur-tile` 16 px en la grilla, `--explicit-blur-cover` 28 px en la portada del perfil. Es el único `blur` permitido en `filter`; la foto se agranda un poco (`scale(1.2)`) para que no se vean los bordes.
 - **Capas** (`z-index: var(--z-…)`), de abajo hacia arriba: `raised` · `sticky` · `menu` · `sheet` · `toast` · `viewer` · `lightbox`.
 - La grilla de gente es de fotos cuadradas, sin espacio entre ellas, con el nombre y el estado encima.
 

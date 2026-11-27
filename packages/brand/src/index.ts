@@ -276,6 +276,10 @@ function globalVars(): Record<string, string> {
     "shadow-icon": `0 1px 2px ${alpha("#000000", 0.6)}`,
     "shadow-ring-ok": `0 0 0 2px ${alpha(p.ok, 0.25)}`,
 
+    // Cuánto se desenfoca una foto explícita tapada (features/explicit): en la grilla y en la portada del perfil
+    "explicit-blur-tile": "16px",
+    "explicit-blur-cover": "28px",
+
     // El botón "Seguir con Google" respeta los colores de Google
     "google-bg": "#ffffff",
     "google-bg-hover": "#eeeeee",
