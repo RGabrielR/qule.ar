@@ -1,3 +1,4 @@
+import { SuspensionTiming } from "./SuspensionTiming";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { api, type StaffAccess } from "../../api";
@@ -179,6 +180,11 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup, onRefresh }: {
               {r.targetAutoHidden && !r.targetSuspendedAt && " · oculta de la grilla hasta revisar"}
               {r.targetAutoSuspendAt && !r.targetSuspendedAt && <b>{` · se suspende sola el ${fmt(r.targetAutoSuspendAt)} si nadie lo revisa`}</b>}
             </span>
+            {r.targetSuspendedAt && (
+              <span className="muted small rcard__count">
+                <SuspensionTiming suspendedAt={r.targetSuspendedAt} suspendedUntil={r.targetSuspendedUntil} />
+              </span>
+            )}
           </span>
         </Link>
       )}

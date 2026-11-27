@@ -1,3 +1,4 @@
+import { formatSuspensionHours } from "@mortero/shared/suspension";
 import { createHash } from "node:crypto";
 import { and, eq, gt, lt, sql } from "drizzle-orm";
 import nodemailer from "nodemailer";
@@ -189,15 +190,19 @@ export function verifyMail(to: string, url: string): Mail {
  * Aviso de suspensión. Discreto: no dice el motivo ni nada del perfil (el mail lo ve el proveedor); el motivo
  * se lee en la app, donde también se pide la revisión.
  */
-export function suspendedMail(to: string): Mail {
+export function suspendedMail(to: string, start?: Date, end?: Date | null): Mail {
+  const term = start && end
+    ? `La suspensión dura ${formatSuspensionHours(end.getTime() - start.getTime())}. Podés volver a entrar el ${new Intl.DateTimeFormat("es-AR", { dateStyle: "long", timeStyle: "short", timeZone: "America/Argentina/Buenos_Aires" }).format(end)} (hora argentina).`
+    : "La suspensión no tiene vencimiento automático.";
   return {
     to,
     subject: `Tu cuenta de ${APP_NAME} está suspendida`,
-    text: `Tu cuenta de ${APP_NAME} fue suspendida. Entrá con tu cuenta para ver el motivo.\n\nSi creés que es un error, desde ahí mismo podés pedir que la revisemos. Es privado.\n\n${env.APP_URL}`,
+    text: `Tu cuenta de ${APP_NAME} fue suspendida. ${term} Entrá con tu cuenta para ver el motivo.\n\nSi creés que es un error, desde ahí mismo podés pedir que la revisemos. Es privado.\n\n${env.APP_URL}`,
     html: layout({
       title: "Tu cuenta está suspendida",
       preview: "Entrá con tu cuenta para ver el motivo.",
       paragraphs: [
+        term,
         "Entrá con tu cuenta para ver el motivo.",
         "Si creés que es un error, desde ahí mismo podés pedir que la revisemos. Es privado.",
       ],

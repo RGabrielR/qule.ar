@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, authClient, closeSocket, type Appeal, type Me } from "../api";
+import { SuspensionTiming } from "../features/moderation/SuspensionTiming";
 import { Logo } from "../components/Logo";
 import { Wordmark } from "../components/Wordmark";
 
@@ -9,7 +10,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString("es-AR", { day: "n
  * Cuenta suspendida: el motivo y la forma de pedir que se revise, en privado y dentro de la app.
  * Mientras tanto no puede usar nada más (lo frena el servidor, ver requireUser en apps/api/src/lib.ts).
  */
-export function Suspended({ me, onSignedOut }: { me: Me; onSignedOut: () => Promise<void> | void }) {
+export function Suspended({ me, onReload }: { me: Me; onReload: () => Promise<void> | void }) {
   const [appeal, setAppeal] = useState<Appeal | null | undefined>(undefined);
   const [error, setError] = useState("");
 
@@ -17,10 +18,27 @@ export function Suspended({ me, onSignedOut }: { me: Me; onSignedOut: () => Prom
     api<Appeal | null>("/appeal").then(setAppeal).catch(() => setAppeal(null));
   }, []);
 
+  const until = me.profile?.suspendedUntil;
+  useEffect(() => {
+    if (!until) return;
+    const end = Date.parse(until);
+    let timer: ReturnType<typeof setTimeout>;
+    let alive = true;
+    function schedule() {
+      const remaining = end - Date.now();
+      timer = setTimeout(async () => {
+        await onReload();
+        if (alive) schedule();
+      }, remaining > 0 ? Math.min(remaining, 86_400_000) : 30_000);
+    }
+    schedule();
+    return () => { alive = false; clearTimeout(timer); };
+  }, [until, onReload]);
+
   async function signOut() {
     await authClient.signOut();
     closeSocket();
-    await onSignedOut();
+    await onReload();
   }
 
   return (
@@ -32,6 +50,9 @@ export function Suspended({ me, onSignedOut }: { me: Me; onSignedOut: () => Prom
       <div className="auth__card">
         <h2 className="auth__title">Tu cuenta está suspendida</h2>
         {me.profile?.suspendReason && <p className="muted">Motivo: {me.profile.suspendReason}</p>}
+        {me.profile?.suspendedAt && (
+          <p><SuspensionTiming suspendedAt={me.profile.suspendedAt} suspendedUntil={until} own /></p>
+        )}
         <p className="muted small">Mientras esté suspendida no aparecés en la app ni podés usarla.</p>
 
         {appeal === undefined ? null : appeal === null ? (

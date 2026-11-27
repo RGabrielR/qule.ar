@@ -1,3 +1,4 @@
+import { formatSuspensionHours, MAX_SUSPENSION_AMOUNT, SUSPENSION_UNITS, type SuspensionDuration } from "@mortero/shared/suspension";
 import { DM_EVENTS } from "@mortero/shared/realtime";
 // Notificaciones push y panel de moderación.
 import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
@@ -16,6 +17,7 @@ import { removeGroup } from "./groups.js";
 import { ALWAYS_COUNTS_REASON, alertKey, dismissableReportsBy, mutedReporterList, mutedReporters, REPORT_SPAM_IGNORED, REPORTS_MUTED, REPORTS_UNMUTED, reportSpamAlerts, resolveAlert, resolveMuted } from "../reportSpam.js";
 import { AUTO_SUSPENDED, pendingAutoSuspensions } from "../autoSuspend.js";
 import { keepEvidence, purgeSuspendedContent } from "../suspension.js";
+import { activeSuspension, isSuspended, suspensionEnd } from "../suspensionStatus.js";
 import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, ownerIds, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
 import { dropPolls } from "../polls.js";
@@ -83,7 +85,7 @@ adminRoutes.get("/admin/stats", async (c) => {
     users: await count(db.select({ n: sql<number>`count(*)::int` }).from(profile)),
     groups: await count(db.select({ n: sql<number>`count(*)::int` }).from(group)),
     openReports: await count(db.select({ n: sql<number>`count(*)::int` }).from(report).where(eq(report.status, "open"))),
-    suspended: await count(db.select({ n: sql<number>`count(*)::int` }).from(profile).where(isNotNull(profile.suspendedAt))),
+    suspended: await count(db.select({ n: sql<number>`count(*)::int` }).from(profile).where(activeSuspension())),
     openAppeals: await count(db.select({ n: sql<number>`count(*)::int` }).from(appeal).where(eq(appeal.status, "open"))),
   });
 });
@@ -108,7 +110,7 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
   const people = await authorsFor(ids(rows.flatMap((r) => [r.reporterId, r.targetUserId])), { realAge: true });
   const targets = [...new Set(ids(rows.map((r) => r.targetUserId)))];
   const profiles = targets.length ? await db.select().from(profile).where(inArray(profile.userId, targets)) : [];
-  const suspended = new Map(profiles.map((p) => [p.userId, p.suspendedAt?.toISOString() ?? null]));
+  const suspended = new Map(profiles.filter((p) => isSuspended(p)).map((p) => [p.userId, p]));
   const totals = targets.length
     ? await db.select({ id: report.targetUserId, n: sql<number>`count(*)::int` }).from(report)
         .where(inArray(report.targetUserId, targets)).groupBy(report.targetUserId)
@@ -197,7 +199,8 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
         : null,
       // Sin persona que lo mande: lo generó la app (palabras que sugieren menores)
       automatic: !r.reporterId && (r.details ?? "").startsWith(AUTO_DETAILS_PREFIX),
-      targetSuspendedAt: suspended.get(tid) ?? null,
+      targetSuspendedAt: suspended.get(tid)?.suspendedAt?.toISOString() ?? null,
+      targetSuspendedUntil: suspended.get(tid)?.suspendedUntil?.toISOString() ?? null,
       targetReportCount: totalBy.get(tid) ?? 0,
       evidenceFiles: r.evidenceKeys.length + Number(Boolean(r.captureKey)),
       photoVerification: canVerifyPhotos && canVerifyReportPhoto(r, actor),
@@ -260,11 +263,19 @@ adminRoutes.post("/admin/report-spam/:id/ignore", requireAccess("owner", "sancti
   return c.json({ ok: true });
 });
 
+const suspensionInput = z.object({
+  reason: z.string().trim().min(3, "Escribí un motivo").max(300),
+  duration: z.object({
+    unit: z.enum(SUSPENSION_UNITS),
+    amount: z.number().int().min(1),
+  }).refine(({ amount, unit }) => amount <= MAX_SUSPENSION_AMOUNT[unit], "Elegí una duración válida").nullish(),
+});
+
 adminRoutes.post("/admin/report-spam/:id/suspend", requireAccess("owner", "sanctions"), async (c) => {
   const reporterId = await alertReporter(c.req.param("id"));
-  const { reason } = z.object({ reason: z.string().trim().min(3, "Escribí un motivo").max(300) }).parse(await c.req.json());
-  await suspendAccount(c.get("user"), reporterId, reason);
-  return c.json({ ok: true });
+  const { reason, duration } = suspensionInput.parse(await c.req.json());
+  const suspension = await suspendAccount(c.get("user"), reporterId, reason, duration);
+  return c.json({ ok: true, ...suspension });
 });
 
 /**
@@ -416,23 +427,23 @@ async function pendingReview(ids: string[]): Promise<Map<string, "preventive" | 
   return out;
 }
 
-/** Suspender una cuenta: se cierran sus sesiones, deja de aparecer y se borra lo que publicó. Cierra sus reportes abiertos. */
+/** Suspender una cuenta cierra sus sesiones y sus reportes abiertos. */
 adminRoutes.post("/admin/users/:id/suspend", requireAccess("sanctions", "reports"), async (c) => {
-  const { reason, photoReportId } = z.object({
-    reason: z.string().trim().min(3, "Escribí un motivo").max(300),
+  const { reason, duration, photoReportId } = suspensionInput.extend({
     // Desde una foto verificada con la marca invisible (ver reportPhotos.ts)
     photoReportId: z.string().max(200).optional(),
   }).parse(await c.req.json());
-  await suspendAccount(c.get("user"), c.req.param("id"), reason, photoReportId);
-  return c.json({ ok: true });
+  const suspension = await suspendAccount(c.get("user"), c.req.param("id"), reason, duration, photoReportId);
+  return c.json({ ok: true, ...suspension });
 });
 
 /** Suspende una cuenta: desde un reporte, o desde una alerta de spam de reportes (ver /admin/report-spam). */
-async function suspendAccount(admin: StaffUser, target: string, reason: string, photoReportId?: string) {
+async function suspendAccount(admin: StaffUser, target: string, reason: string, duration?: SuspensionDuration | null, photoReportId?: string) {
   if (target === admin.id) throw new HTTPException(400, { message: "No podés suspenderte a vos" });
   const mine = await accessFor(admin);
   const preventive = !mine.includes("sanctions");
   if (preventive) {
+    if (duration) throw new HTTPException(403, { message: "La suspensión preventiva queda pendiente de revisión" });
     const [minor] = await db.select({ id: report.id }).from(report)
       .where(and(eq(report.targetUserId, target), eq(report.status, "open"), eq(report.reason, "menor de edad"))).limit(1);
     if (!minor) throw new HTTPException(403, { message: "Con el permiso Reportes solo podés suspender ante un reporte abierto por menor de edad" });
@@ -452,21 +463,31 @@ async function suspendAccount(admin: StaffUser, target: string, reason: string, 
     const r = await requireVerifiedPhotoAction(photoReportId, admin.id, target);
     if (r.status !== "open") throw new HTTPException(409, { message: "Este reporte ya se resolvió" });
   }
-  const [p] = await db.update(profile).set({ suspendedAt: new Date(), suspendReason: reason, suspendedBy: admin.id })
-    .where(eq(profile.userId, target)).returning();
-  if (!p) throw new HTTPException(404, { message: "Esa cuenta no existe" });
+  const suspendedAt = new Date();
+  const suspendedUntil = duration ? suspensionEnd(suspendedAt, duration) : null;
+  const [p] = await db.update(profile).set({ suspendedAt, suspendedUntil, suspendReason: reason, suspendedBy: admin.id })
+    .where(and(eq(profile.userId, target), sql`not ${activeSuspension()}`)).returning({ id: profile.userId });
+  if (!p) {
+    const [existing] = await db.select({ id: profile.userId }).from(profile).where(eq(profile.userId, target));
+    if (!existing) throw new HTTPException(404, { message: "Esa cuenta no existe" });
+    throw new HTTPException(409, { message: "Esa cuenta ya está suspendida" });
+  }
   await db.delete(session).where(eq(session.userId, target));
   disconnectUser(target);
   // Primero la prueba: los reportes guardan los archivos que necesitan antes de que se borren (ver suspension.ts)
   await keepEvidence(target);
   const open = await db.select({ id: report.id }).from(report)
     .where(and(eq(report.targetUserId, target), eq(report.status, "open")));
-  await closeReports(open.map((r) => r.id), admin.id, "actioned", `Cuenta suspendida: ${reason}`);
-  // Después se borra lo público: mensajes en grupos, fotos, álbumes, videos y fotos por privado (ver suspension.ts)
-  const purged = await purgeSuspendedContent(target);
+  const hours = suspendedUntil ? formatSuspensionHours(suspendedUntil.getTime() - suspendedAt.getTime()) : null;
+  const term = hours ? ` por ${hours}` : "";
+  await closeReports(open.map((r) => r.id), admin.id, "actioned", `Cuenta suspendida${term}: ${reason}`);
+  // Una suspensión temporal conserva el contenido para que la cuenta pueda volver al vencer.
   const reportReference = photoReportId ? ` · Reporte ${photoReportId}` : "";
-  await logAction(admin.id, preventive ? PREVENTIVE : SUSPENDED, target,
-    `${reason}${reportReference} · Se borraron ${purged.groupMessages} mensajes en grupos y ${purged.files} archivos`);
+  const result = suspendedUntil
+    ? `Duración: ${hours} · Vence el ${suspendedUntil.toISOString()}`
+    : await purgeSuspendedContent(target).then(({ groupMessages, files }) =>
+      `Se borraron ${groupMessages} mensajes en grupos y ${files} archivos`);
+  await logAction(admin.id, preventive ? PREVENTIVE : SUSPENDED, target, `${reason}${reportReference} · ${result}`);
   if (preventive) {
     await notifyStaff(
       "sanctions",
@@ -476,14 +497,15 @@ async function suspendAccount(admin: StaffUser, target: string, reason: string, 
   }
   // Aviso por mail (sin el motivo: se lee en la app, donde también se pide la revisión)
   const [u] = await db.select({ email: user.email }).from(user).where(eq(user.id, target));
-  if (u) void sendMail(suspendedMail(u.email), "account");
+  if (u) void sendMail(suspendedMail(u.email, suspendedAt, suspendedUntil), "account");
+  return { suspendedAt: suspendedAt.toISOString(), suspendedUntil: suspendedUntil?.toISOString() ?? null };
 }
 
 /** Reactivar una cuenta. Si tenía un pedido de revisión abierto, queda resuelto a su favor. */
 adminRoutes.post("/admin/users/:id/unsuspend", requireAccess("sanctions"), async (c) => {
   const admin = c.get("user");
   const target = c.req.param("id");
-  await db.update(profile).set({ suspendedAt: null, suspendReason: null, suspendedBy: null }).where(eq(profile.userId, target));
+  await db.update(profile).set({ suspendedAt: null, suspendedUntil: null, suspendReason: null, suspendedBy: null }).where(eq(profile.userId, target));
   await db.update(appeal)
     .set({ status: "lifted", response: "Reactivamos tu cuenta.", reviewedBy: admin.id, reviewedAt: new Date() })
     .where(and(eq(appeal.userId, target), eq(appeal.status, "open")));
@@ -495,7 +517,7 @@ adminRoutes.post("/admin/users/:id/unsuspend", requireAccess("sanctions"), async
 adminRoutes.post("/admin/users/:id/confirm-suspension", requireAccess("sanctions"), async (c) => {
   const me = c.get("user");
   const target = c.req.param("id");
-  const [p] = await db.select({ by: profile.suspendedBy, at: profile.suspendedAt }).from(profile).where(eq(profile.userId, target));
+  const [p] = await db.select({ by: profile.suspendedBy, at: profile.suspendedAt }).from(profile).where(and(eq(profile.userId, target), activeSuspension()));
   const kind = p?.at ? (await pendingReview([target])).get(target) : undefined;
   if (!kind) throw new HTTPException(409, { message: "No hay una suspensión para revisar" });
   if (p.by === me.id) throw new HTTPException(403, { message: "Esta suspensión la hiciste vos: la tiene que revisar otra persona del equipo" });
@@ -509,9 +531,9 @@ adminRoutes.post("/admin/users/:id/confirm-suspension", requireAccess("sanctions
 adminRoutes.get("/admin/suspended", requireAccess("sanctions", "appeals"), async (c) => {
   const me = c.get("user");
   const rows = await db
-    .select({ id: profile.userId, reason: profile.suspendReason, at: profile.suspendedAt, by: profile.suspendedBy })
+    .select({ id: profile.userId, reason: profile.suspendReason, at: profile.suspendedAt, until: profile.suspendedUntil, by: profile.suspendedBy })
     .from(profile)
-    .where(isNotNull(profile.suspendedAt))
+    .where(activeSuspension())
     .orderBy(desc(profile.suspendedAt));
   const people = await authorsFor(rows.map((r) => r.id), { realAge: true });
   const pending = await pendingReview(rows.map((r) => r.id));
@@ -519,6 +541,7 @@ adminRoutes.get("/admin/suspended", requireAccess("sanctions", "appeals"), async
     ...people.get(r.id)!,
     reason: r.reason,
     suspendedAt: r.at!.toISOString(),
+    suspendedUntil: r.until?.toISOString() ?? null,
     preventive: pending.get(r.id) === "preventive",
     automatic: pending.get(r.id) === "automatic",
     suspendedByMe: r.by === me.id,
@@ -536,6 +559,10 @@ adminRoutes.get("/admin/appeals", requireAccess("appeals"), async (c) => {
     .orderBy(closed ? desc(appeal.reviewedAt) : appeal.createdAt)
     .limit(100);
   const people = await authorsFor(rows.map((a) => a.userId), { realAge: true });
+  const profiles = rows.length ? await db.select({
+    id: profile.userId, at: profile.suspendedAt, until: profile.suspendedUntil,
+  }).from(profile).where(inArray(profile.userId, rows.map((row) => row.userId))) : [];
+  const suspensions = new Map(profiles.map((row) => [row.id, row]));
   const othersCanReview = (await staffIdsWith("appeals")).some((id) => id !== me.id);
   const out = [];
   for (const a of rows) {
@@ -545,11 +572,15 @@ adminRoutes.get("/admin/appeals", requireAccess("appeals"), async (c) => {
       .where(and(eq(report.targetUserId, a.userId), eq(report.status, "actioned")))
       .orderBy(desc(report.createdAt))
       .limit(10);
+    const suspension = suspensions.get(a.userId);
+    const matches = suspension?.at?.getTime() === a.suspendedAt.getTime();
     out.push({
       id: a.id,
       person: people.get(a.userId) ?? { id: a.userId, name: "Cuenta sin perfil", age: 0, photo: null },
       suspendReason: a.suspendReason,
       suspendedAt: a.suspendedAt.toISOString(),
+      suspendedUntil: matches ? suspension?.until?.toISOString() ?? null : null,
+      suspensionMatches: matches,
       // Si la suspendiste vos y hay otra persona con el permiso Revisiones, la tiene que revisar ella
       suspendedByMe: a.suspendedBy === me.id,
       othersCanReview,
@@ -582,10 +613,14 @@ adminRoutes.post("/admin/appeals/:id/resolve", requireAccess("appeals"), async (
     .set({ status: decision === "lift" ? "lifted" : "upheld", response, reviewedBy: me.id, reviewedAt: new Date() })
     .where(eq(appeal.id, a.id));
   // Si era una suspensión automática sin revisar, mantenerla también borra lo público (ver confirm-suspension)
-  if (decision === "uphold" && (await pendingReview([a.userId])).get(a.userId) === "automatic") await purgeSuspendedContent(a.userId);
+  if (decision === "uphold") {
+    const [same] = await db.select({ id: profile.userId }).from(profile)
+      .where(and(eq(profile.userId, a.userId), eq(profile.suspendedAt, a.suspendedAt), activeSuspension()));
+    if (same && (await pendingReview([a.userId])).get(a.userId) === "automatic") await purgeSuspendedContent(a.userId);
+  }
   if (decision === "lift") {
     // Solo si sigue siendo la misma suspensión
-    await db.update(profile).set({ suspendedAt: null, suspendReason: null, suspendedBy: null })
+    await db.update(profile).set({ suspendedAt: null, suspendedUntil: null, suspendReason: null, suspendedBy: null })
       .where(and(eq(profile.userId, a.userId), eq(profile.suspendedAt, a.suspendedAt)));
   }
   const same = a.suspendedBy === me.id ? " (la revisó la misma persona que suspendió)" : "";
@@ -641,11 +676,15 @@ const SHORT_CODE = /^[a-zA-Z0-9_-]{8}$/;
 
 adminRoutes.post("/admin/accounts/search", requireAccess("sanctions"), async (c) => {
   const query = z.object({ query: z.string().trim().regex(/^[a-zA-Z0-9_-]{8,64}$/) }).parse(await c.req.json()).query;
-  const fields = { id: user.id, name: accountName, suspendedAt: profile.suspendedAt };
+  const fields = { id: user.id, name: accountName, suspendedAt: profile.suspendedAt, suspendedUntil: profile.suspendedUntil };
   // Una cadena de ocho caracteres puede ser también el ID completo de otra cuenta.
   const matches = await db.select(fields).from(user).innerJoin(profile, eq(profile.userId, user.id))
     .where(query.length === 8 ? sql`left(${user.id}, 8) = ${query}` : eq(user.id, query)).limit(2);
-  const account = matches.length === 1 ? matches[0] : null;
+  const found = matches.length === 1 ? matches[0] : null;
+  const account = found && {
+    id: found.id, name: found.name, suspendedAt: isSuspended(found) ? found.suspendedAt : null,
+    ...(isSuspended(found) && found.suspendedUntil ? { suspendedUntil: found.suspendedUntil } : {}),
+  };
   c.header("Cache-Control", "no-store");
   return c.json({ account, ambiguous: matches.length > 1 });
 });
@@ -725,10 +764,10 @@ adminRoutes.post("/admin/people", requireAccess("owner"), async (c) => {
     )!);
   }
   if (filter === "staff") conds.push(inArray(user.id, [...new Set([...owners, ...perms.keys()])].concat("")));
-  if (filter === "suspended") conds.push(isNotNull(profile.suspendedAt));
+  if (filter === "suspended") conds.push(activeSuspension());
   if (filter === "hidden") conds.push(inArray(user.id, [...hidden].concat("")));
   const rows = await db
-    .select({ id: user.id, createdAt: user.createdAt, suspendedAt: profile.suspendedAt, suspendReason: profile.suspendReason })
+    .select({ id: user.id, createdAt: user.createdAt, suspendedAt: profile.suspendedAt, suspendedUntil: profile.suspendedUntil, suspendReason: profile.suspendReason })
     .from(user).innerJoin(profile, eq(profile.userId, user.id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(user.createdAt)).limit(LIMIT + 1);
@@ -746,13 +785,15 @@ adminRoutes.post("/admin/people", requireAccess("owner"), async (c) => {
   return c.json({
     people: page.flatMap((r) => {
       const a = people.get(r.id);
+      const suspended = isSuspended(r);
       return a ? [{
         ...a,
         joinedAt: r.createdAt.toISOString(),
         owner: owners.includes(r.id),
         permissions: perms.get(r.id) ?? [],
-        suspendedAt: r.suspendedAt?.toISOString() ?? null,
-        suspendReason: r.suspendReason,
+        suspendedAt: suspended ? r.suspendedAt!.toISOString() : null,
+        suspendedUntil: suspended ? r.suspendedUntil?.toISOString() ?? null : null,
+        suspendReason: suspended ? r.suspendReason : null,
         hidden: hidden.has(r.id),
         openReports: openBy.get(r.id) ?? 0,
       }] : [];

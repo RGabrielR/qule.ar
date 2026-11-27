@@ -1,3 +1,4 @@
+import { isSuspended } from "../suspensionStatus.js";
 import { DM_EVENTS, INBOX_LIMIT, READ_RECEIPT_LIMIT, type DmReadReceipt, type DmSettingsChange } from "@mortero/shared/realtime";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, notExists, or, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -39,7 +40,7 @@ socialRoutes.get("/users/:id", async (c) => {
   const id = c.req.param("id");
   if (id !== me.id && (await isBlocked(me.id, id))) return c.notFound();
   const [p] = await db.select().from(profile).where(eq(profile.userId, id));
-  if (!p || (p.suspendedAt && id !== me.id)) return c.notFound();
+  if (!p || (isSuspended(p) && id !== me.id)) return c.notFound();
   const allPhotos = await db.select().from(photo).where(eq(photo.userId, id)).orderBy(asc(photo.position));
   const photos = allPhotos.filter((x) => !x.isPrivate);
   const privatePhotos = allPhotos.filter((x) => x.isPrivate);

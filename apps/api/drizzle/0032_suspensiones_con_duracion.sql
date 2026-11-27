@@ -1,0 +1,1 @@
+ALTER TABLE "profile" ADD COLUMN "suspended_until" timestamp with time zone;

@@ -1,3 +1,4 @@
+import { activeSuspension } from "./suspensionStatus.js";
 import { createHmac } from "node:crypto";
 import { and, desc, eq, gte, inArray, isNotNull, notInArray, sql, type SQL } from "drizzle-orm";
 import { dataKey } from "./crypt.js";
@@ -249,7 +250,7 @@ export async function reportSpamAlerts(now = new Date()): Promise<ReportSpamAler
   if (!candidates.length) return [];
 
   const [suspended, muted, ignored, latest, history, dismissable] = await Promise.all([
-    db.select({ id: profile.userId }).from(profile).where(and(inArray(profile.userId, candidates), isNotNull(profile.suspendedAt))),
+    db.select({ id: profile.userId }).from(profile).where(and(inArray(profile.userId, candidates), activeSuspension())),
     db.select({ id: reportMute.userId }).from(reportMute).where(inArray(reportMute.userId, candidates)),
     db.select({ id: modAction.targetId, at: sql<string>`max(${modAction.createdAt})` }).from(modAction)
       .where(and(eq(modAction.action, REPORT_SPAM_IGNORED), inArray(modAction.targetId, candidates)))

@@ -1,3 +1,4 @@
+import { isSuspended } from "../suspensionStatus.js";
 // Toques (avisarle a alguien que te gusta) y reacciones a mensajes.
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { Hono } from "hono";
@@ -38,8 +39,8 @@ toqueRoutes.post("/users/:id/toques", async (c) => {
   if (!r.success) throw new HTTPException(400, { message: "Reacción inválida" });
   if (to === me.id) throw new HTTPException(400, { message: "No te podés mandar un toque a vos" });
   if (await isBlocked(me.id, to)) throw new HTTPException(404, { message: "Perfil no disponible" });
-  const [p] = await db.select({ suspendedAt: profile.suspendedAt }).from(profile).where(eq(profile.userId, to));
-  if (!p || p.suspendedAt) throw new HTTPException(404, { message: "Perfil no disponible" });
+  const [p] = await db.select({ suspendedAt: profile.suspendedAt, suspendedUntil: profile.suspendedUntil }).from(profile).where(eq(profile.userId, to));
+  if (!p || isSuspended(p)) throw new HTTPException(404, { message: "Perfil no disponible" });
   if (await myRecentToque(me.id, to)) throw new HTTPException(429, { message: "Ya le mandaste un toque hace poco" });
   await limit(me.id, "toque");
 

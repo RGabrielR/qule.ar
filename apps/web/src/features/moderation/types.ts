@@ -41,5 +41,6 @@ export type Report = {
   photoVerification: boolean;
   photoEvidence: boolean;
   targetSuspendedAt: string | null;
+  targetSuspendedUntil?: string | null;
   targetReportCount: number;
 };

@@ -1,3 +1,4 @@
+import { activeSuspension, isSuspended } from "../suspensionStatus.js";
 import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -751,7 +752,7 @@ groupRoutes.get("/groups/:id/invite-candidates", async (c) => {
   const f = candidatesQuery.parse(c.req.query());
   const q = f.q ?? "";
 
-  const conds = [sql`${schema.profile.userId} <> ${u.id}`, isNull(schema.profile.suspendedAt)];
+  const conds = [sql`${schema.profile.userId} <> ${u.id}`, sql`not ${activeSuspension()}`];
   if (q) conds.push(ilike(schema.profile.displayName, `%${q.replace(/[%_\\]/g, "\\$&")}%`));
   else conds.push(eq(schema.profile.incognito, false));
   const rows = await db.select().from(schema.profile).where(and(...conds)).orderBy(desc(schema.profile.lastSeenAt)).limit(3000);
@@ -1183,8 +1184,8 @@ groupRoutes.post("/groups/:id/messages/photo", async (c) => {
     const [current] = await tx.select().from(group).where(eq(group.id, g.id)).for("update");
     const [currentMember] = await tx.select().from(groupMember)
       .where(and(eq(groupMember.groupId, g.id), eq(groupMember.userId, u.id))).for("share");
-    const [sender] = await tx.select({ suspendedAt: profile.suspendedAt }).from(profile).where(eq(profile.userId, u.id)).for("share");
-    if (!current || current.removedAt || current.photoUploadsPaused || !currentMember || !sender || sender.suspendedAt) {
+    const [sender] = await tx.select({ suspendedAt: profile.suspendedAt, suspendedUntil: profile.suspendedUntil }).from(profile).where(eq(profile.userId, u.id)).for("share");
+    if (!current || current.removedAt || current.photoUploadsPaused || !currentMember || !sender || isSuspended(sender)) {
       throw new HTTPException(409, { message: "Por ahora no podés mandar fotos en este grupo" });
     }
     const slot = await nextSlot({ groupId: g.id, userId: u.id, userCreatedAt: new Date(u.createdAt), rules: current.spamRules }, tx);

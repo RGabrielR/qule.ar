@@ -1,3 +1,5 @@
+import { SuspensionTiming } from "../features/moderation/SuspensionTiming";
+import { EMPTY_DURATION, parseSuspensionDuration, SuspensionDurationField } from "../features/moderation/SuspensionDurationField";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { api, ApiError, type Author, type StaffAccess } from "../api";
@@ -17,6 +19,7 @@ import type { Report } from "../features/moderation/types";
 type Suspended = Author & {
   reason: string | null;
   suspendedAt: string;
+  suspendedUntil: string | null;
   /** Suspensión preventiva (por menor de edad, con el permiso Reportes) que falta revisar. */
   preventive: boolean;
   /** Suspensión automática (varias personas la reportaron por lo mismo y nadie lo revisó a tiempo) que falta revisar. */
@@ -32,6 +35,8 @@ type AdminAppeal = {
   person: Author;
   suspendReason: string | null;
   suspendedAt: string;
+  suspendedUntil: string | null;
+  suspensionMatches: boolean;
   suspendedByMe: boolean;
   /** Hay otra persona con el permiso Revisiones: si la suspendiste vos, la revisa ella. */
   othersCanReview: boolean;
@@ -223,8 +228,11 @@ export function Admin() {
               <li key={s.id} className="rcard">
                 <div className="rcard__who">
                   <Avatar src={s.photo} name={s.name} size={40} />
-                  <span><b>{s.name}</b><span className="muted small rcard__count">desde {fmt(s.suspendedAt)}</span></span>
+                  <span><b>{s.name}</b><span className="muted small rcard__count">desde {fmt(s.suspendedAt)}
+
+                  </span></span>
                 </div>
+                <p className="small"><SuspensionTiming suspendedAt={s.suspendedAt} suspendedUntil={s.suspendedUntil} /></p>
                 {s.reason && <p className="rcard__details">{s.reason}</p>}
                 {s.preventive && (
                   <p className="small">
@@ -298,6 +306,11 @@ export function Admin() {
                       <span className="muted small rcard__count">Suspendida desde {fmt(a.suspendedAt)}</span>
                     </span>
                   </div>
+                  {a.suspensionMatches && (
+                    <p className="small">
+                      <SuspensionTiming suspendedAt={a.suspendedAt} suspendedUntil={a.suspendedUntil} lifted={a.status === "lifted"} />
+                    </p>
+                  )}
                   {a.suspendReason && <p className="small"><b>Motivo de la suspensión:</b> {a.suspendReason}</p>}
                   {a.reports.length > 0 && (
                     <details>
@@ -402,13 +415,16 @@ type SuspendTarget = { url: string; name: string; reason: string; preventive: bo
 function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onClose: () => void; onDone: () => void }) {
   const { preventive } = target;
   const [reason, setReason] = useState(target.reason);
+  const [durationInput, setDuration] = useState(EMPTY_DURATION);
+  const duration = preventive ? null : parseSuspensionDuration(durationInput);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function submit() {
+    if (busy || duration === undefined || reason.trim().length < 3) return;
     setBusy(true);
     setError("");
     try {
-      await api(target.url, { method: "POST", json: { reason } });
+      await api(target.url, { method: "POST", json: { reason, duration } });
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -420,7 +436,12 @@ function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onC
       <div className="sheet" role="dialog" aria-modal aria-labelledby="suspend-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
         <h2 id="suspend-title">Suspender a {target.name}</h2>
-        <p className="muted small">Se cierran sus sesiones, deja de aparecer en la app y se cierran sus reportes abiertos. También se borran sus mensajes en grupos y todo lo que subió: fotos, álbumes, videos y fotos que mandó por privado. Lo que sea prueba de un reporte queda guardado. La cuenta se puede reactivar después, pero lo borrado no vuelve.</p>
+        <p className="muted small">Se cierran sus sesiones y sus reportes abiertos. Durante la suspensión, la cuenta no puede usar la app ni aparece en Gente.</p>
+        {!preventive && <SuspensionDurationField value={durationInput} onChange={setDuration} disabled={busy} />}
+        {duration === null && (
+          <p className="muted small">Se borran sus mensajes en grupos y lo que subió, incluidas las fotos que mandó por privado. Se conservan las pruebas de los reportes. Si reactivás la cuenta, lo borrado no vuelve.</p>
+        )}
+        {duration && <p className="muted small">La cuenta recupera el acceso al vencer el plazo y conserva su contenido.</p>}
         {preventive && (
           <p className="small">Es una <b>suspensión preventiva</b>: hacela si hay indicios de que es menor de edad. Después alguien con el permiso Suspensiones la revisa y decide si se mantiene.</p>
         )}
@@ -436,7 +457,7 @@ function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onC
         {error && <p className="error" role="alert">{error}</p>}
         <div className="row">
           <button className="btn" onClick={onClose}>Cancelar</button>
-          <button className="btn btn--danger" disabled={busy || reason.trim().length < 3} onClick={submit}>{busy ? "Suspendiendo…" : "Suspender"}</button>
+          <button className="btn btn--danger" disabled={busy || duration === undefined || reason.trim().length < 3} onClick={submit}>{busy ? "Suspendiendo…" : "Suspender"}</button>
         </div>
       </div>
     </div>
@@ -504,10 +525,13 @@ function ResolveAppealDialog({ appeal, decision, onClose, onDone }: {
       <div className="sheet" role="dialog" aria-modal aria-labelledby="appeal-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
         <h2 id="appeal-title">{lift ? `Levantar la suspensión de ${appeal.person.name}` : `Mantener la suspensión de ${appeal.person.name}`}</h2>
+        {appeal.suspensionMatches && (
+          <p className="small"><SuspensionTiming suspendedAt={appeal.suspendedAt} suspendedUntil={appeal.suspendedUntil} /></p>
+        )}
         <p className="muted small">
           {lift
             ? "La cuenta vuelve a funcionar enseguida y le avisamos por mail."
-            : "La cuenta sigue suspendida. Le avisamos por mail que hay una respuesta y la lee en la app."}{" "}
+            : "La decisión respeta el plazo de la suspensión. Le avisamos por mail que hay una respuesta."}{" "}
           Queda registrado quién la resolvió.
         </p>
         <label className="field">

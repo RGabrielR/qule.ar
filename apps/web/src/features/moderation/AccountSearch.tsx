@@ -1,7 +1,8 @@
+import { SuspensionTiming } from "./SuspensionTiming";
 import { useState, type FormEvent } from "react";
 import { api } from "../../api";
 
-export type SanctionMatch = { id: string; name: string; suspendedAt: string | null };
+export type SanctionMatch = { id: string; name: string; suspendedAt: string | null; suspendedUntil?: string };
 
 /**
  * Buscar una cuenta por ID completo o por el código de ocho caracteres de la marca visible de una captura.
@@ -50,7 +51,7 @@ export function AccountSearch({ onSelect }: { onSelect: (account: SanctionMatch)
         <div className="rcard">
           <p><b>{match.name}</b></p>
           <p className="muted small admin-account-detail">ID {match.id}</p>
-          {match.suspendedAt ? <p className="small">Cuenta suspendida</p>
+          {match.suspendedAt ? <p className="small">Cuenta suspendida · <SuspensionTiming suspendedAt={match.suspendedAt} suspendedUntil={match.suspendedUntil} /></p>
             : <button className="btn btn--small btn--danger" onClick={() => onSelect(match)}>Suspender cuenta</button>}
         </div>
       )}

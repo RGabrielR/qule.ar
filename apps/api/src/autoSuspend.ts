@@ -1,4 +1,5 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from "drizzle-orm";
+import { activeSuspension } from "./suspensionStatus.js";
+import { and, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { db, schema } from "./db/index.js";
 import { sendMail, suspendedMail } from "./mail.js";
 import { disconnectUser } from "./realtime.js";
@@ -57,7 +58,7 @@ export async function autoSuspendCandidates(now = new Date(), until?: Date): Pro
       ne(report.reason, NOT_COUNTED),
       gte(report.createdAt, since),
       until ? lte(report.createdAt, until) : undefined,
-      isNull(profile.suspendedAt),
+      sql`not ${activeSuspension()}`,
       reportCounts,
       sql`${user.createdAt} <= ${report.createdAt} - make_interval(hours => ${AUTO_SUSPEND_REPORTER_MIN_AGE_HOURS})`,
       sql`${report.targetUserId} is not null`,
@@ -92,7 +93,7 @@ export async function pendingAutoSuspensions(now = new Date()): Promise<Map<stri
   }
   if (!out.size) return out;
   const suspended = await db.select({ id: profile.userId }).from(profile)
-    .where(and(inArray(profile.userId, [...out.keys()]), isNotNull(profile.suspendedAt)));
+    .where(and(inArray(profile.userId, [...out.keys()]), activeSuspension()));
   for (const s of suspended) out.delete(s.id);
   return out;
 }
@@ -147,8 +148,8 @@ export async function runAutoSuspensions(now = new Date()): Promise<number> {
     }
     const reason = `Suspensión automática: ${c.reporters} personas distintas te reportaron por «${c.reason}» y la cuenta queda frenada hasta que el equipo la revise.`;
     // Solo si sigue activa (si dos procesos corren a la vez, la suspende uno solo)
-    const [p] = await db.update(profile).set({ suspendedAt: now, suspendReason: reason, suspendedBy: null })
-      .where(and(eq(profile.userId, t.id), isNull(profile.suspendedAt))).returning({ id: profile.userId });
+    const [p] = await db.update(profile).set({ suspendedAt: now, suspendedUntil: null, suspendReason: reason, suspendedBy: null })
+      .where(and(eq(profile.userId, t.id), sql`not ${activeSuspension()}`)).returning({ id: profile.userId });
     if (!p) continue;
     await db.delete(session).where(eq(session.userId, t.id));
     disconnectUser(t.id);

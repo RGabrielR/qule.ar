@@ -135,7 +135,7 @@ Al reportar, la app guarda una copia de lo reportado: el texto del mensaje y sus
 
 - Si **descartás** el reporte, la copia se borra.
 - Si el reporte **termina en una medida** (borrar el mensaje o suspender), la copia se conserva como prueba.
-- **Al suspender** se borra lo público de la persona: sus mensajes en grupos (también los que tenía en cola), sus reacciones en grupos, sus fotos, álbumes y videos, y las fotos que mandó por privado. Quienes tienen los grupos o las charlas abiertas lo ven desaparecer en vivo. Antes de borrar se guarda la prueba: si tiene un reporte urgente abierto o que terminó en una medida, **todos** sus archivos quedan guardados con ese reporte; los demás reportes sobre su perfil guardan sus fotos públicas. Los textos de sus mensajes privados no se borran: son privados y son la prueba de quien los recibió. Si después se reactiva la cuenta, lo borrado no vuelve.
+- **Al suspender de forma permanente o preventiva** se borra lo público de la persona: sus mensajes en grupos (también los que tenía en cola), sus reacciones en grupos, sus fotos, álbumes y videos, y las fotos que mandó por privado. Quienes tienen los grupos o las charlas abiertas lo ven desaparecer en vivo. Antes de borrar se guarda la prueba: si tiene un reporte urgente abierto o que terminó en una medida, **todos** sus archivos quedan guardados con ese reporte; los demás reportes sobre su perfil guardan sus fotos públicas. Los textos de sus mensajes privados no se borran: son privados y son la prueba de quien los recibió. Si después se reactiva la cuenta, lo borrado no vuelve.
 - Los archivos guardados solo los puede pedir moderación. El panel dice cuántos hay, pero **no los muestra ni hace falta descargarlos**. Si una fiscalía los pide, quien administra el servidor los entrega.
 
 ### Verificar fotos de álbumes privados
@@ -153,6 +153,7 @@ La consulta queda en **Registro** con el reporte y la acción. La captura que ad
 - **Mirá solo lo necesario** para resolver el reporte: el mensaje o el perfil reportado. Nada más. Son datos personales, y muchas veces sensibles (Ley 25.326).
 - **No compartas** fuera del equipo de moderación nada de lo que ves en un reporte.
 - **Escribí siempre el motivo** al suspender. Queda registrado y es lo que ve la persona suspendida.
+- **Elegí el plazo** cuando apliques una suspensión con el permiso Suspensiones. Puede durar horas, días, meses o ser permanente. La temporal conserva el contenido, pausa los mensajes en cola y devuelve el acceso al vencer. Las preventivas y automáticas se revisan desde Suspendidas.
 - **Cuidado con los reportes falsos.** Si muchas cuentas nuevas reportan a la misma persona sin motivo, puede ser un ataque. Descartá esos reportes y, si hace falta, suspendé a quienes los mandan.
 - **Si te equivocaste**, la suspensión se puede levantar desde la pestaña Suspendidas. Lo que se borró al suspender (mensajes en grupos, fotos y álbumes) no vuelve.
 

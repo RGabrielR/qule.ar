@@ -1,11 +1,14 @@
+import type { SuspensionWindow } from "@mortero/shared/suspension";
+import { SuspensionTiming } from "./SuspensionTiming";
 import { useState, type FormEvent } from "react";
 import { api } from "../../api";
+import { EMPTY_DURATION, parseSuspensionDuration, SuspensionDurationField } from "./SuspensionDurationField";
 import { suspendReportAccount } from "./suspendReportAccount";
 import type { Report } from "./types";
 
 export type ReportReply = { response: string | null; respondedAt: string | null };
 
-export type Measure = "removed" | "suspended";
+export type Measure = { kind: "removed" } | ({ kind: "suspended" } & SuspensionWindow);
 
 type Props = {
   report: Report;
@@ -23,11 +26,16 @@ export function ReportPhotoActions({ report, path, reply, onReply, measure, onMe
   const [response, setResponse] = useState("");
   const [reason, setReason] = useState("");
   const [suspendReason, setSuspendReason] = useState("");
+  const [durationInput, setDuration] = useState(EMPTY_DURATION);
+  const duration = parseSuspensionDuration(durationInput);
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState<"reply" | "remove" | "suspend" | null>(null);
   const [error, setError] = useState("");
   const open = report.status === "open" && !measure;
   const canRemove = open && report.messageId && !report.message?.deleted;
+  const suspension = measure?.kind === "suspended" ? measure : report.targetSuspendedAt
+    ? { suspendedAt: report.targetSuspendedAt, suspendedUntil: report.targetSuspendedUntil }
+    : null;
   const maySuspend = open && canSuspend && matchedTarget && report.target?.id && !report.targetSuspendedAt;
 
   async function sendResponse(e: FormEvent) {
@@ -51,7 +59,7 @@ export function ReportPhotoActions({ report, path, reply, onReply, measure, onMe
     setError("");
     try {
       await api(`/admin/reports/${encodeURIComponent(report.id)}/delete-message`, { method: "POST", json: { verified: true, reason } });
-      onMeasure("removed");
+      onMeasure({ kind: "removed" });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -61,13 +69,13 @@ export function ReportPhotoActions({ report, path, reply, onReply, measure, onMe
 
   async function suspend(e: FormEvent) {
     e.preventDefault();
-    if (pending || !maySuspend || suspendReason.trim().length < 3) return;
+    if (pending || !maySuspend || duration === undefined || suspendReason.trim().length < 3) return;
     setPending("suspend");
     setError("");
     try {
-      await suspendReportAccount(report, suspendReason, true);
+      const window = await suspendReportAccount(report, suspendReason, duration, true);
       setConfirming(false);
-      onMeasure("suspended");
+      onMeasure({ kind: "suspended", ...window });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -81,8 +89,10 @@ export function ReportPhotoActions({ report, path, reply, onReply, measure, onMe
         <section className="stack" aria-labelledby="report-photo-measure">
           <h3 id="report-photo-measure">Cuenta reportada</h3>
           <p><strong>{report.target?.name ?? "Cuenta sin perfil"}</strong></p>
-          {(measure === "suspended" || report.targetSuspendedAt) && <p className="small" role="status">Cuenta suspendida.</p>}
-          {measure === "removed" && <p className="small" role="status">Mensaje borrado.</p>}
+          {suspension && (
+            <p className="small">Cuenta suspendida · <SuspensionTiming {...suspension} /></p>
+          )}
+          {measure?.kind === "removed" && <p className="small" role="status">Mensaje borrado.</p>}
           {open && !matchedTarget && <p className="muted small">La copia verificada corresponde a otra cuenta.</p>}
           {canRemove && (
             <details>
@@ -101,7 +111,9 @@ export function ReportPhotoActions({ report, path, reply, onReply, measure, onMe
           )}
           {maySuspend && (confirming ? (
             <form className="stack" onSubmit={suspend}>
-              <p className="muted small">Se cierran sus sesiones y sus reportes abiertos. La cuenta se puede reactivar después.</p>
+              <p className="muted small">Se cierran sus sesiones y sus reportes abiertos.</p>
+              <SuspensionDurationField value={durationInput} onChange={setDuration} disabled={pending !== null} />
+              {duration === null && <p className="muted small">Se borran sus mensajes en grupos y lo que subió. Se conservan las pruebas de los reportes.</p>}
               <label className="field">
                 <span>Motivo de la suspensión (la persona lo va a ver)</span>
                 <textarea className="input" rows={3} maxLength={300} value={suspendReason} disabled={pending !== null}
@@ -109,7 +121,7 @@ export function ReportPhotoActions({ report, path, reply, onReply, measure, onMe
               </label>
               <div className="rcard__actions">
                 <button type="button" className="btn" disabled={pending !== null} onClick={() => setConfirming(false)}>Cancelar suspensión</button>
-                <button type="submit" className="btn btn--danger" disabled={pending !== null || suspendReason.trim().length < 3}>
+                <button type="submit" className="btn btn--danger" disabled={pending !== null || duration === undefined || suspendReason.trim().length < 3}>
                   {pending === "suspend" ? "Suspendiendo…" : "Confirmar suspensión"}
                 </button>
               </div>
