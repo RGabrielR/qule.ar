@@ -1,6 +1,7 @@
 import { DM_EVENTS } from "@mortero/shared/realtime";
 // Notificaciones push y panel de moderación.
 import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -210,6 +211,41 @@ adminRoutes.get("/admin/reports", requireAccess("reports", "sanctions"), async (
   }
   // Lo más nuevo primero; el panel agrupa, ordena y filtra (y avisa arriba si hay urgentes)
   return c.json(out);
+});
+
+/** Historial paginado de la mesa de escritorio. Solo administración general puede atribuir reportes a una cuenta. */
+adminRoutes.get("/admin/reports/:id/history", requireAccess("reports", "sanctions"), async (c) => {
+  const query = z.object({ direction: z.enum(["received", "sent"]), before: z.string().min(1).max(100).optional() })
+    .safeParse(c.req.query());
+  if (!query.success) throw new HTTPException(400, { message: "Historial inválido" });
+  const { direction, before } = query.data;
+  if (direction === "sent" && !isOwner(c.get("user"))) {
+    throw new HTTPException(403, { message: "No tenés permiso para ver quién reportó" });
+  }
+  const [topic] = await db.select({ target: report.targetUserId, group: report.groupId })
+    .from(report).where(eq(report.id, c.req.param("id")));
+  if (!topic) return c.notFound();
+  const subject = direction === "sent"
+    ? !topic.group && topic.target && eq(report.reporterId, topic.target)
+    : topic.group ? eq(report.groupId, topic.group) : topic.target && eq(report.targetUserId, topic.target);
+  if (!subject) return c.json({ items: [], next: null });
+
+  const cursor = alias(report, "history_cursor");
+  const cursorRow = before && db.select({ createdAt: cursor.createdAt, id: cursor.id })
+    .from(cursor).where(eq(cursor.id, before));
+  const rows = await db.select({
+    id: report.id,
+    reason: report.reason,
+    details: report.details,
+    status: report.status,
+    resolution: report.resolution,
+    createdAt: report.createdAt,
+    targetName: direction === "sent" ? report.targetName : sql<null>`null`,
+  }).from(report).where(and(subject, cursorRow ? sql`(${report.createdAt}, ${report.id}) < (${cursorRow})` : undefined))
+    .orderBy(desc(report.createdAt), desc(report.id)).limit(21);
+  const items = rows.slice(0, 20);
+  c.header("Cache-Control", "no-store");
+  return c.json({ items, next: rows.length > items.length ? items.at(-1)?.id ?? null : null });
 });
 
 async function closeReports(ids: string[], adminId: string, status: "dismissed" | "actioned", resolution: string) {

@@ -28,6 +28,13 @@ test("en compu, las pestañas van al costado y la charla se abre al lado de la b
   // La bandeja sigue a la vista y marca la charla abierta
   await expect(page.getByRole("heading", { name: "Mensajes" })).toBeVisible();
   await expect(row).toHaveAttribute("aria-current", "page");
+  const active = page.locator(".inbox__row").filter({ has: row });
+  const leftEdge = await active.evaluate((el) => {
+    const marker = getComputedStyle(el, "::before");
+    const avatar = el.querySelector(".inbox__avatar")!.getBoundingClientRect();
+    return marker.content !== "none" && marker.left === "0px" && avatar.x === el.getBoundingClientRect().x;
+  });
+  expect(leftEdge).toBe(true);
   await expect(page.getByRole("textbox", { name: "Mensaje", exact: true })).toBeVisible();
   await expect(nav).toBeVisible();
 });
@@ -65,24 +72,36 @@ test("Moderación en compu: lista de temas y el elegido al lado, con teclado", a
   await page.route((url) => url.pathname === "/api/admin/reports", (route) => route.fulfill({
     json: new URL(route.request().url()).searchParams.get("status") === "closed" ? [] : [
       report(1, "Perfil Uno", "spam", "Manda links"),
-      report(2, "Perfil Dos", "acoso", "No para de escribir"),
+      { ...report(2, "Perfil Dos", "amenazas o violencia", "Mensaje intimidante"), urgent: true },
     ],
   }));
   await page.route((url) => url.pathname === "/api/admin/report-spam", (route) => route.fulfill({ json: { alerts: [], muted: [] } }));
+  await page.route((url) => /\/api\/admin\/reports\/r\d\/history$/.test(url.pathname), (route) =>
+    route.fulfill({ json: { items: [{
+      id: "anterior", reason: "spam", status: "dismissed", resolution: null,
+      createdAt: new Date(now - 86_400_000).toISOString(), details: "Comentario de un reporte anterior", targetName: null,
+    }], next: null } }));
 
   await page.goto("/admin");
   await expect(page.getByRole("navigation", { name: "Secciones" }).getByRole("link", { name: "Moderación" })).toHaveAttribute("aria-current", "page");
   const list = page.getByRole("region", { name: "Temas reportados" });
   const detail = page.getByRole("region", { name: "Tema elegido" });
+  await expect(list.getByRole("list").getByRole("button").first()).toHaveAccessibleName(/Perfil Uno/);
   await expect(list.getByRole("button", { name: /Perfil Uno/ })).toHaveAttribute("aria-current", "true");
   await expect(detail.getByText("“Manda links”")).toBeVisible();
+  await expect(detail.getByText("Comentario de un reporte anterior")).toBeVisible();
+  await expect(detail.getByText("Descartado", { exact: true })).toBeVisible();
+  await expect(detail.getByRole("heading", { name: "Reportes enviados por esta cuenta" })).toHaveCount(0);
 
   await page.keyboard.press("j");
   await expect(list.getByRole("button", { name: /Perfil Dos/ })).toHaveAttribute("aria-current", "true");
-  await expect(detail.getByText("“No para de escribir”")).toBeVisible();
-  await expect(detail.getByRole("button", { name: "Suspender" })).toBeVisible();
+  await expect(detail.getByText("“Mensaje intimidante”")).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Suspender", exact: true }).first()).toBeVisible();
   await page.keyboard.press("ArrowUp");
   await expect(detail.getByText("Tema 1 de 2")).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(page.getByRole("region", { name: "Temas reportados" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Moderación" })).toBeVisible();
 });
 
 /** El id de una cuenta, buscándola por nombre en la grilla de Gente. */

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { api, type StaffAccess } from "../../api";
 import { Avatar } from "../../components/Avatar";
@@ -57,15 +57,6 @@ export function ReportDesk({ reports, status, has, act, onSuspend, onRemoveGroup
   useEffect(() => {
     if (index >= 0) lastIndex.current = index;
   });
-
-  // Reportes ya resueltos, para ver si el tema elegido ya tuvo reportes antes
-  const [closed, setClosed] = useState<Report[] | null>(null);
-  useEffect(() => {
-    if (status !== "open") return;
-    let alive = true;
-    api<Report[]>("/admin/reports?status=closed").then((r) => alive && setClosed(r)).catch(() => alive && setClosed([]));
-    return () => { alive = false; };
-  }, [status, reports]);
 
   function select(i: number) {
     const g = visible[i];
@@ -154,7 +145,7 @@ export function ReportDesk({ reports, status, has, act, onSuspend, onRemoveGroup
               </button>
             </div>
             <GroupCard key={selected.key} g={selected} as="section" has={has} act={act} onSuspend={onSuspend} onRemoveGroup={onRemoveGroup} onRefresh={onRefresh} />
-            <History g={selected} closed={status === "open" ? closed : null} />
+            <History key={selected.key} g={selected} showSent={has("owner")} reports={reports} />
           </>
         ) : (
           <div className="empty"><p className="muted">Elegí un tema de la lista.</p></div>
@@ -164,10 +155,9 @@ export function ReportDesk({ reports, status, has, act, onSuspend, onRemoveGroup
   );
 }
 
-/** Lo que ya se sabe del tema: estado de la cuenta o del grupo y reportes anteriores ya resueltos. */
-function History({ g, closed }: { g: ReportGroup; closed: Report[] | null }) {
+function History({ g, showSent, reports }: { g: ReportGroup; showSent: boolean; reports: Report[] }) {
   const r = g.first;
-  const before = closed?.filter((x) => x.subject === g.key) ?? [];
+  const current = new Set(g.reports.map((report) => report.id));
   return (
     <section className="rcard desk__history" aria-label="Historial">
       <h2 className="small"><b>Historial</b></h2>
@@ -189,23 +179,11 @@ function History({ g, closed }: { g: ReportGroup; closed: Report[] | null }) {
           {r.group.autoHidden && !r.group.removedAt && <li>Oculto hasta que alguien lo revise</li>}
         </ul>
       )}
-      {closed && (
-        before.length === 0 ? (
-          <p className="muted small">No tiene reportes anteriores ya resueltos.</p>
-        ) : (
-          <>
-            <p className="muted small">{plural(before.length, "reporte anterior ya resuelto", "reportes anteriores ya resueltos")}</p>
-            <ul className="desk__before small">
-              {before.slice(0, 8).map((x) => (
-                <li key={x.id}>
-                  <span className="pill pill--reason">{x.reason}</span>
-                  <span className="muted">{fmt(x.createdAt)}</span>
-                  <span>{x.status === "dismissed" ? "Descartado" : x.resolution ?? "Resuelto"}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        )
+      {(r.target?.id || r.group?.id) && (
+        <HistoryList reportId={r.id} direction="received" reports={reports} current={current} />
+      )}
+      {showSent && r.target?.id && (
+        <HistoryList reportId={r.id} direction="sent" reports={reports} current={current} />
       )}
       {r.target?.id && (
         <div className="rcard__actions">
@@ -213,5 +191,68 @@ function History({ g, closed }: { g: ReportGroup; closed: Report[] | null }) {
         </div>
       )}
     </section>
+  );
+}
+
+type HistoryEntry = Pick<Report, "id" | "reason" | "details" | "status" | "resolution" | "createdAt"> & {
+  targetName: string | null;
+};
+type HistoryPage = { items: HistoryEntry[]; next: string | null };
+
+function HistoryList({ reportId, direction, reports, current }: {
+  reportId: string;
+  direction: "received" | "sent";
+  reports: Report[];
+  current: Set<string>;
+}) {
+  const [page, setPage] = useState<HistoryPage | null>(null);
+  const [request, setRequest] = useState<{ before: string | null; failed: boolean } | null>(null);
+  const active = useRef<AbortController | null>(null);
+  const load = useCallback(async (before: string | null) => {
+    active.current?.abort();
+    const controller = new AbortController();
+    active.current = controller;
+    setRequest({ before, failed: false });
+    if (!before) setPage(null);
+    const params = new URLSearchParams({ direction });
+    if (before) params.set("before", before);
+    try {
+      const next = await api<HistoryPage>(`/admin/reports/${encodeURIComponent(reportId)}/history?${params}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setPage((prev) => before && prev ? { items: [...prev.items, ...next.items], next: next.next } : next);
+      setRequest(null);
+    } catch {
+      if (!controller.signal.aborted) setRequest({ before, failed: true });
+    }
+  }, [direction, reportId]);
+  useEffect(() => {
+    void load(null);
+    return () => active.current?.abort();
+  }, [load, reports]);
+
+  return (
+    <div className="desk__history-list">
+      <h3 className="small">{direction === "received" ? "Reportes recibidos" : "Reportes enviados por esta cuenta"}</h3>
+      {page && (page.items.length ? (
+        <ul className="desk__before small">
+          {page.items.map((entry) => (
+            <li key={entry.id}>
+              <div className="desk__history-entry">
+                <span className="pill pill--reason">{entry.reason}</span>
+                <time className="muted" dateTime={entry.createdAt}>{fmt(entry.createdAt)}</time>
+                <span>{entry.status === "open" ? "Abierto" : entry.status === "dismissed" ? "Descartado" : entry.resolution ?? "Resuelto"}</span>
+                {direction === "received" && current.has(entry.id) && <span className="muted">En este tema</span>}
+              </div>
+              {entry.targetName && <p><b>{entry.targetName}</b></p>}
+              {entry.details && <p className="muted">{entry.details}</p>}
+            </li>
+          ))}
+        </ul>
+      ) : <p className="muted small">No hay reportes.</p>)}
+      {request?.failed ? (
+        <button type="button" className="btn btn--small" onClick={() => void load(request.before)}>No se pudo cargar. Reintentar</button>
+      ) : request ? <p className="muted small" role="status">Cargando reportes…</p>
+        : page?.next && <button type="button" className="btn btn--small" onClick={() => void load(page.next)}>Mostrar más</button>}
+    </div>
   );
 }
