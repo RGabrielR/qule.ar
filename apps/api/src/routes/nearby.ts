@@ -1,4 +1,5 @@
-import { eq, inArray, sql, type SQL } from "drizzle-orm";
+import { ONLINE_STATUS_OPTIONS, type OnlineStatus } from "@mortero/shared/onlineStatus";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -8,7 +9,7 @@ import { HAS_PLACE } from "../db/schema.js";
 import { distanceLabel, snapToCell, visibleKm } from "../geo.js";
 import { ageFrom, blurFor, firstPublicPhotos, imageUrl, thumbUrl, requireProfile, requireUser, type AppEnv } from "../lib.js";
 import { autoHiddenUsers } from "../moderation.js";
-import { isOnline } from "../realtime.js";
+import { isPubliclyOnline } from "../onlineStatus.js";
 import { hit } from "../shared.js";
 import { unlistedUsers } from "../verification.js";
 import { limit } from "../ratelimit.js";
@@ -16,8 +17,6 @@ import { limit } from "../ratelimit.js";
 const { profile } = schema;
 
 const MAX_OFFSET = 2000;
-/** Cuánto tiempo después de cerrar la app se te sigue mostrando como "hace un rato". */
-const RECENT_MS = 15 * 60_000;
 
 export const nearbyRoutes = new Hono<AppEnv>();
 nearbyRoutes.use("/nearby", requireUser, requireProfile);
@@ -67,8 +66,16 @@ nearbyRoutes.put("/me/privacy", async (c) => {
     showDistance: z.boolean().optional(), incognito: z.boolean().optional(), showAge: z.boolean().optional(),
     // Tapar las fotos explícitas de los demás (ver src/explicit/)
     hideExplicit: z.boolean().optional(),
+    onlineStatus: z.enum(ONLINE_STATUS_OPTIONS).optional(),
   }).parse(await c.req.json());
-  await db.update(profile).set(data).where(eq(profile.userId, u.id));
+  const changingStatus = data.onlineStatus !== undefined;
+  const statusError = "Desactivá Incógnito para cambiar tu estado en línea";
+  if (changingStatus && data.incognito === true) throw new HTTPException(409, { message: statusError });
+  const [updated] = await db.update(profile).set(data).where(and(
+    eq(profile.userId, u.id),
+    changingStatus && data.incognito !== false ? eq(profile.incognito, false) : undefined,
+  )).returning({ userId: profile.userId });
+  if (changingStatus && !updated) throw new HTTPException(409, { message: statusError });
   return c.json({ ok: true });
 });
 
@@ -165,7 +172,7 @@ export async function chatPeopleMatching(meId: string, f: NearbyFilters): Promis
   return (result as unknown as { rows: { user_id: string }[] }).rows.map((r) => r.user_id);
 }
 
-type Candidate = { user_id: string; cell_lat: number | null; cell_lng: number | null; show_distance: boolean; seen: number };
+type Candidate = { user_id: string; cell_lat: number | null; cell_lng: number | null; show_distance: boolean; online_status: OnlineStatus; seen: number };
 
 /**
  * Grilla de gente cerca, de la más cercana a la más lejana.
@@ -207,7 +214,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
     unlistedUsers(),
     db.select({ id: schema.favorite.favoriteId }).from(schema.favorite).where(eq(schema.favorite.userId, u.id)),
     db.execute(sql`
-      select p.user_id, p.cell_lat, p.cell_lng, p.show_distance, (extract(epoch from p.last_seen_at) * 1000)::float8 as seen
+      select p.user_id, p.cell_lat, p.cell_lng, p.show_distance, p.online_status, (extract(epoch from p.last_seen_at) * 1000)::float8 as seen
       from profile p
       where ${sql.join(conds, sql` and `)}
       order by p.last_seen_at desc
@@ -215,14 +222,13 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
   ]);
   const rows = (result as unknown as { rows: Candidate[] }).rows;
   const favs = new Set(favorites.map((r) => r.id));
-  const now = Date.now();
 
   const candidates = rows
     .filter((p) => !hidden.has(p.user_id) && !unlisted.has(p.user_id))
     .map((p) => {
       const km = visibleKm(me, { cellLat: p.cell_lat, cellLng: p.cell_lng, showDistance: p.show_distance });
-      const on = isOnline(p.user_id);
-      return { id: p.user_id, seen: p.seen, km, online: on, recent: on || now - p.seen < RECENT_MS };
+      const online = isPubliclyOnline({ userId: p.user_id, onlineStatus: p.online_status });
+      return { id: p.user_id, seen: p.seen, km, online };
     })
     .filter((x) => !f.online || x.online);
 
@@ -252,7 +258,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
     hasMore: nextOffset !== null,
     nextOffset,
     total: candidates.length,
-    people: page.flatMap(({ id, km, online, recent }) => {
+    people: page.flatMap(({ id, km, online }) => {
       const d = byId.get(id);
       if (!d) return []; // borró la cuenta entre los dos pasos
       const cover = first.get(id);
@@ -265,7 +271,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
         // La foto se ve borrosa (eligió tapar las explícitas). No cambia el orden ni quién aparece.
         blur: blurFor({ userId: me.userId, hideExplicit: me.hideExplicit ?? false }, id, cover?.explicit ?? false),
         online,
-        recent,
+        recent: online,
         favorite: favs.has(id),
         // Si cualquiera de los dos eligió esconder la distancia, km es null (ver visibleKm)
         distance: km != null ? distanceLabel(km) : null,

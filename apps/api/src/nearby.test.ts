@@ -19,9 +19,10 @@ process.env.DATA_KEY ??= randomBytes(32).toString("base64");
 const { db, schema, runMigrations, closeDb } = await import("./db/index.js");
 const { chatPeopleMatching, nearbyPage, parseNearbyFilters } = await import("./routes/nearby.js");
 const { forgetUnlisted } = await import("./verification.js");
-const { ageFrom, imageUrl, thumbUrl } = await import("./lib.js");
+const { ageFrom, authorsFor, imageUrl, thumbUrl } = await import("./lib.js");
 const { distanceLabel, visibleKm } = await import("./geo.js");
 const { REPORT_REASONS } = await import("./moderation.js");
+const { reserveSocket } = await import("./shared.js");
 
 // Azar con semilla: la prueba siempre arma los mismos datos
 let seed = 42;
@@ -132,7 +133,7 @@ async function reference(me: { userId: string; cellLat: number | null; cellLng: 
     total: list.length,
     people: page.map(({ p, km, age }) => ({
       id: p.userId, name: p.displayName, age, photo: thumbUrl(first.get(p.userId)), coverPhoto: imageUrl(first.get(p.userId)), blur: false, online: false,
-      recent: Date.now() - p.lastSeenAt.getTime() < 15 * 60_000, favorite: favs.has(p.userId),
+      recent: false, favorite: favs.has(p.userId),
       distance: km != null ? distanceLabel(km) : null,
     })),
   };
@@ -321,3 +322,52 @@ test("Mensajes: de las personas con chat, solo las que cumplen los filtros de pe
   await db.update(schema.profile).set({ showAge: true }).where(eq(schema.profile.userId, hider));
 });
 
+
+test("Gente y Mensajes respetan el estado elegido, con prioridad para Incógnito", async () => {
+  const id = "estado-en-linea-prueba";
+  await db.insert(schema.user).values({ id, name: "Ana", email: "estado@example.test", emailVerified: true });
+  await db.insert(schema.profile).values({
+    userId: id, displayName: "Ana", birthdate: "1990-01-01", bodyType: id,
+  });
+  const where = eq(schema.profile.userId, id);
+  const people = async (online?: "1") => (await nearbyPage(
+    MES["sin ubicación"], parseNearbyFilters(online ? { bodyType: id, online } : { bodyType: id }),
+  )).people;
+  const presence = async () => (await authorsFor([id], { presence: true })).get(id);
+  const release = await reserveSocket(id);
+  assert.ok(release);
+  try {
+    assert.equal((await people("1"))[0]?.online, true);
+    assert.ok("presence" in (await presence())!);
+    release();
+
+    assert.equal((await people())[0]?.recent, false);
+    assert.equal((await people("1")).length, 0);
+    assert.ok(!("presence" in (await presence())!));
+
+    await db.update(schema.profile).set({ onlineStatus: "always" }).where(where);
+    assert.equal((await people("1"))[0]?.id, id);
+    assert.ok("presence" in (await presence())!);
+
+    await db.update(schema.profile).set({ incognito: true }).where(where);
+    assert.equal((await people()).length, 0);
+    assert.ok(!("presence" in (await presence())!));
+
+    await db.update(schema.profile).set({ incognito: false }).where(where);
+    assert.equal((await people("1"))[0]?.id, id);
+
+    await db.update(schema.profile).set({ onlineStatus: "never" }).where(where);
+    const disconnect = await reserveSocket(id);
+    assert.ok(disconnect);
+    try {
+      assert.equal((await people())[0]?.online, false);
+      assert.equal((await people("1")).length, 0);
+      assert.ok(!("presence" in (await presence())!));
+    } finally {
+      disconnect();
+    }
+  } finally {
+    release();
+    await db.delete(schema.user).where(eq(schema.user.id, id));
+  }
+});

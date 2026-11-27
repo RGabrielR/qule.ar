@@ -11,7 +11,8 @@ import { autoHiddenGroups, autoHiddenUsers, deleteImageUnlessEvidence, forbidden
 import { BULK_MAX, bulkInput, pendingConds, requestFilters, requestPage } from "../joinRequests.js";
 import { limit } from "../ratelimit.js";
 import { deleteImage, MAX_UPLOAD_BYTES, readImage, saveImage } from "../storage.js";
-import { emitPublishedMessage, emitToGroup, emitToGroupRoom, emitToUser, isOnline, serializeGroupMessages, syncGroupRoom } from "../realtime.js";
+import { emitPublishedMessage, emitToGroup, emitToGroupRoom, emitToUser, serializeGroupMessages, syncGroupRoom } from "../realtime.js";
+import { isPubliclyOnline } from "../onlineStatus.js";
 import { broadcast, onBroadcast } from "../shared.js";
 import { pushTo } from "../push.js";
 import { notifyGroupMessage } from "../groupNotify.js";
@@ -776,7 +777,7 @@ groupRoutes.get("/groups/:id/invite-candidates", async (c) => {
     .map((p) => {
       // null si alguien escondió la distancia: tampoco se usa para ordenar ni para el filtro de km
       const km = visibleKm(me, p);
-      return { p, km, age: p.showAge ? ageFrom(p.birthdate) : null, online: !p.incognito && isOnline(p.userId) };
+      return { p, km, age: p.showAge ? ageFrom(p.birthdate) : null, online: isPubliclyOnline(p) };
     })
     .filter(({ km, age, online }) =>
       (f.maxKm == null || (km != null && km <= f.maxKm)) &&

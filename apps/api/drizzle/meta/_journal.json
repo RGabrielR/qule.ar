@@ -225,6 +225,13 @@
       "when": 1795721905290,
       "tag": "0031_fotos_explicitas",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795821939771,
+      "tag": "0032_preferencia_de_estado_en_linea",
+      "breakpoints": true
     }
   ]
 }

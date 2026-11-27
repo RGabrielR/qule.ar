@@ -4,7 +4,7 @@ import { HTTPException } from "hono/http-exception";
 import { auth, type AuthUser } from "./auth.js";
 import { db, schema } from "./db/index.js";
 
-import { isOnline } from "./shared.js";
+import { isPubliclyOnline } from "./onlineStatus.js";
 
 const { profile, photo, block } = schema;
 
@@ -96,19 +96,16 @@ export async function authorsFor(ids: string[], options: { presence?: boolean; r
   const [profiles, firstPhoto] = await Promise.all([
     db.select({
       userId: profile.userId, displayName: profile.displayName, birthdate: profile.birthdate, showAge: profile.showAge,
-      ...(options.presence && { incognito: profile.incognito, suspendedAt: profile.suspendedAt, lastSeenAt: profile.lastSeenAt }),
+      ...(options.presence && { incognito: profile.incognito, suspendedAt: profile.suspendedAt, onlineStatus: profile.onlineStatus }),
     })
       .from(profile).where(inArray(profile.userId, unique)),
     firstPublicPhotoKeys(unique),
   ]);
   for (const p of profiles) {
-    let presence: "online" | "recent" | undefined;
-    if (options.presence && p.incognito === false && !p.suspendedAt && p.lastSeenAt) {
-      if (isOnline(p.userId)) presence = "online";
-      else if (Date.now() - p.lastSeenAt.getTime() < 15 * 60_000) presence = "recent";
-    }
+    const online = options.presence && p.onlineStatus &&
+      isPubliclyOnline({ ...p, onlineStatus: p.onlineStatus });
     map.set(p.userId, {
-      ...(presence && { presence }),
+      ...(online && { presence: "online" }),
       id: p.userId,
       name: p.displayName,
       age: p.showAge || options.realAge ? ageFrom(p.birthdate) : null,

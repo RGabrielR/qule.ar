@@ -8,7 +8,8 @@ import { db, schema } from "../db/index.js";
 import {
   ageFrom, authorsFor, blurFor, canOpenLinks, messageKey, imageUrl, isBlocked, mediaOut, newId, reactionsFor, requireProfile, requireUser, serializeDm, type AppEnv, type ReactionSummary,
 } from "../lib.js";
-import { emitToGroupRoom, emitToUser, isOnline } from "../realtime.js";
+import { emitToGroupRoom, emitToUser } from "../realtime.js";
+import { isPubliclyOnline } from "../onlineStatus.js";
 import { distanceLabel, visibleKm } from "../geo.js";
 import { deleteImage, deleteReportCapture, InvalidImageError, MAX_UPLOAD_BYTES, saveImage, saveReportCapture } from "../storage.js";
 import { albumAccess, markAlbumNoticesRevoked, recordView } from "./premium.js";
@@ -57,8 +58,7 @@ socialRoutes.get("/users/:id", async (c) => {
   const mine = c.get("profile")!;
   await recordView(me.id, mine.incognito, id);
   const km = id === me.id ? null : visibleKm(mine, p);
-  // En incógnito no se muestra si estás en línea
-  const on = !p.incognito && isOnline(id);
+  const online = isPubliclyOnline(p);
   const [fav] = await db.select().from(schema.favorite)
     .where(and(eq(schema.favorite.userId, me.id), eq(schema.favorite.favoriteId, id)));
   // Qué álbumes míos le compartí y hasta cuándo
@@ -83,8 +83,8 @@ socialRoutes.get("/users/:id", async (c) => {
     // Cuáles se ven borrosas, en el mismo orden (si eligió tapar las fotos explícitas; las propias nunca)
     photosBlur: photos.map((x) => blurFor(mine, id, x.explicit)),
     isMe: id === me.id,
-    online: on,
-    recent: !p.incognito && (on || Date.now() - p.lastSeenAt.getTime() < 15 * 60_000),
+    online,
+    recent: online,
     favorite: Boolean(fav),
     // Álbumes privados: cuántas fotos y videos hay en total y, de los que te compartieron, el contenido y hasta cuándo
     // los ves. Los nombres de los álbumes que no te compartieron no se muestran.
