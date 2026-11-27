@@ -190,6 +190,12 @@ button.chip:active:not(:disabled) { scale: 0.97; }
 /* ---------- Layout con barra de pestañas ---------- */
 .shell { --people-grid-columns: 3; height: 100%; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; border-inline: 1px solid var(--line); }
 @media (min-width: 560px) { .shell { --people-grid-columns: 4; } }
+/* Dentro de la app el documento nunca se desplaza ni rebota (lo que se desplaza es cada pantalla, por dentro), y
+   arrastrar desde el encabezado o la barra de pestañas no mueve nada: quedan fijos, como en una app instalada.
+   Los toques y los gestos propios (deslizar entre pestañas, tirar para actualizar) siguen andando, y el zoom con dos
+   dedos también: hay quien necesita ampliar (pinch-zoom frena solo el arrastre). */
+html:has(.shell), body:has(.shell) { overscroll-behavior: none; }
+.topbar, .tabbar { touch-action: pinch-zoom; }
 html:has(.shell--thread), body:has(.shell--thread) { overflow: hidden; overscroll-behavior: none; }
 .shell--thread { position: fixed; inset-inline: 0; top: var(--chat-top, 0px); height: var(--chat-height, 100dvh); overflow: clip; }
 .shell__main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -202,7 +208,9 @@ html:has(.shell--thread), body:has(.shell--thread) { overflow: hidden; overscrol
 .tabbar__item.active { color: var(--accent); }
 .tabbar__item .badge { position: absolute; top: 8px; left: calc(50% + 6px); }
 
-.page { flex: 1; overflow-y: auto; padding-bottom: 24px; }
+/* Las pantallas tampoco rebotan por dentro al llegar arriba o abajo: el encabezado va pegado adentro de la pantalla
+   y se movería con el rebote, y en el perfil se vería el fondo arriba de la foto. */
+.page { flex: 1; overflow-y: auto; padding-bottom: 24px; overscroll-behavior: none; }
 html:has(.nearby-page), .nearby-page { overscroll-behavior-y: none; }
 .nearby-refresh {
   display: flex; align-items: center; justify-content: center; overflow: clip;
@@ -1007,7 +1015,11 @@ button.quote:hover { background: var(--surface-3); }
 
 /* Términos y privacidad */
 .legal { min-height: 100%; max-width: 680px; margin: 0 auto; padding: 0 16px 48px; }
+/* Términos y Privacidad se desplazan con el documento: sin rebote, y su encabezado tampoco se arrastra (pero deja
+   hacer zoom con dos dedos) */
+html:has(.legal) { overscroll-behavior: none; }
 .legal__top {
+  touch-action: pinch-zoom;
   position: sticky; top: 0; z-index: var(--z-sticky); display: flex; align-items: center; gap: 8px;
   padding: calc(10px + env(safe-area-inset-top, 0px)) 0 10px; background: var(--bg); border-bottom: 1px solid var(--line);
 }
