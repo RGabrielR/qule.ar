@@ -132,6 +132,24 @@ describe("XMP (IPTC DigitalSourceType)", () => {
     assert.equal(await of("algorithmicMedia"), null);
     assert.equal(await of("computationalCapture"), null);
   });
+
+  test("un XMP armado para trabar la lectura se resuelve rápido (CodeQL: expresión regular polinómica)", async () => {
+    // Miles de claves sin cerrar: con un patrón sin límite, cada una se leía hasta el final del texto
+    for (const [label, bomb] of [
+      ["DigitalSourceType", "DigitalSourceType>" + "DigitalSourceType>!".repeat(15_000)],
+      ["Software", "Software>" + "Software>;".repeat(20_000)],
+      ["CreatorTool", 'CreatorTool="' + "x".repeat(200_000)],
+    ] as const) {
+      const jpeg = await base().jpeg().withXmp(`<x:xmpmeta xmlns:x="adobe:ns:meta/">${bomb}</x:xmpmeta>`).toBuffer();
+      const started = performance.now();
+      assert.equal(await detectAiProvenance(jpeg), null, label);
+      const ms = performance.now() - started;
+      assert.ok(ms < 500, `${label}: ${Math.round(ms)} ms`);
+    }
+    // Y lo legítimo, cerca de esas claves, se sigue leyendo
+    const real = `<x:xmpmeta xmlns:x="adobe:ns:meta/">${"Software>;".repeat(1_000)}<a Iptc4xmpExt:DigitalSourceType="${IPTC}/trainedAlgorithmicMedia"/></x:xmpmeta>`;
+    assert.equal((await detectAiProvenance(await base().jpeg().withXmp(real).toBuffer()))?.origin, "generated");
+  });
 });
 
 describe("Stable Diffusion y compañía", () => {

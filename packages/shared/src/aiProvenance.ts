@@ -269,17 +269,35 @@ function readWebp(b: Uint8Array, out: Metadata) {
 // ---------------------------------------------------------------------------------------------------------------
 // XMP, PNG text and EXIF
 
+// The XMP comes from the uploaded file, so it can be crafted. Each keyword is found first with a plain search and
+// only a short window after it is read: an unbounded pattern scanning to the end of the text from every occurrence
+// takes quadratic time ("DigitalSourceType>" repeated thousands of times without a closing "<").
+const XMP_WINDOW = 512;
+
+/** For each occurrence of `keyword`, the match of `after` right after it, reading at most XMP_WINDOW characters. */
+function* afterKeyword(text: string, keyword: RegExp, after: RegExp) {
+  for (const k of text.matchAll(keyword)) {
+    const start = k.index + k[0].length;
+    const m = after.exec(text.slice(start, start + XMP_WINDOW));
+    if (m) yield m;
+  }
+}
+
+// Attribute (DigitalSourceType="…"), element (<…DigitalSourceType>…<) or resource (rdf:resource="…")
+const SOURCE_TYPE_VALUE = /^(?:\s*=\s*"([^"]*)"|>\s*([^<\s]+)\s*<|\s+rdf:resource="([^"]*)")/;
+// Attribute (CreatorTool="…") or element (<…Software>…<)
+const TOOL_VALUE = /^(?:\s*=\s*"([^"]*)"|>([^<]*)<)/;
+
 function xmpOrigin(xmp: string): AiOrigin | null {
-  // Attribute (DigitalSourceType="…"), element (<…DigitalSourceType>…<) or resource (rdf:resource="…")
-  const re = /DigitalSourceType(?:\s*=\s*"([^"]*)"|>\s*([^<\s]+)\s*<|\s+rdf:resource="([^"]*)")/g;
   let best: AiOrigin | null = null;
-  for (const m of xmp.matchAll(re)) {
+  for (const m of afterKeyword(xmp, /DigitalSourceType/g, SOURCE_TYPE_VALUE)) {
     const origin = classifyDigitalSourceType(m[1] ?? m[2] ?? m[3]);
     if (origin === "generated") return origin;
     best ??= origin;
   }
   if (best) return best;
-  const tool = /(?:CreatorTool|Software)(?:\s*=\s*"([^"]*)"|>([^<]*)<)/.exec(xmp);
+  // The first tool that has a value, as before
+  const tool = afterKeyword(xmp, /CreatorTool|Software/g, TOOL_VALUE).next().value;
   return tool && GENERATOR_RE.test(tool[1] ?? tool[2] ?? "") ? "generated" : null;
 }
 
