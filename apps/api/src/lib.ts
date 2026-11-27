@@ -160,8 +160,10 @@ export function serializeDm(
     kind: m.kind === "text" && m.photoKey ? "photo" : m.kind,
     body: m.body,
     ...(m.albumId ? { albumId: m.albumId } : {}),
-    // Las fotos temporales nunca viajan en la lista: se piden una sola vez con /open
-    photo: m.expiring ? null : imageUrl(m.photoKey),
+    // Las fotos temporales nunca viajan en la lista: se piden una sola vez con /open.
+    // `?m=1`: antes de que el servidor escribiera la marca con quién mira (viewerMark.ts), estas fotos se guardaban
+    // un año en el celu sin volver a pedirse; con otra dirección se piden de nuevo y llegan marcadas
+    photo: m.expiring || !m.photoKey ? null : `${imageUrl(m.photoKey)}?m=1`,
     expiring: m.expiring,
     opened: Boolean(m.openedAt),
     readAt: m.readAt?.toISOString() ?? null,
