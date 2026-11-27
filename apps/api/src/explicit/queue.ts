@@ -70,7 +70,13 @@ export async function runQueue({ detect, perMinute, minScore, signal }: QueueOpt
   }
 }
 
-const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve) => {
-  const t = setTimeout(resolve, ms);
-  signal?.addEventListener("abort", () => { clearTimeout(t); resolve(); }, { once: true });
+/**
+ * Espera `ms`, o hasta que se corte `signal`. La escucha de "abort" se saca al vencer la espera: la cola corre todo el
+ * día con el mismo `signal`, y si quedaran colgadas se acumularían (Node avisa con MaxListenersExceededWarning).
+ */
+export const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve) => {
+  if (signal?.aborted) return resolve();
+  const onAbort = () => { clearTimeout(t); resolve(); };
+  const t = setTimeout(() => { signal?.removeEventListener("abort", onAbort); resolve(); }, ms);
+  signal?.addEventListener("abort", onAbort, { once: true });
 });

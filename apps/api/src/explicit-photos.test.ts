@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { getEventListeners } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -43,7 +44,16 @@ test("la marca de foto explícita solo tapa la foto a quien eligió no verlas", 
   const { nearbyRoutes } = await import("./routes/nearby.js");
   const { adminRoutes } = await import("./routes/admin.js");
   const { grant } = await import("./staff.js");
-  const { checkNext, pendingCount, runQueue } = await import("./explicit/queue.js");
+  const { checkNext, pendingCount, runQueue, sleep } = await import("./explicit/queue.js");
+
+  // Las esperas no dejan escuchas colgadas en el signal: la cola corre todo el día con el mismo
+  const longRun = new AbortController();
+  for (let i = 0; i < 20; i++) await sleep(1, longRun.signal);
+  assert.equal(getEventListeners(longRun.signal, "abort").length, 0);
+  const cut = sleep(60_000, longRun.signal);
+  longRun.abort();
+  await cut;
+  assert.equal(getEventListeners(longRun.signal, "abort").length, 0);
   const { testDetector } = await import("./explicit/index.js");
   const { eq } = await import("drizzle-orm");
   const app = new Hono().basePath("/api").route("/", meRoutes).route("/", socialRoutes).route("/", nearbyRoutes).route("/", adminRoutes);
