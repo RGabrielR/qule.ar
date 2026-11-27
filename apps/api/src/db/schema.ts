@@ -1,3 +1,4 @@
+import { DEFAULT_ONLINE_STATUS, ONLINE_STATUS_OPTIONS } from "@mortero/shared/onlineStatus";
 import {
   pgTable, text, timestamp, boolean, integer, date, jsonb, uniqueIndex, index, primaryKey, doublePrecision, real,
 } from "drizzle-orm/pg-core";
@@ -83,6 +84,7 @@ export const profile = pgTable("profile", {
   showDistance: boolean("show_distance").notNull().default(true),
   // Incógnito: no aparecés en la grilla, no se ve si estás en línea y tus visitas no quedan registradas
   incognito: boolean("incognito").notNull().default(false),
+  onlineStatus: text("online_status", { enum: ONLINE_STATUS_OPTIONS }).notNull().default(DEFAULT_ONLINE_STATUS),
   // Tapar las fotos explícitas de otras personas en la grilla y en los perfiles (ver src/explicit/). Prendido para
   // las cuentas nuevas; la migración 0031 lo deja apagado para las que ya existían.
   hideExplicit: boolean("hide_explicit").notNull().default(true),

@@ -1,3 +1,4 @@
+import type { OnlineStatus } from "@mortero/shared/onlineStatus";
 import type { HasPlace } from "./features/place/hasPlace";
 import { createAuthClient } from "better-auth/react";
 import { io, type Socket } from "socket.io-client";
@@ -123,6 +124,7 @@ export type Me = {
     hasLocation: boolean;
     showDistance: boolean;
     incognito: boolean;
+    onlineStatus: OnlineStatus;
     showAge: boolean;
     /** Tapar las fotos explícitas de los demás en la grilla y en los perfiles (ver features/explicit). */
     hideExplicit: boolean;

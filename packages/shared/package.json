@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./nearby": "./src/nearby.ts",
+    "./onlineStatus": "./src/onlineStatus.ts",
     "./realtime": "./src/realtime.ts"
   }
 }

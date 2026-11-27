@@ -1,0 +1,1 @@
+ALTER TABLE "profile" ADD COLUMN "online_status" text DEFAULT 'connected' NOT NULL;

@@ -1,3 +1,4 @@
+import { DEFAULT_ONLINE_STATUS } from "@mortero/shared/onlineStatus";
 import { DM_EVENTS, SOCKET_ERRORS } from "@mortero/shared/realtime";
 import type { Server as HttpServer } from "node:http";
 import { and, eq, inArray, lte } from "drizzle-orm";
@@ -22,7 +23,11 @@ export { isOnline } from "./shared.js";
 function touchLastSeen(userId: string) {
   db.update(schema.profile)
     .set({ lastSeenAt: new Date() })
-    .where(eq(schema.profile.userId, userId))
+    .where(and(
+      eq(schema.profile.userId, userId),
+      eq(schema.profile.incognito, false),
+      eq(schema.profile.onlineStatus, DEFAULT_ONLINE_STATUS),
+    ))
     .catch(() => {});
 }
 

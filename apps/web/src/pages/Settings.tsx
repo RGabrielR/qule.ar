@@ -1,3 +1,4 @@
+import type { OnlineStatus } from "@mortero/shared/onlineStatus";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link } from "react-router";
@@ -11,6 +12,7 @@ import { useRememberScroll } from "../features/navigation/viewMemory";
 import { disablePush, enablePush, pushHelp, pushState, testPush, type PushState } from "../push";
 import { getTheme, setTheme } from "../theme";
 import { staffNotices } from "../features/moderation/notices";
+import { OnlineStatusSelect } from "../features/privacy/OnlineStatusSelect";
 
 const NOTICES: { kind: NotifyKind; label: string; hint?: string }[] = [
   { kind: "reportes", label: "Respuestas de Moderación" },
@@ -166,7 +168,7 @@ export function Settings() {
     }
   }
 
-  function updatePrivacy(json: { incognito?: boolean; showDistance?: boolean; showAge?: boolean; hideExplicit?: boolean }) {
+  function updatePrivacy(json: { incognito?: boolean; showDistance?: boolean; showAge?: boolean; hideExplicit?: boolean; onlineStatus?: OnlineStatus }) {
     return change(async () => {
       await api("/me/privacy", { method: "PUT", json });
       await reload();
@@ -240,6 +242,8 @@ export function Settings() {
             />
             <span><b>Modo incógnito.</b> No aparecés en la grilla, nadie ve si estás en línea y tus visitas a perfiles no quedan registradas. Podés seguir chateando con quien quieras.</span>
           </label>
+          <OnlineStatusSelect value={me.profile.onlineStatus} incognito={me.profile.incognito}
+            busy={busy} onChange={(onlineStatus) => updatePrivacy({ onlineStatus })} />
           <label className="check">
             <input
               type="checkbox"
