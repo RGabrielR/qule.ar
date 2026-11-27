@@ -3,6 +3,7 @@ import type { Server as HttpServer } from "node:http";
 import { and, eq, inArray, lte } from "drizzle-orm";
 import { createAdapter } from "@socket.io/cluster-adapter";
 import { Server } from "socket.io";
+import { aiOut } from "./aiOrigin.js";
 import { auth } from "./auth.js";
 import { db, schema } from "./db/index.js";
 import { authorsFor, blockedWith, canOpenLinks, reactionsFor } from "./lib.js";
@@ -168,6 +169,7 @@ export async function serializeGroupMessages(rows: (typeof groupMessage.$inferSe
       body: r.status === "deleted" ? null : r.body,
       status: r.status,
       photo: r.photoKey ? (r.photoHiddenAt ? "hidden" : "available") : null,
+      photoAi: r.photoKey ? aiOut(r.photoAi) : null,
       scheduledAt: r.scheduledAt.toISOString(),
       author: author(r.userId),
       reactions: reactions.get(r.id) ?? [],

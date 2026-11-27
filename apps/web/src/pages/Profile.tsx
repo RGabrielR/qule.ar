@@ -207,8 +207,10 @@ function ProfileView({ id }: { id: string }) {
       <ProfileCover
         photos={p?.photos}
         photosBlur={p?.photosBlur}
+        photosAi={p?.photosAi}
         coverPhoto={swipe.current?.coverPhoto}
         coverBlur={swipe.current?.blur}
+        coverAi={swipe.current?.photoAi}
         displayName={p?.displayName}
         age={p?.age}
         status={p ?? undefined}

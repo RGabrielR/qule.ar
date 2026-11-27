@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, notInArray, or, sql
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { aiOriginOf, aiOut } from "../aiOrigin.js";
 import { nextSlot } from "../antispam.js";
 import { db, schema } from "../db/index.js";
 import { DEFAULT_SPAM_RULES } from "../db/schema.js";
@@ -271,6 +272,7 @@ groupRoutes.get("/groups/all", async (c) => {
     name: g.name,
     description: g.description,
     photo: thumbUrl(g.photoKey),
+    photoAi: aiOut(g.photoAi),
     memberCount: counts.get(g.id) ?? 0,
     role: roles.get(g.id) ?? null,
     pending: states.get(g.id)?.pending ?? false,
@@ -309,6 +311,7 @@ groupRoutes.get("/groups/:id", async (c) => {
     name: g.name,
     description: g.description,
     photo: thumbUrl(g.photoKey),
+    photoAi: aiOut(g.photoAi),
     isGeneral: g.isGeneral,
     rules: g.spamRules,
     role: member?.role ?? null,
@@ -359,19 +362,22 @@ groupRoutes.post("/groups/:id/photo", async (c) => {
   if (g.isGeneral) throw new HTTPException(400, { message: "El chat general usa el logo de la app" });
   if (member?.role !== "owner") throw new HTTPException(403, { message: "Solo el dueño puede cambiar la foto del grupo" });
   await limit(u.id, "upload");
-  const file = (await c.req.parseBody()).file;
+  const form = await c.req.parseBody();
+  const file = form.file;
   if (!(file instanceof File)) throw new HTTPException(400, { message: "Falta la foto" });
   if (file.type.startsWith("video/")) throw new HTTPException(400, { message: "La foto del grupo no puede ser un video" });
   if (file.size > MAX_UPLOAD_BYTES) throw new HTTPException(413, { message: "La foto pesa demasiado (máx. 12 MB)" });
+  const bytes = await file.arrayBuffer();
+  const photoAi = await aiOriginOf(bytes, form.ai);
   let key: string;
   try {
-    key = await saveImage(await file.arrayBuffer());
+    key = await saveImage(bytes);
   } catch {
     throw new HTTPException(400, { message: "No pudimos leer esa imagen" });
   }
-  await db.update(group).set({ photoKey: key }).where(eq(group.id, g.id));
+  await db.update(group).set({ photoKey: key, photoAi }).where(eq(group.id, g.id));
   if (g.photoKey) await deleteImageUnlessEvidence(g.photoKey);
-  return c.json({ photo: thumbUrl(key) });
+  return c.json({ photo: thumbUrl(key), photoAi });
 });
 
 /** Sacar la foto del grupo (vuelve a mostrar la inicial). */
@@ -380,7 +386,7 @@ groupRoutes.delete("/groups/:id/photo", async (c) => {
   const { group: g, member } = await membership(c.req.param("id"), u.id);
   if (member?.role !== "owner") throw new HTTPException(403, { message: "Solo el dueño puede cambiar la foto del grupo" });
   if (g.photoKey) {
-    await db.update(group).set({ photoKey: null }).where(eq(group.id, g.id));
+    await db.update(group).set({ photoKey: null, photoAi: null }).where(eq(group.id, g.id));
     await deleteImageUnlessEvidence(g.photoKey);
   }
   return c.json({ photo: null });
@@ -1164,7 +1170,8 @@ groupRoutes.post("/groups/:id/messages/photo", async (c) => {
     throw new HTTPException(403, { message: `Las cuentas nuevas no pueden mandar fotos en grupos durante las primeras ${newAccountHours} h` });
   }
   await limit(u.id, "upload");
-  const file = (await c.req.parseBody()).file;
+  const form = await c.req.parseBody();
+  const file = form.file;
   if (!(file instanceof File) || file.type.startsWith("video/")) {
     throw new HTTPException(400, { message: "Elegí una foto" });
   }
@@ -1172,9 +1179,12 @@ groupRoutes.post("/groups/:id/messages/photo", async (c) => {
   // Primero un control sin bloqueo, para no procesar la imagen si ya se sabe que no entra en la cola
   const early = await nextSlot({ groupId: g.id, userId: u.id, userCreatedAt: new Date(u.createdAt), rules: g.spamRules });
   if (!early.ok) throw new HTTPException(429, { message: early.error });
+  const bytes = await file.arrayBuffer();
+  // Antes de guardarla, que le borra los metadatos. `ai` lo manda la web si convirtió la foto (HEIC a JPG).
+  const photoAi = await aiOriginOf(bytes, form.ai);
   let photoKey: string;
   try {
-    photoKey = await saveImage(await file.arrayBuffer());
+    photoKey = await saveImage(bytes);
   } catch {
     throw new HTTPException(400, { message: "No pudimos leer esa imagen" });
   }
@@ -1192,7 +1202,7 @@ groupRoutes.post("/groups/:id/messages/photo", async (c) => {
     const now = new Date();
     const publishNow = slot.at.getTime() <= now.getTime();
     const [message] = await tx.insert(groupMessage).values({
-      id: newId(), groupId: g.id, userId: u.id, body: "", photoKey,
+      id: newId(), groupId: g.id, userId: u.id, body: "", photoKey, photoAi,
       status: publishNow ? "published" : "queued", scheduledAt: publishNow ? now : slot.at,
     }).returning();
     return message;

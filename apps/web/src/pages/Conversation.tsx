@@ -4,7 +4,7 @@ import { privateOutbox, newMessageKey, SendFailure, usePending, useTimeline } fr
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router";
-import { api, getSocket, upload, type ChatContact, type Dm, type ReactionEvent } from "../api";
+import { api, getSocket, upload, type AiOrigin, type ChatContact, type Dm, type ReactionEvent } from "../api";
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
@@ -21,6 +21,7 @@ import { batchReadReceipts } from "../features/messages/readReceipts";
 import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../features/messages/albumNotices";
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
 import { Watermark } from "../features/photos/Watermark";
+import { AiChip } from "../features/photos/AiChip";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
 import { useNewArrivals } from "../features/messages/useNewArrivals";
 import { useConversationActions } from "../features/messages/ConversationActions";
@@ -70,7 +71,7 @@ function ConversationThread({ id }: { id: string }) {
   const [msgMenu, setMsgMenu] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<Dm | null>(null);
   const [photoMessageId, setPhotoMessageId] = useState<string | null>(null);
-  const [viewer, setViewer] = useState<{ src: string; seconds: number } | null>(null);
+  const [viewer, setViewer] = useState<{ src: string; seconds: number; ai?: AiOrigin } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const messageActions = useMessageActions(msgMenu, setMsgMenu);
   const positionMessageMenu = useMessageMenuPosition(listRef, setMsgMenu);
@@ -302,7 +303,8 @@ function ConversationThread({ id }: { id: string }) {
     privateOutbox.add({
       scope,
       message: {
-        id: idempotencyKey, idempotencyKey, conversationId: id, senderId: myId, body, photo,
+        // Si la foto está hecha con IA lo dice el servidor al leer el archivo: hasta que confirma, sin chip
+        id: idempotencyKey, idempotencyKey, conversationId: id, senderId: myId, body, photo, photoAi: null,
         replyTo: quote ? { id: quote.id, authorName: quote.senderId === myId ? me?.profile?.displayName ?? me?.user.name ?? null : other?.name ?? null, body: quote.body ?? (quote.photo ? "Foto" : null) } : null,
         kind: file ? "photo" : "text", expiring, opened: false, readAt: null, createdAt: new Date().toISOString(), reactions: [],
       },
@@ -322,7 +324,7 @@ function ConversationThread({ id }: { id: string }) {
     try {
       const r = await api<{ photo: string; seconds: number }>(`/conversations/${id}/messages/${m.id}/open`, { method: "POST" });
       setMessages((list) => list.map((x) => (x.id === m.id ? { ...x, opened: true } : x)));
-      setViewer({ src: r.photo, seconds: r.seconds });
+      setViewer({ src: r.photo, seconds: r.seconds, ai: m.photoAi });
     } catch (err) {
       setError((err as Error).message);
       setMessages((list) => list.map((x) => (x.id === m.id ? { ...x, opened: true } : x)));
@@ -451,6 +453,7 @@ function ConversationThread({ id }: { id: string }) {
                     <button type="button" className={`bubble__photo-button${mine ? "" : " private-media"}`} aria-label="Abrir foto" onClick={() => setPhotoMessageId(m.id)}>
                       <img className="bubble__photo" src={m.photo} alt="" loading="lazy" onLoad={followLatestMessage} />
                       {!mine && <Watermark />}
+                      <AiChip origin={m.photoAi} />
                     </button>
                   )}
                   {m.body && <p>{m.canOpenLinks ? <MessageText text={m.body} /> : m.body}</p>}
@@ -581,14 +584,14 @@ function ConversationThread({ id }: { id: string }) {
         </div>
       </form>
 
-      {openPhoto && <ChatPhotoViewer src={openPhoto} watermark={openPhotoMessage?.senderId !== myId} onClose={() => setPhotoMessageId(null)} />}
+      {openPhoto && <ChatPhotoViewer src={openPhoto} ai={openPhotoMessage?.photoAi} watermark={openPhotoMessage?.senderId !== myId} onClose={() => setPhotoMessageId(null)} />}
       {dialog}
-      {viewer && <ExpiringViewer src={viewer.src} seconds={viewer.seconds} onClose={() => setViewer(null)} />}
+      {viewer && <ExpiringViewer src={viewer.src} seconds={viewer.seconds} ai={viewer.ai} onClose={() => setViewer(null)} />}
     </div>
   );
 }
 
-function ExpiringViewer({ src, seconds, onClose }: { src: string; seconds: number; onClose: () => void }) {
+function ExpiringViewer({ src, seconds, ai, onClose }: { src: string; seconds: number; ai?: AiOrigin; onClose: () => void }) {
   const [left, setLeft] = useState(seconds);
   useEffect(() => {
     const t = setInterval(() => setLeft((l) => l - 1), 1000);
@@ -603,6 +606,7 @@ function ExpiringViewer({ src, seconds, onClose }: { src: string; seconds: numbe
       <div className="viewer__photo">
         <img src={src} alt="Foto temporal" onContextMenu={(e) => e.preventDefault()} draggable={false} />
         <Watermark />
+        <AiChip origin={ai} />
       </div>
       <p className="viewer__note">Se cierra en {Math.max(left, 0)} s y no se puede volver a abrir. Tocá para cerrar.</p>
     </div>

@@ -61,7 +61,14 @@ export function closeSocket() {
 
 // ---------- Tipos ----------
 
-export type Author = { id: string; name: string; age: number | null; photo: string | null };
+/**
+ * Si una foto está hecha con IA según sus propios metadatos (ver packages/shared/src/aiProvenance.ts):
+ * "generated" (creada por IA, lleva el chip), "edited" (foto real retocada con IA) o null (no trae señal).
+ */
+export type AiOrigin = "generated" | "edited" | null;
+
+/** `photoAi` solo viene si la foto principal está hecha con IA. */
+export type Author = { id: string; name: string; age: number | null; photo: string | null; photoAi?: AiOrigin };
 
 /** Un toque recibido. */
 export type Toque = Author & { kind: string; at: string; unseen: boolean };
@@ -70,7 +77,7 @@ export type Toque = Author & { kind: string; at: string; unseen: boolean };
 export type ReactionEvent = { scope: "dm" | "group"; messageId: string; conversationId?: string; groupId?: string; reactions: { kind: string; by: string[] }[] };
 
 /** Una foto o video del perfil o del álbum. `thumb` es la miniatura (en los videos, un fotograma). */
-export type Media = { url: string; kind: "photo" | "video"; thumb: string | null; seconds: number | null };
+export type Media = { url: string; kind: "photo" | "video"; thumb: string | null; seconds: number | null; ai: AiOrigin };
 
 /** Alguien con acceso a uno de mis álbumes (una fila por persona y álbum). expiresAt null = sin límite. */
 export type AlbumGrant = Author & { expiresAt: string | null; albumId: string; albumName: string };
@@ -149,6 +156,8 @@ export type PublicProfile = Omit<Profile, "birthdate" | "age"> & {
   photos: string[];
   /** Cuáles de `photos` se ven borrosas, en el mismo orden. */
   photosBlur: boolean[];
+  /** Para cada foto de `photos`, si está hecha con IA. */
+  photosAi: AiOrigin[];
   isMe: boolean;
   online: boolean;
   recent: boolean;
@@ -172,6 +181,7 @@ export type NearbyPerson = {
   coverPhoto: string | null;
   /** La foto se ve borrosa: está marcada como explícita y elegiste taparlas. */
   blur: boolean;
+  photoAi: AiOrigin;
   online: boolean;
   recent: boolean;
   distance: string | null;
@@ -191,6 +201,8 @@ export type GroupMessage = {
   status: "queued" | "published" | "cancelled" | "deleted";
   scheduledAt: string;
   photo?: "available" | "hidden" | null;
+  /** Si la foto está hecha con IA. */
+  photoAi?: AiOrigin;
   // En los grupos solo se muestra nombre y foto, sin la edad
   author: Pick<Author, "id" | "name" | "photo">;
   replyTo: { id: string; authorName: string; body: string | null } | null;
@@ -213,6 +225,7 @@ export type Dm = {
   body: string | null;
   canOpenLinks?: boolean;
   photo: string | null;
+  photoAi: AiOrigin;
   expiring: boolean;
   opened: boolean;
   readAt: string | null;
@@ -249,6 +262,7 @@ export type GroupListing = {
   name: string;
   description: string | null;
   photo: string | null;
+  photoAi?: AiOrigin;
   memberCount: number;
   role: Role | null;
   pending: boolean;

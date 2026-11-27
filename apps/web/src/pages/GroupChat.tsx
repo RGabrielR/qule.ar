@@ -26,6 +26,8 @@ import { preparePhotoForUpload } from "../features/photos/preparePhoto";
 import { useSectionBack } from "../useSectionBack";
 import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 import { useNewArrivals } from "../features/messages/useNewArrivals";
+import { AiChip } from "../features/photos/AiChip";
+import { aiFieldsFor } from "../features/photos/aiOrigin";
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
@@ -511,7 +513,8 @@ function GroupChatThread({ id }: { id: string }) {
     setSendingPhoto(true);
     setNotice(null);
     try {
-      const { message } = await upload<{ message: GroupMessage }>(`/groups/${id}/messages/photo`, await preparePhotoForUpload(file));
+      // Si la convierte (HEIC a JPG) se pierden los metadatos: la marca de IA se lee del original
+      const { message } = await upload<{ message: GroupMessage }>(`/groups/${id}/messages/photo`, await preparePhotoForUpload(file), await aiFieldsFor(file));
       jumpToEnd();
       if (message.status === "queued") {
         setQueued((list) => list.some((m) => m.id === message.id) ? list : [...list, message]);
@@ -604,6 +607,7 @@ function GroupChatThread({ id }: { id: string }) {
         </header>
         <div className="preview">
           <GroupAvatar name={info.name} photo={info.photo} general={info.isGeneral} size="big" />
+          {info.photo && <AiChip origin={info.photoAi} className="ai-chip--inline" />}
           <h2>{info.name}</h2>
           {info.description && <p className="muted group-description">{info.description}</p>}
           <p className="muted small">{info.memberCount} {info.memberCount === 1 ? "miembro" : "miembros"} · {rulesText}</p>
@@ -702,6 +706,7 @@ function GroupChatThread({ id }: { id: string }) {
                 )}
                 {info.photoPilot && m.photo === "available" && (
                   <div className="row">
+                    <AiChip origin={m.photoAi} className="ai-chip--row" />
                     <button type="button" className="btn btn--small" onClick={() => setViewingPhoto(m.id)}>Ver foto</button>
                     {!mine && <button type="button" className="btn btn--small btn--ghost" onClick={() => setReporting(m)}>Reportar foto</button>}
                   </div>
@@ -833,7 +838,12 @@ function GroupChatThread({ id }: { id: string }) {
       </form>
 
       {info.photoPilot && viewingPhoto && visibleMessages.some((m) => m.id === viewingPhoto && m.photo === "available") && (
-        <ChatPhotoViewer src={`/api/groups/${id}/messages/${viewingPhoto}/photo`} onClose={() => setViewingPhoto(null)} watermark />
+        <ChatPhotoViewer
+          src={`/api/groups/${id}/messages/${viewingPhoto}/photo`}
+          ai={visibleMessages.find((m) => m.id === viewingPhoto)?.photoAi}
+          onClose={() => setViewingPhoto(null)}
+          watermark
+        />
       )}
       {pollOpen && (
         <CreatePollDialog groupName={info.name} onCreate={createPoll} onClose={() => setPollOpen(false)} />

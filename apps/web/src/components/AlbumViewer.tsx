@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 import type { Media } from "../api";
 import { Watermark } from "../features/photos/Watermark";
+import { AiChip } from "../features/photos/AiChip";
 
 /** "por 3 h más", "hasta el lunes 14:30", etc. Para mostrar cuánto falta para que venza un acceso. */
 export function untilLabel(iso: string | null) {
@@ -231,6 +232,7 @@ export function AlbumViewer({ items, start = 0, title, onClose, watermark = fals
           })}
         </div>
         {watermark && <Watermark />}
+        <AiChip origin={items[i]?.ai} className="ai-chip--viewer" />
       </div>
       {i > 0 && (
         <button className="lightbox__nav lightbox__nav--prev" onClick={() => go(-1)} aria-label="Anterior">‹</button>
@@ -250,6 +252,7 @@ export function AlbumGrid({ items, onOpen, watermark = false }: { items: Media[]
         <button key={m.url} className="album__cell" onClick={() => onOpen(i)} aria-label={`${m.kind === "video" ? "Video" : "Foto"} ${i + 1}`}>
           {m.thumb ? <img src={m.thumb} alt="" loading="lazy" draggable={false} /> : <span className="album__nothumb" />}
           {m.kind === "video" && <span className="album__play">▶ {duration(m.seconds)}</span>}
+          <AiChip origin={m.ai} compact />
         </button>
       ))}
       {watermark && <Watermark />}

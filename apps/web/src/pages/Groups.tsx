@@ -4,6 +4,7 @@ import { loadedCount, useRememberScroll } from "../features/navigation/viewMemor
 import { api, getSocket, ROLE_LABEL, upload, type GroupListing } from "../api";
 import { GroupAvatar } from "../components/GroupAvatar";
 import { PhotoPicker } from "../components/GroupPhoto";
+import { aiFieldsFor } from "../features/photos/aiOrigin";
 import { preparePhotoForUpload } from "../features/photos/preparePhoto";
 import { GROUP_EVENTS, useTabData } from "../features/navigation/tabData";
 import { usePullToRefresh } from "../features/navigation/pullToRefresh";
@@ -224,7 +225,7 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
     try {
       const { id } = await api<{ id: string }>("/groups", { method: "POST", json: { name, description: description || null } });
       // El grupo ya está creado: si la foto falla, se puede volver a poner desde la info del grupo
-      if (photo) await upload(`/groups/${id}/photo`, await preparePhotoForUpload(photo)).catch(() => {});
+      if (photo) await upload(`/groups/${id}/photo`, await preparePhotoForUpload(photo), await aiFieldsFor(photo)).catch(() => {});
       refreshGroups("refresh");
       nav(`/grupos/${id}`);
     } catch (err) {

@@ -92,8 +92,8 @@ export function GroupEdit() {
         <>
           <section className="section group-head" aria-label="Foto del grupo">
             <GroupAvatar name={current.name} photo={current.photo} size="big" />
-            <GroupPhotoSetting key={id} groupId={id} photo={current.photo} onChange={(photo) => {
-              setGroup((prev) => prev?.id === id ? { ...prev, photo } : prev);
+            <GroupPhotoSetting key={id} groupId={id} photo={current.photo} onChange={(photo, photoAi) => {
+              setGroup((prev) => prev?.id === id ? { ...prev, photo, photoAi } : prev);
               refreshGroups("refresh");
             }} />
           </section>

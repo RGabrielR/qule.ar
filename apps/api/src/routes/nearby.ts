@@ -261,6 +261,7 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
         name: d.displayName,
         age: d.showAge ? ageFrom(d.birthdate) : null,
         photo: thumbUrl(cover?.key),
+        photoAi: cover?.ai ?? null,
         coverPhoto: imageUrl(cover?.key),
         // La foto se ve borrosa (eligió tapar las explícitas). No cambia el orden ni quién aparece.
         blur: blurFor({ userId: me.userId, hideExplicit: me.hideExplicit ?? false }, id, cover?.explicit ?? false),
