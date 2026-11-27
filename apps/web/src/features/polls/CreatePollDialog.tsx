@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CloseIcon, PollIcon } from "../../components/Icons";
 import { DialogFocus } from "../../components/DialogFocus";
+import { useSheetExit } from "../../components/useSheetExit";
 import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, POLL_OPTION_MAX, POLL_QUESTION_MAX } from "./polls";
 
 /** Botón del composer del grupo para abrir una encuesta. */
@@ -25,6 +26,7 @@ export function CreatePollDialog({ groupName, onCreate, onClose }: {
   const [options, setOptions] = useState(["", ""]);
   const [state, setState] = useState<"idle" | "sending">("idle");
   const [error, setError] = useState<string | null>(null);
+  const { close, backdrop } = useSheetExit(onClose);
 
   const filled = options.map((o) => o.trim());
   const repeated = new Set(filled.map((o) => o.toLocaleLowerCase("es-AR"))).size !== filled.length;
@@ -42,7 +44,7 @@ export function CreatePollDialog({ groupName, onCreate, onClose }: {
     setError(null);
     try {
       await onCreate(question.trim(), filled);
-      onClose();
+      close();
     } catch (err) {
       setError((err as Error).message || "No se pudo publicar la encuesta. Probá de nuevo.");
       setState("idle");
@@ -50,9 +52,9 @@ export function CreatePollDialog({ groupName, onCreate, onClose }: {
   }
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
+    <div className="sheet-backdrop" {...backdrop}>
       <form className="sheet poll-form" role="dialog" aria-modal aria-labelledby="poll-title" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <DialogFocus onClose={onClose} />
+        <DialogFocus onClose={close} />
         <h2 id="poll-title">Nueva encuesta en #{groupName}</h2>
         <label className="field">
           <span>Pregunta</span>
@@ -85,7 +87,7 @@ export function CreatePollDialog({ groupName, onCreate, onClose }: {
         {repeated && filled.every(Boolean) && <p className="error">Hay opciones repetidas.</p>}
         {error && <p className="error" role="alert">{error}</p>}
         <div className="row">
-          <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+          <button type="button" className="btn" onClick={() => close()}>Cancelar</button>
           <button className="btn btn--primary" disabled={!ready || state === "sending"}>
             {state === "sending" ? "Publicando…" : "Publicar"}
           </button>

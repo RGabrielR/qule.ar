@@ -4,6 +4,7 @@ import { useMe } from "../App";
 import { BackIcon } from "../components/Icons";
 import { Markdown } from "../components/Markdown";
 import { Wordmark } from "../components/Wordmark";
+import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 import terminos from "../legal/terminos.md?raw";
 import privacidad from "../legal/privacidad.md?raw";
 
@@ -13,15 +14,16 @@ const DOCS = { terminos, privacidad };
 export function Legal({ doc }: { doc: keyof typeof DOCS }) {
   const nav = useNavigate();
   const { me } = useMe();
+  const enter = usePageTransition();
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [doc]);
 
   return (
-    <div className="legal">
+    <div className={`legal ${enter}`}>
       <header className="legal__top">
-        <button className="iconbtn" aria-label="Volver" onClick={() => (history.length > 1 ? nav(-1) : nav("/"))}>
+        <button className="iconbtn" aria-label="Volver" onClick={() => { markBack(); if (history.length > 1) nav(-1); else nav("/"); }}>
           <BackIcon />
         </button>
         <Wordmark />

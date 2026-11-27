@@ -9,7 +9,7 @@ import { PERMISSION_LABELS, toggleStaffPermission } from "../staff";
 import { AccountSearch } from "../features/moderation/AccountSearch";
 import { PeoplePanel } from "../features/moderation/PeoplePanel";
 import { ModerationNotices } from "../features/moderation/ModerationNotices";
-import { ReportSpamAlerts } from "../features/moderation/ReportSpamAlerts";
+import { ReportSpamAlerts, type ReportSpamData } from "../features/moderation/ReportSpamAlerts";
 import { ReportGroups } from "../features/moderation/ReportGroups";
 import { ExplicitReviews } from "../features/moderation/ExplicitReviews";
 import type { Report } from "../features/moderation/types";
@@ -25,7 +25,7 @@ type Suspended = Author & {
 };
 type RemovedGroup = { id: string; name: string; description: string | null; removedAt: string; reason: string | null; purgeAt: string };
 type Stats = { users: number; groups: number; openReports: number; suspended: number; openAppeals: number };
-type Tab = "open" | "closed" | "suspended" | "appeals" | "explicit" | "people" | "groups" | "team" | "log";
+type Tab = "open" | "closed" | "reporters" | "suspended" | "appeals" | "explicit" | "people" | "groups" | "team" | "log";
 
 type AdminAppeal = {
   id: string;
@@ -50,6 +50,8 @@ type LogEntry = { id: string; actor: string; action: string; targetId: string | 
 const TABS: { id: Tab; label: string; need: StaffAccess[] }[] = [
   { id: "open", label: "Abiertos", need: ["reports", "sanctions"] },
   { id: "closed", label: "Resueltos", need: ["reports", "sanctions"] },
+  // Aparte de Abiertos: quien reporta de mala fe es un caso raro y no tiene que tapar los reportes
+  { id: "reporters", label: "Quién reporta", need: ["owner", "sanctions"] },
   { id: "appeals", label: "Revisiones", need: ["appeals"] },
   { id: "suspended", label: "Suspendidas", need: ["sanctions", "appeals"] },
   { id: "explicit", label: "Fotos tapadas", need: ["reports"] },
@@ -77,6 +79,9 @@ export function Admin() {
   const [log, setLog] = useState<LogEntry[] | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [reports, setReports] = useState<Report[] | null>(null);
+  /** Quién reporta: se carga siempre, para mostrar en la pestaña cuántas cuentas hay para mirar. */
+  const [reporters, setReporters] = useState<ReportSpamData | null>(null);
+  const seesReporters = has("owner", "sanctions");
   const [suspended, setSuspended] = useState<Suspended[] | null>(null);
   const [removed, setRemoved] = useState<RemovedGroup[] | null>(null);
   const [suspending, setSuspending] = useState<SuspendTarget | null>(null);
@@ -91,7 +96,12 @@ export function Admin() {
   // Un 403 de una acción (por ejemplo, tocar los permisos de la administración general) es solo un error.
   const load = useCallback(async () => {
     try {
-      setStats(await api<Stats>("/admin/stats"));
+      const [nextStats, nextReporters] = await Promise.all([
+        api<Stats>("/admin/stats"),
+        seesReporters ? api<ReportSpamData>("/admin/report-spam").catch(() => null) : null,
+      ]);
+      setStats(nextStats);
+      setReporters(nextReporters);
       if (tab === "suspended") setSuspended(await api<Suspended[]>("/admin/suspended"));
       else if (tab === "appeals") setAppeals(await api<AdminAppeal[]>(`/admin/appeals?status=${appealsClosed ? "closed" : "open"}`));
       else if (tab === "team") setTeam(await api<TeamMember[]>("/admin/team"));
@@ -99,6 +109,7 @@ export function Admin() {
       else if (tab === "people") { /* La pestaña Personas carga sus propios datos */ }
       else if (tab === "explicit") { /* Fotos tapadas también */ }
       else if (tab === "groups") setRemoved(await api<RemovedGroup[]>("/admin/groups/removed"));
+      else if (tab === "reporters") { /* Ya se cargó arriba */ }
       else setReports(await api<Report[]>(`/admin/reports?status=${tab}`));
     } catch (e) {
       if (e instanceof ApiError && e.status === 403) setDenied(true);
@@ -106,7 +117,7 @@ export function Admin() {
     } finally {
       setLoaded(true);
     }
-  }, [tab, appealsClosed]);
+  }, [tab, appealsClosed, seesReporters]);
 
   useEffect(() => {
     load();
@@ -163,14 +174,19 @@ export function Admin() {
 
       <div className="tabs tabs--scroll" role="tablist">
         {tabs.map((t) => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
+          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>
+            {t.label}
+            {t.id === "reporters" && reporters?.alerts.length ? (
+              <b className="badge tabs__badge" aria-label={`${reporters.alerts.length} para mirar`}>{reporters.alerts.length}</b>
+            ) : null}
+          </button>
         ))}
       </div>
 
       {error && <div className="notice notice--error" role="alert">{error}</div>}
 
-      {tab === "open" && (has("owner") || has("sanctions")) && (
-        <ReportSpamAlerts act={act} onSuspend={(t) => setSuspending({ ...t, preventive: false })} refresh={reports} />
+      {tab === "reporters" && reporters && (
+        <ReportSpamAlerts data={reporters} act={act} onSuspend={(t) => setSuspending({ ...t, preventive: false })} />
       )}
 
       {(tab === "open" || tab === "closed") && reports && (

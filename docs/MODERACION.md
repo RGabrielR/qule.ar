@@ -74,7 +74,7 @@ La lista está en `MINOR_SIGNALS` (`apps/api/src/moderation.ts`). Si aparece una
 
 ## Reportes de mala fe
 
-Hay quien reporta mucho y sin fundamento: para tapar los reportes de verdad, para llenar de avisos a moderación o para intentar que oculten o suspendan a alguien. Arriba de los reportes abiertos, quien tiene el permiso Suspensiones (o la administración general) ve **Quién reporta**: cuentas que reportan de una forma para mirar, con sus números de los últimos 90 días (cuántos reportes, cuántos descartados, cuántos con una medida y cuántos sin revisar) y por qué aparecen:
+Hay quien reporta mucho y sin fundamento: para tapar los reportes de verdad, para llenar de avisos a moderación o para intentar que oculten o suspendan a alguien. Quien tiene el permiso Suspensiones (o la administración general) ve la pestaña **Quién reporta**, aparte de Abiertos para que no tape los reportes (la pestaña muestra cuántas cuentas hay para mirar): cuentas que reportan de una forma para mirar, con sus números de los últimos 90 días (cuántos reportes, cuántos descartados, cuántos con una medida y cuántos sin revisar) y por qué aparecen:
 
 - reportó a **5 o más personas o grupos distintos en una hora**;
 - de sus reportes ya revisados (al menos 5), **se descartó el 80 % o más**;
