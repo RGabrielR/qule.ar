@@ -1,3 +1,5 @@
+import { ZODIAC_SIGNS } from "@mortero/shared/zodiac";
+import { zodiacLabel } from "../features/profile/zodiac";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router";
@@ -18,13 +20,15 @@ import { BODY_TYPES, HIV_STATUS, LOOKING_FOR, POSITIONS, PRONOUNS, RELATIONSHIP,
 
 type Form = Omit<Profile, "birthdate" | "age">;
 
-function Select({ label, value, options, onChange }: { label: string; value: string | null; options: string[]; onChange: (v: string | null) => void }) {
+function Select<T extends string>({ label, value, options, onChange, getLabel = (option) => option }: {
+  label: string; value: T | null; options: readonly T[]; onChange: (value: T | null) => void; getLabel?: (option: T) => string;
+}) {
   return (
     <label className="field">
       <span>{label}</span>
-      <select className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}>
+      <select className="input" value={value ?? ""} onChange={(e) => onChange(options.find((option) => option === e.target.value) ?? null)}>
         <option value="">Sin especificar</option>
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+        {options.map((o) => <option key={o} value={o}>{getLabel(o)}</option>)}
       </select>
     </label>
   );
@@ -75,7 +79,8 @@ function profileForm(p: Profile): Form {
   return {
     displayName: p.displayName, about: p.about, heightCm: p.heightCm, weightKg: p.weightKg,
     bodyType: p.bodyType, position: p.position, tribes: p.tribes, lookingFor: p.lookingFor,
-    relationship: p.relationship, pronouns: p.pronouns, hasPlace: p.hasPlace, hivStatus: p.hivStatus, lastTested: p.lastTested,
+    relationship: p.relationship, pronouns: p.pronouns, zodiacSign: p.zodiacSign,
+    hasPlace: p.hasPlace, hivStatus: p.hivStatus, lastTested: p.lastTested,
   };
 }
 
@@ -527,6 +532,7 @@ function ProfileEditor({ profile, photos, albums, reload }: { profile: Profile; 
           <Select label="Relación" value={form.relationship} options={RELATIONSHIP} onChange={(v) => set("relationship", v)} />
           <Select label="Pronombres" value={form.pronouns} options={PRONOUNS} onChange={(v) => set("pronouns", v)} />
           <HasPlaceSelect value={form.hasPlace} onChange={(v) => set("hasPlace", v)} />
+          <Select label="Signo" value={form.zodiacSign} options={ZODIAC_SIGNS} getLabel={zodiacLabel} onChange={(v) => set("zodiacSign", v)} />
         </div>
         <MultiChips label="Tribus" value={form.tribes} options={TRIBES} onChange={(v) => set("tribes", v)} />
         <MultiChips label="Busco" value={form.lookingFor} options={LOOKING_FOR} onChange={(v) => set("lookingFor", v)} />

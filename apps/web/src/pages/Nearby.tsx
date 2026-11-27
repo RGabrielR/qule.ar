@@ -1,3 +1,5 @@
+import { ZODIAC_SIGNS, type ZodiacSign } from "@mortero/shared/zodiac";
+import { zodiacLabel } from "../features/profile/zodiac";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type TouchEvent } from "react";
 import { NEARBY_PAGE_SIZE } from "@mortero/shared/nearby";
 import { InstallBanner } from "../components/InstallBanner";
@@ -22,11 +24,11 @@ export type Filters = {
   ageMin?: number; ageMax?: number;
   heightMin?: number; heightMax?: number;
   weightMin?: number; weightMax?: number;
-  bodyType: string[]; position: string[]; tribes: string[]; lookingFor: string[]; relationship: string[]; hasPlace: HasPlace[];
+  bodyType: string[]; position: string[]; tribes: string[]; lookingFor: string[]; relationship: string[]; hasPlace: HasPlace[]; zodiacSign: ZodiacSign[];
   online: boolean; withPhoto: boolean; favorites: boolean;
 };
 
-export const EMPTY: Filters = { bodyType: [], position: [], tribes: [], lookingFor: [], relationship: [], hasPlace: [], online: false, withPhoto: false, favorites: false };
+export const EMPTY: Filters = { bodyType: [], position: [], tribes: [], lookingFor: [], relationship: [], hasPlace: [], zodiacSign: [], online: false, withPhoto: false, favorites: false };
 const STORE_KEY = "mortero:filtros";
 
 function loadFilters(): Filters {
@@ -51,7 +53,7 @@ export function toQuery(f: Filters) {
   for (const k of ["ageMin", "ageMax", "heightMin", "heightMax", "weightMin", "weightMax"] as const) {
     if (f[k] != null) q.set(k, String(f[k]));
   }
-  for (const k of ["bodyType", "position", "tribes", "lookingFor", "relationship", "hasPlace"] as const) {
+  for (const k of ["bodyType", "position", "tribes", "lookingFor", "relationship", "hasPlace", "zodiacSign"] as const) {
     if (f[k].length) q.set(k, f[k].join(","));
   }
   if (f.online) q.set("online", "1");
@@ -65,7 +67,7 @@ export function countFilters(f: Filters) {
   if (f.ageMin != null || f.ageMax != null) n++;
   if (f.heightMin != null || f.heightMax != null) n++;
   if (f.weightMin != null || f.weightMax != null) n++;
-  n += [f.bodyType, f.position, f.tribes, f.lookingFor, f.relationship, f.hasPlace].filter((x) => x.length).length;
+  n += [f.bodyType, f.position, f.tribes, f.lookingFor, f.relationship, f.hasPlace, f.zodiacSign].filter((x) => x.length).length;
   if (f.online) n++;
   if (f.withPhoto) n++;
   if (f.favorites) n++;
@@ -488,7 +490,9 @@ function RangeRow({ label, unit, min, max, onChange, lo, hi }: {
   );
 }
 
-function Chips({ label, options, value, onChange }: { label: string; options: string[]; value: string[]; onChange: (v: string[]) => void }) {
+function Chips<T extends string>({ label, options, value, onChange, getLabel = (option) => option }: {
+  label: string; options: readonly T[]; value: T[]; onChange: (value: T[]) => void; getLabel?: (option: T) => string;
+}) {
   return (
     <fieldset className="field">
       <legend>{label}</legend>
@@ -497,7 +501,7 @@ function Chips({ label, options, value, onChange }: { label: string; options: st
           const on = value.includes(o);
           return (
             <button type="button" key={o} className={`chip ${on ? "chip--on" : ""}`} aria-pressed={on} onClick={() => onChange(on ? value.filter((x) => x !== o) : [...value, o])}>
-              {o}
+              {getLabel(o)}
             </button>
           );
         })}
@@ -541,6 +545,7 @@ export function FilterSheet({ initial, onApply, onClose }: { initial: Filters; o
           <Chips label="Busca" options={LOOKING_FOR} value={f.lookingFor} onChange={(v) => set("lookingFor", v)} />
           <Chips label="Relación" options={RELATIONSHIP} value={f.relationship} onChange={(v) => set("relationship", v)} />
           <HasPlaceChips value={f.hasPlace} onChange={(v) => set("hasPlace", v)} />
+          <Chips label="Signo" options={ZODIAC_SIGNS} getLabel={zodiacLabel} value={f.zodiacSign} onChange={(v) => set("zodiacSign", v)} />
           <p className="muted small">Los filtros de altura, peso y demás dejan afuera a quien no completó ese dato.</p>
         </div>
         <div className="row sheet__foot">
