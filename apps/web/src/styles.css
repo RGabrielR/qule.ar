@@ -292,7 +292,7 @@ html:has(.pull-refresh), .page:has(> .pull-refresh) { overscroll-behavior-y: non
 
 /* ---------- Chat de grupo ---------- */
 .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.chat__list { flex: 1; overflow-y: auto; padding: 12px 4px 8px; overscroll-behavior: contain; }
+.chat__list { flex: 1; overflow-x: hidden; overflow-y: auto; padding: 12px 4px 8px; overscroll-behavior: contain; }
 .chat__jump { position: relative; height: 0; flex: none; }
 .chat__jump-button { position: absolute; right: 8px; bottom: 4px; width: 48px; height: 44px; padding: 0; }
 .chat__jump-button svg { box-sizing: content-box; width: 18px; height: 18px; padding: 4px 11px; border: 1px solid var(--accent-line); border-radius: var(--radius-pill); background: var(--surface); color: var(--accent-2); }
@@ -301,6 +301,17 @@ html:has(.pull-refresh), .page:has(> .pull-refresh) { overscroll-behavior-y: non
 .chat__older { display: block; margin: 0 auto 12px; }
 .gmsg { display: grid; grid-template-columns: 44px 1fr; gap: 0 8px; padding: 6px 8px 2px; border-radius: var(--radius-md); position: relative; }
 .message-gesture { -webkit-touch-callout: none; }
+/* Deslizar para responder (ver useSwipeToReply): se arrastra la fila entera, que sigue al dedo y al soltar vuelve */
+.message-swipe { position: relative; touch-action: pan-y; }
+.message-swipe--dragging { user-select: none; -webkit-user-select: none; }
+.message-swipe--snap, .message-swipe--snap > .swipe-reply { transition: translate var(--dur-base) var(--ease-sheet), opacity var(--dur-fast) var(--ease-out), scale var(--dur-base) var(--ease-sheet); }
+/* En el chat privado, la fila del globo: ocupa todo el ancho y el globo se alinea adentro como antes */
+.bubble-row { display: flex; flex-direction: column; }
+.swipe-reply {
+  position: absolute; right: calc(100% + 10px); top: 50%; translate: 0 -50%; width: 32px; height: 32px;
+  display: grid; place-items: center; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--text);
+  opacity: 0; scale: 0.5; pointer-events: none;
+}
 .bubble > p, .bubble time, .gmsg__body, .gmsg__time,
 .message-gesture > .menu, .message-gesture > .menu * { user-select: none; -webkit-user-select: none; }
 @media (hover: hover) and (pointer: fine) { .gmsg:hover { background: var(--surface); } }
@@ -924,7 +935,11 @@ button.quote:hover { background: var(--surface-3); }
 .quote--static { margin: 0; max-width: none; }
 /* Sobre la burbuja propia la brasa se pierde: el borde de la cita va en blanco. */
 .bubble--mine .quote { border-left-color: var(--quote-line); }
-.composer__reply { display: flex; gap: 6px; align-items: center; padding: 0 0 8px; }
+.composer__reply { display: flex; gap: 6px; align-items: center; padding: 0 0 8px; overflow: hidden; animation: reply-in var(--dur-base) var(--ease-sheet); }
+/* El mensaje a responder se abre lugar arriba del campo de texto y sube con un fundido (lleva key: se repite al
+   cambiar de mensaje) */
+@keyframes reply-in { from { max-height: 0; padding-bottom: 0; opacity: 0; translate: 0 8px; } to { max-height: 80px; } }
+@media (prefers-reduced-motion: reduce) { .composer__reply { animation-name: fade-in; } }
 .gmsg--flash { animation: gmsg-flash 1.4s ease; }
 @keyframes gmsg-flash { 0%, 40% { background: var(--accent-soft); } 100% { background: transparent; } }
 

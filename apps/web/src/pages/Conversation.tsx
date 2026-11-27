@@ -8,10 +8,11 @@ import { api, getSocket, upload, type ChatContact, type Dm, type ReactionEvent }
 import { myReaction, ReactionBar, ReactionPicker } from "../components/Reactions";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
-import { BackIcon, DotsIcon, ImageIcon, LockIcon, SendIcon, TimerIcon } from "../components/Icons";
+import { BackIcon, DotsIcon, ImageIcon, LockIcon, ReplyIcon, SendIcon, TimerIcon } from "../components/Icons";
 import { useSectionBack } from "../useSectionBack";
 import { usePageTransition } from "../features/navigation/pageTransition";
 import { useMessageActions } from "../features/chat/useMessageActions";
+import { useSwipeToReply } from "../features/chat/useSwipeToReply";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
 import { useDraft } from "../features/chat/useDraft";
@@ -73,6 +74,7 @@ function ConversationThread({ id }: { id: string }) {
   const [viewer, setViewer] = useState<{ src: string; seconds: number } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const messageActions = useMessageActions(msgMenu, setMsgMenu);
+  const swipeToReply = useSwipeToReply();
   const positionMessageMenu = useMessageMenuPosition(listRef, setMsgMenu);
   const stickToBottom = useRef(true);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -490,7 +492,13 @@ function ConversationThread({ id }: { id: string }) {
           return (
             <Fragment key={m.idempotencyKey ?? m.id}>
               {startsDay && <time className="chat__date" dateTime={day}>{day === today ? "Hoy" : chatDateFormat.format(sentAt)}</time>}
-              {bubble}
+              {gesture ? (
+                // Se desliza la fila entera para responder, no solo el globo
+                <div className="bubble-row message-swipe" {...swipeToReply(() => startReply(m))}>
+                  <span className="swipe-reply" aria-hidden="true"><ReplyIcon /></span>
+                  {bubble}
+                </div>
+              ) : bubble}
             </Fragment>
           );
         })}
@@ -519,7 +527,7 @@ function ConversationThread({ id }: { id: string }) {
           <SavedPhrasesMenu text={text} onClose={() => setPhrasesOpen(false)} onPick={(p) => { onType(p); setPhrasesOpen(false); }} />
         )}
         {replyTo && (
-          <div className="composer__reply">
+          <div className="composer__reply" key={replyTo.id}>
             <div className="quote quote--static">
               <span className="quote__name">Respondiendo a {replyTo.senderId === myId ? "tu mensaje" : other?.name ?? "ese mensaje"}</span>
               <span className="quote__body">{replyPreview(replyTo)}</span>

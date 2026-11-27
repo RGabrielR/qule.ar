@@ -6,6 +6,10 @@ const base = {
 export const GroupIcon = () => (
   <svg {...base}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" /><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c1.9.7 3.1 2.4 3.5 5.2" /></svg>
 );
+/** Responder un mensaje (aparece al deslizarlo para la derecha). */
+export const ReplyIcon = () => (
+  <svg {...base}><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg>
+);
 export const ChatIcon = () => (
   <svg {...base}><path d="M21 12a8 8 0 0 1-11.8 7L4 20.5l1.5-4.6A8 8 0 1 1 21 12z" /></svg>
 );

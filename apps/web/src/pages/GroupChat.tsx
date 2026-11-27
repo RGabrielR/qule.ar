@@ -8,7 +8,7 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { MessageText } from "../features/chat/MessageText";
 import { GroupAvatar } from "../components/GroupAvatar";
-import { BackIcon, ChevronDownIcon, ClockIcon, ImageIcon, SendIcon } from "../components/Icons";
+import { BackIcon, ChevronDownIcon, ClockIcon, ImageIcon, ReplyIcon, SendIcon } from "../components/Icons";
 import { JoinButton } from "../components/JoinButton";
 import { ReportDialog } from "../components/ReportDialog";
 import { GroupActions } from "../features/groups/GroupActions";
@@ -17,6 +17,7 @@ import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedP
 import { useDraft } from "../features/chat/useDraft";
 import { useKeyboardAfterSend } from "../features/chat/useKeyboardAfterSend";
 import { useMessageActions } from "../features/chat/useMessageActions";
+import { mergeGestures, useSwipeToReply } from "../features/chat/useSwipeToReply";
 import { CreatePollButton, CreatePollDialog } from "../features/polls/CreatePollDialog";
 import { PollCard } from "../features/polls/PollCard";
 import { applyMyVote, applyPollTotals } from "../features/polls/polls";
@@ -169,6 +170,7 @@ function GroupChatThread({ id }: { id: string }) {
   const [now, setNow] = useState(Date.now());
   const listRef = useRef<HTMLDivElement>(null);
   const messageActions = useMessageActions(menuFor, setMenuFor);
+  const swipeToReply = useSwipeToReply();
   const positionMessageMenu = useMessageMenuPosition(listRef, setMenuFor);
   const [findingQuote, setFindingQuote] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -671,10 +673,11 @@ function GroupChatThread({ id }: { id: string }) {
           return (
             <div
               key={key} id={`gm-${m.id}`}
-              className={`gmsg ${entry ? "" : "message-gesture"} ${grouped && !m.replyTo ? "gmsg--grouped" : ""} ${arrived ? "gmsg--new" : ""}`}
+              className={`gmsg ${entry ? "" : "message-gesture message-swipe"} ${grouped && !m.replyTo ? "gmsg--grouped" : ""} ${arrived ? "gmsg--new" : ""}`}
               onAnimationEnd={arrived ? (e) => e.target === e.currentTarget && settle(key) : undefined}
-              {...(!entry && messageActions(m.id))}
+              {...(!entry && mergeGestures(messageActions(m.id), swipeToReply(m.status === "published" ? () => startReply(m) : undefined)))}
             >
+              {!entry && m.status === "published" && <span className="swipe-reply" aria-hidden="true"><ReplyIcon /></span>}
               <div className="gmsg__avatar">
                 {!(grouped && !m.replyTo) && (
                   <Link to={`/perfil/${m.author.id}`} aria-label={`Ver perfil de ${m.author.name}`}>
@@ -780,7 +783,7 @@ function GroupChatThread({ id }: { id: string }) {
           </div>
         )}
         {replyTo && !editing && (
-          <div className="composer__reply">
+          <div className="composer__reply" key={replyTo.id}>
             <div className="quote quote--static">
               <span className="quote__name">Respondiendo a {replyTo.author.name}</span>
               <span className="quote__body">{replyTo.body}</span>
