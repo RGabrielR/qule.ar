@@ -1,3 +1,4 @@
+import { UserName } from "../../components/UserName";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { api, getSocket, type JoinRequest, type JoinRequestPage } from "../../api";
@@ -267,7 +268,7 @@ export function JoinRequests({ groupId, onChanged }: { groupId: string; onChange
                 <Link to={`/perfil/${r.user.id}`} className="req__who">
                   <Avatar src={r.user.photo} name={r.user.name} size={44} />
                   <span className="req__name">
-                    <span><b><bdi>{r.user.name}</bdi></b></span>
+                    <span><b><UserName name={r.user.name} /></b></span>
                     <span className="muted small">{since(r.createdAt)}{r.newAccount ? " · cuenta nueva" : ""}</span>
                   </span>
                 </Link>

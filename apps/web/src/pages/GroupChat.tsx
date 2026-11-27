@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { groupOutbox, newMessageKey, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -24,6 +25,8 @@ import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
 import { preparePhotoForUpload } from "../features/photos/preparePhoto";
 import { useSectionBack } from "../useSectionBack";
+import { markBack, usePageTransition } from "../features/navigation/pageTransition";
+import { useNewArrivals } from "../features/messages/useNewArrivals";
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
@@ -47,6 +50,7 @@ function GroupChatThread({ id }: { id: string }) {
   const pending = usePending(groupOutbox, scope);
   const nav = useNavigate();
   const goBack = useSectionBack("/grupos");
+  const enter = usePageTransition();
   const [info, setInfo] = useState<GroupInfo | null>(null);
   const [infoTick, setInfoTick] = useState(0);
   const [confirmed, setMessages] = useState<GroupMessage[]>([]);
@@ -55,6 +59,8 @@ function GroupChatThread({ id }: { id: string }) {
   const visibleMessages = quoteWindow?.messages ?? messages;
   const [queued, setQueued] = useState<GroupMessage[]>([]);
   const [historyReady, setHistoryReady] = useState(false);
+  // Los mensajes que llegan después de abrir el chat entran animados (el historial y las páginas cargadas no)
+  const { arrivals, settle } = useNewArrivals(visibleMessages.map((m) => m.idempotencyKey ?? m.id), historyReady, id);
   const [hasMore, setHasMore] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [text, setText] = useDraft(`group:${me?.user.id ?? ""}:${id}`, editing === null);
@@ -586,15 +592,15 @@ function GroupChatThread({ id }: { id: string }) {
     }
   }
 
-  if (!info) return <div className="chat" />;
+  if (!info) return <div className={`chat ${enter}`} />;
   const rulesText = slowModeText(info.rules);
 
   // Vista previa para quien todavía no es miembro del grupo
   if (!isMember) {
     return (
-      <div className="page">
+      <div className={`page ${enter}`}>
         <header className="topbar topbar--thread">
-          <button className="iconbtn" onClick={() => (window.history.state?.idx > 0 ? nav(-1) : nav("/grupos?ver=todos"))} aria-label="Volver"><BackIcon /></button>
+          <button className="iconbtn" onClick={() => { markBack(); if (window.history.state?.idx > 0) nav(-1); else nav("/grupos?ver=todos"); }} aria-label="Volver"><BackIcon /></button>
           <h1 className="topbar__title topbar__title--sm">{info.name}</h1>
         </header>
         <div className="preview">
@@ -626,12 +632,12 @@ function GroupChatThread({ id }: { id: string }) {
   }
 
   return (
-    <div className="chat">
+    <div className={`chat ${enter}`}>
       <header className="topbar topbar--linked">
         <button type="button" className="iconbtn" onClick={goBack} aria-label="Volver a Grupos"><BackIcon /></button>
         <GroupAvatar name={info.name} photo={info.photo} general={info.isGeneral} size="sm" />
         <div className="topbar__grow">
-          <h1 className="topbar__title topbar__title--sm"><Link className="topbar__link" to={`/grupos/${id}/info`} state={{ fromGroupChat: true }}>{info.isGeneral ? "# " : ""}{info.name}</Link></h1>
+          <h1 className="topbar__title topbar__title--sm"><Link className="topbar__link" to={`/grupos/${id}/info`} state={{ fromGroupChat: true }}>{info.isGeneral ? "# " : ""}<UserName name={info.name} /></Link></h1>
           <p className="topbar__sub"><ClockIcon /> {rulesText}</p>
         </div>
         <GroupActions
@@ -661,8 +667,15 @@ function GroupChatThread({ id }: { id: string }) {
             prev && prev.author.id === m.author.id &&
             new Date(m.scheduledAt).getTime() - new Date(prev.scheduledAt).getTime() < 5 * 60_000;
           const mine = m.author.id === me?.user.id;
+          const key = m.idempotencyKey ?? m.id;
+          const arrived = arrivals.has(key);
           return (
-            <div key={m.idempotencyKey ?? m.id} id={`gm-${m.id}`} className={`gmsg ${entry ? "" : "message-gesture"} ${grouped && !m.replyTo ? "gmsg--grouped" : ""}`} {...(!entry && messageActions(m.id))}>
+            <div
+              key={key} id={`gm-${m.id}`}
+              className={`gmsg ${entry ? "" : "message-gesture"} ${grouped && !m.replyTo ? "gmsg--grouped" : ""} ${arrived ? "gmsg--new" : ""}`}
+              onAnimationEnd={arrived ? (e) => e.target === e.currentTarget && settle(key) : undefined}
+              {...(!entry && messageActions(m.id))}
+            >
               <div className="gmsg__avatar">
                 {!(grouped && !m.replyTo) && (
                   <Link to={`/perfil/${m.author.id}`} aria-label={`Ver perfil de ${m.author.name}`}>
@@ -673,13 +686,13 @@ function GroupChatThread({ id }: { id: string }) {
               <div className="gmsg__content">
                 {!(grouped && !m.replyTo) && (
                   <div className="gmsg__meta">
-                    <Link to={`/perfil/${m.author.id}`} className="gmsg__name"><bdi>{m.author.name}</bdi></Link>
+                    <Link to={`/perfil/${m.author.id}`} className="gmsg__name"><UserName name={m.author.name} /></Link>
                     <time className="gmsg__time">{fmtTime(m.scheduledAt)}</time>
                   </div>
                 )}
                 {m.replyTo && (
                   <button type="button" className="quote" onClick={() => jumpTo(m.replyTo!)}>
-                    <span className="quote__name"><bdi>{m.replyTo.authorName}</bdi></span>
+                    <span className="quote__name"><UserName name={m.replyTo.authorName} /></span>
                     <span className="quote__body">{m.replyTo.body ?? "Mensaje borrado"}</span>
                   </button>
                 )}
@@ -770,7 +783,7 @@ function GroupChatThread({ id }: { id: string }) {
         {replyTo && !editing && (
           <div className="composer__reply">
             <div className="quote quote--static">
-              <span className="quote__name">Respondiendo a <bdi>{replyTo.author.name}</bdi></span>
+              <span className="quote__name">Respondiendo a <UserName name={replyTo.author.name} /></span>
               <span className="quote__body">{replyTo.body}</span>
             </div>
             <button type="button" className="iconbtn" aria-label="Cancelar respuesta" onClick={() => setReplyTo(null)}>✕</button>

@@ -1,7 +1,9 @@
+import { UserName } from "./UserName";
 import { useEffect, useState } from "react";
 import { api, type StaffAccess } from "../api";
 import { PERMISSION_LABELS, toggleStaffPermission } from "../staff";
 import { DialogFocus } from "./DialogFocus";
+import { useSheetExit } from "./useSheetExit";
 
 type Perm = Exclude<StaffAccess, "owner">;
 
@@ -12,6 +14,7 @@ export function StaffDialog({ userId, name, onClose }: { userId: string; name: s
   const [perms, setPerms] = useState<Perm[]>([]);
   const [state, setState] = useState<"idle" | "saving" | "done">("idle");
   const [error, setError] = useState("");
+  const { close, backdrop } = useSheetExit(onClose);
 
   useEffect(() => {
     api<{ owner: boolean; permissions: Perm[] }>(`/admin/team/${userId}`)
@@ -39,25 +42,25 @@ export function StaffDialog({ userId, name, onClose }: { userId: string; name: s
   }
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
+    <div className="sheet-backdrop" {...backdrop}>
       <div className="sheet" role="dialog" aria-modal aria-labelledby="staff-title" onClick={(e) => e.stopPropagation()}>
-        <DialogFocus onClose={onClose} />
-        <h2 id="staff-title">Moderación: <bdi>{name}</bdi></h2>
+        <DialogFocus onClose={close} />
+        <h2 id="staff-title">Moderación: <UserName name={name} /></h2>
         {state === "done" ? (
           <>
             <p className="muted">
               {perms.length
-                ? <>Listo. <bdi>{name}</bdi> ya puede entrar a Moderación con estos permisos.</>
-                : <>Listo. <bdi>{name}</bdi> ya no tiene permisos de moderación.</>}
+                ? <>Listo. <UserName name={name} /> ya puede entrar a Moderación con estos permisos.</>
+                : <>Listo. <UserName name={name} /> ya no tiene permisos de moderación.</>}
             </p>
-            <button className="btn btn--primary" onClick={onClose}>Listo</button>
+            <button className="btn btn--primary" onClick={() => close()}>Listo</button>
           </>
         ) : saved == null ? (
           error ? <p className="error" role="alert">{error}</p> : <p className="muted">Cargando…</p>
         ) : owner ? (
           <>
-            <p className="muted"><bdi>{name}</bdi> tiene administración general. Eso se cambia en la configuración del servidor, no desde acá.</p>
-            <button className="btn" onClick={onClose}>Cerrar</button>
+            <p className="muted"><UserName name={name} /> tiene administración general. Eso se cambia en la configuración del servidor, no desde acá.</p>
+            <button className="btn" onClick={() => close()}>Cerrar</button>
           </>
         ) : (
           <>
@@ -72,7 +75,7 @@ export function StaffDialog({ userId, name, onClose }: { userId: string; name: s
             </div>
             {error && <p className="error small" role="alert">{error}</p>}
             <div className="row">
-              <button className="btn" onClick={onClose}>Cancelar</button>
+              <button className="btn" onClick={() => close()}>Cancelar</button>
               <button className="btn btn--primary" disabled={!changed || state === "saving"} onClick={save}>
                 {perms.length === 0 && saved.length > 0 ? "Sacar permisos" : "Guardar"}
               </button>

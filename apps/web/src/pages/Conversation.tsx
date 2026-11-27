@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { ChatPresenceDot } from "../features/messages/chatPresence";
 import { compareDmOrder, DM_EVENTS, type DmReadReceipt, type DmSettingsChange } from "@mortero/shared/realtime";
 import { privateOutbox, newMessageKey, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
@@ -10,6 +11,7 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { BackIcon, DotsIcon, ImageIcon, LockIcon, SendIcon, TimerIcon } from "../components/Icons";
 import { useSectionBack } from "../useSectionBack";
+import { usePageTransition } from "../features/navigation/pageTransition";
 import { useMessageActions } from "../features/chat/useMessageActions";
 import { useMessageMenuPosition } from "../useMessageMenuPosition";
 import { SavedPhrasesButton, SavedPhrasesMenu } from "../features/phrases/SavedPhrases";
@@ -21,6 +23,7 @@ import { albumExpiryLabel, albumNoticeKind, useAlbumNoticeTime } from "../featur
 import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
 import { Watermark } from "../features/photos/Watermark";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
+import { useNewArrivals } from "../features/messages/useNewArrivals";
 import { useConversationActions } from "../features/messages/ConversationActions";
 import { ConversationHeaderMenu } from "../features/messages/ConversationHeaderMenu";
 import { chatDateFormat, chatDay, useChatToday } from "../features/messages/chatDates";
@@ -49,6 +52,7 @@ function ConversationThread({ id }: { id: string }) {
   const pending = usePending(privateOutbox, scope);
   const nav = useNavigate();
   const goBack = useSectionBack("/mensajes");
+  const enter = usePageTransition();
   const [details, setDetails] = useState<{ id: string; other?: ChatContact; muted: boolean }>();
   const other = details?.id === id ? details.other : undefined;
   const muted = details?.id === id && details.muted;
@@ -79,6 +83,9 @@ function ConversationThread({ id }: { id: string }) {
   const typingTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const myId = me?.user.id;
   const albumNoticeTime = useAlbumNoticeTime(messages);
+  // Los mensajes que llegan después de abrir el chat entran animados (el historial no)
+  const [historyReady, setHistoryReady] = useState(false);
+  const { arrivals, settle } = useNewArrivals(messages.map((m) => m.idempotencyKey ?? m.id), historyReady, id);
   const today = useChatToday();
 
   useEffect(() => {
@@ -104,6 +111,7 @@ function ConversationThread({ id }: { id: string }) {
       const loaded = [...history].sort(compareDmOrder);
       beforeHistory = null;
       setMessages(loaded);
+      setHistoryReady(true);
       setHasMore(d.hasMore);
       // Al abrir el chat, marcá también los mensajes anteriores a la página de historial.
       const oldestLoaded = d.messages[0];
@@ -347,7 +355,7 @@ function ConversationThread({ id }: { id: string }) {
     ((seen.readAtById.get(lastMine.id) ?? "") >= lastMine.createdAt || (seen.through && compareDmOrder(lastMine, seen.through) <= 0))));
 
   return (
-    <div className="chat">
+    <div className={`chat ${enter}`}>
       <header className="topbar topbar--thread topbar--linked">
         <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
         {other && (
@@ -356,7 +364,7 @@ function ConversationThread({ id }: { id: string }) {
             <span>
               <span className="chat-contact-name">
                 <ChatPresenceDot state={other.presence} />
-                <b><bdi>{other.name}</bdi></b>
+                <b><UserName name={other.name} /></b>
               </span>
               {typing && <span className="typing-label">escribiendo…</span>}
             </span>
@@ -389,10 +397,17 @@ function ConversationThread({ id }: { id: string }) {
           const albumText = <><LockIcon /> {mine ? "Le compartiste tu álbum privado" : "Te compartió su álbum privado"}{m.body ? ` por ${m.body}` : ""}</>;
           const expiry = albumExpiryLabel(m, albumNoticeTime);
           const quoted = m.replyTo;
+          const key = m.idempotencyKey ?? m.id;
+          const arrived = arrivals.has(key);
           // Mantener apretado (o clic derecho) abre las acciones. Los avisos de álbum y lo que todavía se está mandando no.
           const gesture = !albumNotice && !entry;
           const bubble = (
-            <div id={`dm-${m.id}`} className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""} ${gesture ? "message-gesture" : ""}`} {...(gesture && messageActions(m.id))}>
+            <div
+              id={`dm-${m.id}`}
+              className={`bubble ${mine ? "bubble--mine" : ""} ${albumNotice ? "bubble--album" : ""} ${gesture ? "message-gesture" : ""} ${arrived ? "bubble--new" : ""}`}
+              onAnimationEnd={arrived ? (e) => e.target === e.currentTarget && settle(key) : undefined}
+              {...(gesture && messageActions(m.id))}
+            >
               {quoted && (quoted.authorName && loadedMessageIds.has(quoted.id) ? (
                 <button
                   type="button"
@@ -400,12 +415,12 @@ function ConversationThread({ id }: { id: string }) {
                   aria-label={`Ir al mensaje citado de ${quoted.authorName}`}
                   onClick={() => jumpTo(quoted.id)}
                 >
-                  <span className="quote__name"><bdi>{quoted.authorName}</bdi></span>
+                  <span className="quote__name"><UserName name={quoted.authorName} /></span>
                   <span className="quote__body">{quoted.body ?? "Mensaje borrado"}</span>
                 </button>
               ) : (
                 <div className="quote">
-                  <span className="quote__name">{quoted.authorName == null ? "Mensaje borrado" : <bdi>{quoted.authorName}</bdi>}</span>
+                  <span className="quote__name">{quoted.authorName == null ? "Mensaje borrado" : <UserName name={quoted.authorName} />}</span>
                   {quoted.authorName && quoted.body && <span className="quote__body">{quoted.body}</span>}
                 </div>
               ))}
@@ -507,7 +522,7 @@ function ConversationThread({ id }: { id: string }) {
         {replyTo && (
           <div className="composer__reply">
             <div className="quote quote--static">
-              <span className="quote__name">Respondiendo a {replyTo.senderId === myId ? "tu mensaje" : other ? <bdi>{other.name}</bdi> : "ese mensaje"}</span>
+              <span className="quote__name">Respondiendo a {replyTo.senderId === myId ? "tu mensaje" : other ? <UserName name={other.name} /> : "ese mensaje"}</span>
               <span className="quote__body">{replyPreview(replyTo)}</span>
             </div>
             <button

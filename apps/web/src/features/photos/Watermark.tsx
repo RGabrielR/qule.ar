@@ -1,3 +1,4 @@
+import { UserName } from "../../components/UserName";
 import { useEffect, useMemo } from "react";
 import { useMe } from "../../App";
 
@@ -18,7 +19,7 @@ export function Watermark() {
     if (!me) return null;
     const name = me.profile?.displayName || me.user.name;
     const when = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-    return <><bdi>{name}</bdi> · {me.user.id.slice(0, 8)} · {when}</>;
+    return <><UserName name={name} /> · {me.user.id.slice(0, 8)} · {when}</>;
   }, [me]);
   if (!label) return null;
   return (

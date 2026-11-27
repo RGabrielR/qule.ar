@@ -20,6 +20,7 @@ import { appealReviewedMail, sendMail, suspendedMail } from "../mail.js";
 import { accessFor, grant, isOwner, logAction, notifyStaff, ownerIds, requireAccess, STAFF_PERMISSIONS, staffIdsWith } from "../staff.js";
 import { dropPolls } from "../polls.js";
 import { GROUP_PHOTO_REPORT_BODY } from "../groupPhotos.js";
+import { explicitAdminRoutes } from "./explicitAdmin.js";
 
 const { report, profile, session, groupMessage, directMessage, conversation, pushSubscription, user, group, appeal, staffPermission, modAction, reportMute } = schema;
 
@@ -73,6 +74,8 @@ adminRoutes.delete("/push/subscribe", requireUser, async (c) => {
 adminRoutes.use("/admin/*", requireUser, requireAccess("owner", ...STAFF_PERMISSIONS));
 
 adminRoutes.route("/admin/reports/:id/photo-verification", reportPhotoRoutes);
+// Corregir la marca de fotos explícitas (no es un reporte ni una medida)
+adminRoutes.route("/admin/explicit", explicitAdminRoutes);
 
 adminRoutes.get("/admin/stats", async (c) => {
   const count = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;

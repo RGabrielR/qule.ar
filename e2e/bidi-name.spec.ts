@@ -53,3 +53,36 @@ for (const theme of ["oscuro", "penumbra"]) {
     expect((await profileName.boundingBox())!.x).toBeLessThan((await profileAge.boundingBox())!.x);
   });
 }
+
+test("la API limpia los nombres al crear y editar cuentas, perfiles y grupos", async ({ request, baseURL }) => {
+  const headers = { Origin: baseURL! };
+  const control = "\u202e\u2068";
+  const password = "clave-de-prueba-bidi";
+  const signup = await request.post("/api/auth/sign-up/email", {
+    headers, data: { email: `bidi-${Date.now()}@example.test`, name: `${control}Ana`, password },
+  });
+  await expect(signup).toBeOK();
+  expect((await signup.json()).user.name).toBe("Ana");
+
+  const saveProfile = (displayName: string) => request.put("/api/me/profile", {
+    headers, data: { displayName, birthdate: "1990-01-01", acceptTerms: true },
+  });
+  expect((await saveProfile(control)).status()).toBe(400);
+  await expect(await saveProfile(`${control}${name}`)).toBeOK();
+  await expect(await saveProfile(`Ana ${control}${name}`)).toBeOK();
+  await expect(await request.post("/api/auth/update-user", { headers, data: { name: `Ana${control} María` } })).toBeOK();
+
+  const me = await request.get("/api/me");
+  await expect(me).toBeOK();
+  expect(await me.json()).toMatchObject({ user: { name: "Ana María" }, profile: { displayName: `Ana ${name}` } });
+
+  const createGroup = (name: string) => request.post("/api/groups", { headers, data: { name } });
+  expect((await createGroup(`Ab${control}`)).status()).toBe(400);
+  const group = await createGroup(`Grupo ${control}${name}`);
+  await expect(group).toBeOK();
+  const { id } = await group.json();
+  const url = `/api/groups/${id}`;
+  expect((await (await request.get(url)).json()).name).toBe(`Grupo ${name}`);
+  await expect(await request.patch(url, { headers, data: { name: `${control}Otro grupo` } })).toBeOK();
+  expect((await (await request.get(url)).json()).name).toBe("Otro grupo");
+});

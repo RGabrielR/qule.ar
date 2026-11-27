@@ -1,3 +1,4 @@
+import { UserName } from "../../components/UserName";
 import { isolateText } from "../../bidi";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, upload } from "../../api";
@@ -193,15 +194,15 @@ function VerificationForm({ report, canSuspend, measure, onMeasure, onMatch, onC
 
             {chosen && (
               <dl className="verify-photo__result" aria-live="polite">
-                <div><dt>Foto subida por</dt><dd><bdi>{result?.uploader ?? chosen.name}</bdi></dd></div>
-                {result?.recipient && <div><dt>Copia entregada a</dt><dd><bdi>{result.recipient.name}</bdi></dd></div>}
+                <div><dt>Foto subida por</dt><dd><UserName name={result?.uploader ?? chosen.name} /></dd></div>
+                {result?.recipient && <div><dt>Copia entregada a</dt><dd><UserName name={result.recipient.name} /></dd></div>}
               </dl>
             )}
           </div>
           <div className="verify-photo__footer">
             {result && (
               <p className="muted small" role="status">
-                {result.status === "match" && result.recipient && <>La marca coincide con la copia entregada a <bdi>{result.recipient.name}</bdi>.</>}
+                {result.status === "match" && result.recipient && <>La marca coincide con la copia entregada a <UserName name={result.recipient.name} />.</>}
                 {result.status === "no_match" && "Sin coincidencia para esta cuenta."}
                 {result.status === "insufficient" && "Imagen insuficiente para verificar la marca."}
               </p>

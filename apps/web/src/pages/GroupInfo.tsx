@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { api, getSocket, ROLE_LABEL, type GroupInfo as Info, type Member, type MemberPage } from "../api";
@@ -9,7 +10,9 @@ import { setGroupMuted } from "../features/groups/groupNotifications";
 import { ReportDialog } from "../components/ReportDialog";
 import { slowModeText } from "../features/groups/groupRules";
 import { useTabData } from "../features/navigation/tabData";
+import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 import { GroupAvatar } from "../components/GroupAvatar";
+import { Skeleton, SkeletonRows, SkeletonText, SkeletonWait } from "../components/Skeleton";
 import { useInstalledAndroidBack } from "../useSectionBack";
 
 export function GroupInfo() {
@@ -18,8 +21,11 @@ export function GroupInfo() {
   const { refreshGroups } = useTabData();
   const nav = useNavigate();
   const location = useLocation();
+  const enter = usePageTransition();
   const [info, setInfo] = useState<Info | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  // Los miembros llegan después que la info: mientras tanto, su esqueleto
+  const [membersReady, setMembersReady] = useState(false);
   // Las recargas por socket llaman a load() sin cantidad: el ref conserva lo que se ve.
   const visibleMembers = useRef(0);
   const [memberNext, setMemberNext] = useState<number | null>(null);
@@ -48,6 +54,7 @@ export function GroupInfo() {
       }
       visibleMembers.current = list.length;
       setMembers(list);
+      setMembersReady(true);
       setMemberNext(next);
     } catch {
       nav("/grupos", { replace: true });
@@ -102,6 +109,7 @@ export function GroupInfo() {
   }
 
   function goBack() {
+    markBack();
     // Volvé al origen. Si Detalles se abrió directo, volvé al chat.
     if (location.key === "default" || window.history.state?.idx === 0) nav(`/grupos/${id}`, { replace: true });
     else nav(-1);
@@ -110,16 +118,16 @@ export function GroupInfo() {
   useInstalledAndroidBack(Boolean(location.state?.fromDirectInvitations && !reporting), goBack);
 
   if (location.hash === "#solicitudes") return <Navigate to={`/grupos/${id}/solicitudes`} replace />;
-  if (!info) return <div className="page" />;
+  if (!info) return <div className={`page ${enter}`}><GroupInfoSkeleton /></div>;
   const showChatLink = Boolean(info.role && !location.state?.fromGroupChat);
   const canManageGroup = isMod && !info.isGeneral;
   const hasPendingRequests = canManageGroup && info.pendingCount > 0;
 
   return (
-    <div className="page">
+    <div className={`page ${enter}`}>
       <header className="topbar topbar--thread">
         <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
-        <h1 className="topbar__grow topbar__title topbar__title--sm">{info.isGeneral ? "# " : ""}{info.name}</h1>
+        <h1 className="topbar__grow topbar__title topbar__title--sm">{info.isGeneral ? "# " : ""}<UserName name={info.name} /></h1>
         {(canManageGroup || showChatLink) && (
           <GroupActionMenu hasPendingRequests={hasPendingRequests}>
             {(close) => (
@@ -163,6 +171,7 @@ export function GroupInfo() {
       {!info.isGeneral && (
         <section className="section">
           <h2 className="section__title">Miembros <span className="muted">{info.memberCount}</span></h2>
+          {!membersReady ? <SkeletonRows flush count={Math.min(Math.max(info.memberCount, 1), 6)} avatar={40} lines={1} /> : (
           <ul className="members">
             {members.map((m) => {
               const isMe = m.id === me?.user.id;
@@ -171,9 +180,9 @@ export function GroupInfo() {
               return (
                 <li key={m.id} className="member">
                   <Link to={`/perfil/${m.id}`} className="member__who">
-                    <Avatar src={m.photo} name={m.name} size={40} />
+                    <Avatar src={m.photo} name={m.name} size={40} appear />
                     <span>
-                      <b><bdi>{m.name}</bdi></b>{isMe && <span className="muted"> (vos)</span>}
+                      <b><UserName name={m.name} /></b>{isMe && <span className="muted"> (vos)</span>}
                       {m.role !== "member" && <span className="pill pill--role">{ROLE_LABEL[m.role]}</span>}
                     </span>
                   </Link>
@@ -199,6 +208,7 @@ export function GroupInfo() {
               );
             })}
           </ul>
+          )}
           {memberNext != null && (
             <div className="center">
               <button className="btn btn--small" disabled={loadingMore} onClick={loadMoreMembers}>
@@ -240,7 +250,7 @@ export function GroupInfo() {
           <div className="stack">
             {confirmLeave ? (
               <div className="confirm">
-                <p>¿Salir de {info.name}? Para volver vas a tener que pedir ingreso de nuevo.{isOwner && " Como sos el dueño, el grupo pasa a un moderador o al miembro más antiguo. Si no queda nadie, se cierra."}</p>
+                <p>¿Salir de <UserName name={info.name} />? Para volver vas a tener que pedir ingreso de nuevo.{isOwner && " Como sos el dueño, el grupo pasa a un moderador o al miembro más antiguo. Si no queda nadie, se cierra."}</p>
                 <div className="row">
                   <button className="btn" onClick={() => setConfirmLeave(false)}>Cancelar</button>
                   <button className="btn btn--danger" onClick={() => act(async () => {
@@ -268,5 +278,23 @@ export function GroupInfo() {
         </section>
       )}
     </div>
+  );
+}
+
+/** Mientras llega la info del grupo: la barra, la foto y las primeras secciones con su forma. */
+function GroupInfoSkeleton() {
+  return (
+    <SkeletonWait>
+      <header className="topbar topbar--thread">
+        <span className="skeleton--iconbtn" />
+        <Skeleton className="skeleton--title" />
+      </header>
+      <section className="section group-head"><Skeleton className="skeleton--group-photo" /></section>
+      <section className="section">
+        <Skeleton className="skeleton--title section__title" />
+        <SkeletonText lines={3} />
+      </section>
+      <section className="section"><SkeletonText lines={2} /></section>
+    </SkeletonWait>
   );
 }

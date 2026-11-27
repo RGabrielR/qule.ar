@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { api, ApiError, type Author, type StaffAccess } from "../api";
@@ -9,8 +10,9 @@ import { PERMISSION_LABELS, toggleStaffPermission } from "../staff";
 import { AccountSearch } from "../features/moderation/AccountSearch";
 import { PeoplePanel } from "../features/moderation/PeoplePanel";
 import { ModerationNotices } from "../features/moderation/ModerationNotices";
-import { ReportSpamAlerts } from "../features/moderation/ReportSpamAlerts";
+import { ReportSpamAlerts, type ReportSpamData } from "../features/moderation/ReportSpamAlerts";
 import { ReportGroups } from "../features/moderation/ReportGroups";
+import { ExplicitReviews } from "../features/moderation/ExplicitReviews";
 import type { Report } from "../features/moderation/types";
 
 type Suspended = Author & {
@@ -24,7 +26,7 @@ type Suspended = Author & {
 };
 type RemovedGroup = { id: string; name: string; description: string | null; removedAt: string; reason: string | null; purgeAt: string };
 type Stats = { users: number; groups: number; openReports: number; suspended: number; openAppeals: number };
-type Tab = "open" | "closed" | "suspended" | "appeals" | "people" | "groups" | "team" | "log";
+type Tab = "open" | "closed" | "reporters" | "suspended" | "appeals" | "explicit" | "people" | "groups" | "team" | "log";
 
 type AdminAppeal = {
   id: string;
@@ -49,8 +51,11 @@ type LogEntry = { id: string; actor: string; action: string; targetId: string | 
 const TABS: { id: Tab; label: string; need: StaffAccess[] }[] = [
   { id: "open", label: "Abiertos", need: ["reports", "sanctions"] },
   { id: "closed", label: "Resueltos", need: ["reports", "sanctions"] },
+  // Aparte de Abiertos: quien reporta de mala fe es un caso raro y no tiene que tapar los reportes
+  { id: "reporters", label: "Quién reporta", need: ["owner", "sanctions"] },
   { id: "appeals", label: "Revisiones", need: ["appeals"] },
   { id: "suspended", label: "Suspendidas", need: ["sanctions", "appeals"] },
+  { id: "explicit", label: "Fotos tapadas", need: ["reports"] },
   { id: "people", label: "Personas", need: ["owner"] },
   { id: "groups", label: "Grupos de baja", need: ["owner"] },
   { id: "team", label: "Equipo", need: ["owner"] },
@@ -75,6 +80,9 @@ export function Admin() {
   const [log, setLog] = useState<LogEntry[] | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [reports, setReports] = useState<Report[] | null>(null);
+  /** Quién reporta: se carga siempre, para mostrar en la pestaña cuántas cuentas hay para mirar. */
+  const [reporters, setReporters] = useState<ReportSpamData | null>(null);
+  const seesReporters = has("owner", "sanctions");
   const [suspended, setSuspended] = useState<Suspended[] | null>(null);
   const [removed, setRemoved] = useState<RemovedGroup[] | null>(null);
   const [suspending, setSuspending] = useState<SuspendTarget | null>(null);
@@ -89,13 +97,20 @@ export function Admin() {
   // Un 403 de una acción (por ejemplo, tocar los permisos de la administración general) es solo un error.
   const load = useCallback(async () => {
     try {
-      setStats(await api<Stats>("/admin/stats"));
+      const [nextStats, nextReporters] = await Promise.all([
+        api<Stats>("/admin/stats"),
+        seesReporters ? api<ReportSpamData>("/admin/report-spam").catch(() => null) : null,
+      ]);
+      setStats(nextStats);
+      setReporters(nextReporters);
       if (tab === "suspended") setSuspended(await api<Suspended[]>("/admin/suspended"));
       else if (tab === "appeals") setAppeals(await api<AdminAppeal[]>(`/admin/appeals?status=${appealsClosed ? "closed" : "open"}`));
       else if (tab === "team") setTeam(await api<TeamMember[]>("/admin/team"));
       else if (tab === "log") setLog(await api<LogEntry[]>("/admin/log"));
       else if (tab === "people") { /* La pestaña Personas carga sus propios datos */ }
+      else if (tab === "explicit") { /* Fotos tapadas también */ }
       else if (tab === "groups") setRemoved(await api<RemovedGroup[]>("/admin/groups/removed"));
+      else if (tab === "reporters") { /* Ya se cargó arriba */ }
       else setReports(await api<Report[]>(`/admin/reports?status=${tab}`));
     } catch (e) {
       if (e instanceof ApiError && e.status === 403) setDenied(true);
@@ -103,7 +118,7 @@ export function Admin() {
     } finally {
       setLoaded(true);
     }
-  }, [tab, appealsClosed]);
+  }, [tab, appealsClosed, seesReporters]);
 
   useEffect(() => {
     load();
@@ -160,14 +175,19 @@ export function Admin() {
 
       <div className="tabs tabs--scroll" role="tablist">
         {tabs.map((t) => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
+          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>
+            {t.label}
+            {t.id === "reporters" && reporters?.alerts.length ? (
+              <b className="badge tabs__badge" aria-label={`${reporters.alerts.length} para mirar`}>{reporters.alerts.length}</b>
+            ) : null}
+          </button>
         ))}
       </div>
 
       {error && <div className="notice notice--error" role="alert">{error}</div>}
 
-      {tab === "open" && (has("owner") || has("sanctions")) && (
-        <ReportSpamAlerts act={act} onSuspend={(t) => setSuspending({ ...t, preventive: false })} refresh={reports} />
+      {tab === "reporters" && reporters && (
+        <ReportSpamAlerts data={reporters} act={act} onSuspend={(t) => setSuspending({ ...t, preventive: false })} />
       )}
 
       {(tab === "open" || tab === "closed") && reports && (
@@ -204,7 +224,7 @@ export function Admin() {
               <li key={s.id} className="rcard">
                 <div className="rcard__who">
                   <Avatar src={s.photo} name={s.name} size={40} />
-                  <span><b><bdi>{s.name}</bdi></b><span className="muted small rcard__count">desde {fmt(s.suspendedAt)}</span></span>
+                  <span><b><UserName name={s.name} /></b><span className="muted small rcard__count">desde {fmt(s.suspendedAt)}</span></span>
                 </div>
                 {s.reason && <p className="rcard__details">{s.reason}</p>}
                 {s.preventive && (
@@ -275,7 +295,7 @@ export function Admin() {
                   <div className="rcard__who">
                     <Avatar src={a.person.photo} name={a.person.name} size={40} />
                     <span>
-                      <b><bdi>{a.person.name}</bdi></b> <span className="muted">{a.person.age || ""}</span>
+                      <b><UserName name={a.person.name} /></b> <span className="muted">{a.person.age || ""}</span>
                       <span className="muted small rcard__count">Suspendida desde {fmt(a.suspendedAt)}</span>
                     </span>
                   </div>
@@ -324,6 +344,8 @@ export function Admin() {
         </>
       )}
 
+      {tab === "explicit" && <ExplicitReviews />}
+
       {tab === "people" && (
         <PeoplePanel onSuspend={(p, done) => setSuspending({ url: `/admin/users/${p.id}/suspend`, name: p.name, reason: "", preventive: false, done })} />
       )}
@@ -338,7 +360,7 @@ export function Admin() {
             {log.map((l) => (
               <li key={l.id}>
                 <span className="muted small">{fmt(l.createdAt)}</span><br />
-                <b><bdi>{l.actor}</bdi></b> · {l.action}
+                <b><UserName name={l.actor} /></b> · {l.action}
                 {l.details && <span className="muted"> · {l.details}</span>}
               </li>
             ))}
@@ -398,7 +420,7 @@ function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onC
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal aria-labelledby="suspend-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
-        <h2 id="suspend-title">Suspender a <bdi>{target.name}</bdi></h2>
+        <h2 id="suspend-title">Suspender a <UserName name={target.name} /></h2>
         <p className="muted small">Se cierran sus sesiones, deja de aparecer en la app y se cierran sus reportes abiertos. También se borran sus mensajes en grupos y todo lo que subió: fotos, álbumes, videos y fotos que mandó por privado. Lo que sea prueba de un reporte queda guardado. La cuenta se puede reactivar después, pero lo borrado no vuelve.</p>
         {preventive && (
           <p className="small">Es una <b>suspensión preventiva</b>: hacela si hay indicios de que es menor de edad. Después alguien con el permiso Suspensiones la revisa y decide si se mantiene.</p>
@@ -482,7 +504,7 @@ function ResolveAppealDialog({ appeal, decision, onClose, onDone }: {
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal aria-labelledby="appeal-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
-        <h2 id="appeal-title">{lift ? "Levantar" : "Mantener"} la suspensión de <bdi>{appeal.person.name}</bdi></h2>
+        <h2 id="appeal-title">{lift ? "Levantar" : "Mantener"} la suspensión de <UserName name={appeal.person.name} /></h2>
         <p className="muted small">
           {lift
             ? "La cuenta vuelve a funcionar enseguida y le avisamos por mail."
@@ -534,7 +556,7 @@ function Team({ team, onChange, onPeople }: { team: TeamMember[]; onChange: () =
             <li key={m.id} className="rcard">
               <div className="rcard__who">
                 <Avatar src={m.photo} name={m.name} size={40} />
-                <span><b><bdi>{m.name}</bdi></b><span className="muted small rcard__count">desde {fmt(m.since)}</span></span>
+                <span><b><UserName name={m.name} /></b><span className="muted small rcard__count">desde {fmt(m.since)}</span></span>
               </div>
               <div className="team__perms">
                 {PERMISSION_LABELS.map((p) => (

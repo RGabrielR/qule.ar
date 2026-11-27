@@ -1,3 +1,4 @@
+import { UserName } from "./UserName";
 import { useEffect, useId, useRef, useState, type TouchEvent } from "react";
 import type { Media } from "../api";
 import { Watermark } from "../features/photos/Watermark";
@@ -186,7 +187,7 @@ export function AlbumViewer({ items, start = 0, title, ownerName, onClose, water
   return (
     <div className={`lightbox${watermark ? " private-media" : ""}`} role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} aria-label={title ? undefined : "Álbum"} onContextMenu={(e) => e.preventDefault()}>
       <header className="lightbox__bar">
-        <span><span id={titleId}>{title}{ownerName && <> · <bdi>{ownerName}</bdi></>}</span>{n > 1 && <span className="muted"> · {i + 1} de {n}</span>}</span>
+        <span><span id={titleId}>{title}{ownerName && <> · <UserName name={ownerName} /></>}</span>{n > 1 && <span className="muted"> · {i + 1} de {n}</span>}</span>
         <button className="iconbtn" onClick={onClose} aria-label="Cerrar">✕</button>
       </header>
       <div

@@ -124,6 +124,8 @@ export type Me = {
     showDistance: boolean;
     incognito: boolean;
     showAge: boolean;
+    /** Tapar las fotos explícitas de los demás en la grilla y en los perfiles (ver features/explicit). */
+    hideExplicit: boolean;
     /** Avisos que apagó (false). Lo que no está cuenta como prendido. */
     notifyPrefs: Partial<Record<NotifyKind, boolean>>;
     suspendedAt: string | null;
@@ -131,14 +133,22 @@ export type Me = {
     /** Versión de los términos que aceptó (null: cuenta anterior a los términos) */
     termsVersion: string | null;
   }) | null;
-  photos: (Media & { id: string; position: number; isPrivate: boolean; albumId: string | null })[];
+  photos: (Media & { id: string; position: number; isPrivate: boolean; albumId: string | null } & ExplicitMark)[];
   albums: MyAlbum[];
 };
+
+/**
+ * Lo que ve quien subió una foto del perfil sobre la marca de explícita: si está tapada para quien eligió no ver
+ * fotos explícitas, y si pidió que la revisen ("requested") o moderación ya decidió ("reviewed").
+ */
+export type ExplicitMark = { explicit: boolean; explicitReview: "requested" | "reviewed" | null };
 
 export type PublicProfile = Omit<Profile, "birthdate" | "age"> & {
   age: number | null;
   id: string;
   photos: string[];
+  /** Cuáles de `photos` se ven borrosas, en el mismo orden. */
+  photosBlur: boolean[];
   isMe: boolean;
   online: boolean;
   recent: boolean;
@@ -160,6 +170,8 @@ export type NearbyPerson = {
   age: number | null;
   photo: string | null;
   coverPhoto: string | null;
+  /** La foto se ve borrosa: está marcada como explícita y elegiste taparlas. */
+  blur: boolean;
   online: boolean;
   recent: boolean;
   distance: string | null;

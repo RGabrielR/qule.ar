@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { api, type GroupListing } from "../api";
 import { DialogFocus } from "./DialogFocus";
+import { useSheetExit } from "./useSheetExit";
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("es-AR", { day: "numeric", month: "long" });
 
@@ -11,6 +12,7 @@ export function JoinButton({ g, onChange }: { g: GroupListing; onChange: () => v
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const sheet = useSheetExit(() => setAsking(false));
 
   if (g.role) return <Link className="btn btn--small" to={`/grupos/${g.id}`}>Abrir</Link>;
   if (g.cooldownUntil) return <span className="pill">Podés volver a pedir el {fmtDate(g.cooldownUntil)}</span>;
@@ -39,9 +41,12 @@ export function JoinButton({ g, onChange }: { g: GroupListing; onChange: () => v
     setError("");
     try {
       await api(`/groups/${g.id}/requests`, { method: "POST", json: { message: message || undefined } });
-      setAsking(false);
-      setMessage("");
-      onChange();
+      // La hoja baja y recién ahí el botón pasa a "Solicitud enviada"
+      sheet.close(() => {
+        setAsking(false);
+        setMessage("");
+        onChange();
+      });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -53,9 +58,9 @@ export function JoinButton({ g, onChange }: { g: GroupListing; onChange: () => v
     <>
       <button className="btn btn--small btn--primary" onClick={() => setAsking(true)}>Pedir ingreso</button>
       {asking && (
-        <div className="sheet-backdrop" onClick={() => setAsking(false)}>
+        <div className="sheet-backdrop" {...sheet.backdrop}>
           <div className="sheet" role="dialog" aria-modal aria-labelledby="join-title" onClick={(e) => e.stopPropagation()}>
-            <DialogFocus onClose={() => setAsking(false)} />
+            <DialogFocus onClose={sheet.close} />
             <h2 id="join-title">Pedir ingreso a {g.name}</h2>
             <p className="muted small">El dueño o los moderadores del grupo aceptan o rechazan tu solicitud.</p>
             <textarea
@@ -68,7 +73,7 @@ export function JoinButton({ g, onChange }: { g: GroupListing; onChange: () => v
             />
             {error && <p className="error" role="alert">{error}</p>}
             <div className="row">
-              <button className="btn" onClick={() => setAsking(false)}>Cancelar</button>
+              <button className="btn" onClick={() => sheet.close()}>Cancelar</button>
               <button className="btn btn--primary" disabled={busy} onClick={send}>{busy ? "Mandando…" : "Mandar solicitud"}</button>
             </div>
           </div>

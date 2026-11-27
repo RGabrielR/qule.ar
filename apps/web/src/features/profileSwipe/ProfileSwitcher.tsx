@@ -1,3 +1,4 @@
+import { UserName } from "../../components/UserName";
 import { useEffect, useId, useRef } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "../../components/Icons";
 import type { ProfileSwipe } from "./useProfileSwipe";
@@ -22,7 +23,7 @@ export function ProfileSwitcher({ swipe, className = "" }: { swipe: ProfileSwipe
   return (
     <nav className={`profile-switch ${className}`} aria-label="Perfiles de Gente">
       <p id={describedBy} className="sr-only">
-        Estás viendo a <bdi>{current.name}</bdi>, {position} de {total}{hasMore ? " por ahora" : ""}. También podés deslizar o usar las flechas.
+        Estás viendo a <UserName name={current.name} />, {position} de {total}{hasMore ? " por ahora" : ""}. También podés deslizar o usar las flechas.
       </p>
       <button
         ref={prevRef}

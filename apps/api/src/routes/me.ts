@@ -3,6 +3,7 @@ import { mailEnabled } from "../mail.js";
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { stripBidiControls } from "../names.js";
 import { db, schema } from "../db/index.js";
 import { ageFrom, mediaOut, newId, requireProfile, requireUser, type AppEnv } from "../lib.js";
 import { syncGroupRoom } from "../realtime.js";
@@ -33,7 +34,7 @@ const albumFullMessage = `Entre todos tus álbumes podés tener hasta ${MAX_ALBU
 
 const shortText = z.string().trim().max(60);
 const profileInput = z.object({
-  displayName: z.string().trim().min(1, "Poné un nombre").max(40),
+  displayName: z.string().transform(stripBidiControls).pipe(z.string().trim().min(1, "Poné un nombre").max(40)),
   birthdate: z.iso.date().optional(),
   about: z.string().trim().max(500).nullish(),
   heightCm: z.number().int().min(120).max(230).nullish(),
@@ -166,7 +167,7 @@ meRoutes.get("/me", requireUser, async (c) => {
           return { ...rest, age: ageFrom(p.birthdate), hasLocation: cellLat != null && cellLng != null };
         })()
       : null,
-    photos: photos.map((x) => ({ id: x.id, position: x.position, isPrivate: x.isPrivate, albumId: x.albumId, ...mediaOut(x) })),
+    photos: photos.map((x) => ({ id: x.id, position: x.position, isPrivate: x.isPrivate, albumId: x.albumId, ...mediaOut(x), ...explicitOut(x) })),
     // Álbumes privados, en orden (el primero es el álbum por defecto)
     albums: albums.map((a) => ({ id: a.id, name: a.name })),
   });
@@ -295,6 +296,31 @@ meRoutes.post("/me/photos", requireUser, requireProfile, async (c) => {
   const position = mine.length;
   await db.insert(photo).values({ id, userId: u.id, position, isPrivate, albumId, kind, ...saved });
   return c.json({ id, position, isPrivate, albumId, ...mediaOut({ kind, ...saved }) });
+});
+
+/**
+ * Lo que ve quien subió la foto sobre la marca de explícita (ver src/explicit/): si está tapada para quien eligió
+ * no ver fotos explícitas y en qué anda la revisión. Las fotos privadas no se revisan.
+ */
+function explicitOut(x: typeof photo.$inferSelect) {
+  return {
+    explicit: !x.isPrivate && x.explicit,
+    // "requested": pidió que la revisen y moderación todavía no la vio. "reviewed": moderación ya decidió.
+    explicitReview: x.explicitReviewRequestedAt ? ("requested" as const) : x.explicitReviewedAt ? ("reviewed" as const) : null,
+  };
+}
+
+/** Pedir que moderación revise una foto propia que el modelo marcó como explícita (si se equivocó). */
+meRoutes.post("/me/photos/:id/explicit-review", requireUser, requireProfile, async (c) => {
+  const u = c.get("user");
+  const [row] = await db.select().from(photo).where(and(eq(photo.id, c.req.param("id")), eq(photo.userId, u.id)));
+  if (!row) return c.notFound();
+  if (!row.explicit || row.isPrivate) throw new HTTPException(400, { message: "Esa foto no está tapada" });
+  if (row.explicitReviewedAt) throw new HTTPException(409, { message: "Moderación ya revisó esta foto" });
+  if (!row.explicitReviewRequestedAt) {
+    await db.update(photo).set({ explicitReviewRequestedAt: new Date() }).where(eq(photo.id, row.id));
+  }
+  return c.json({ explicitReview: "requested" });
 });
 
 /** Uno de mis álbumes, o 404 (para no confirmar que existe un álbum ajeno). */

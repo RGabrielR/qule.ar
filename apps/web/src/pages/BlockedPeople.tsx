@@ -1,8 +1,11 @@
+import { UserName } from "../components/UserName";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, type Author } from "../api";
+import { motionMs } from "../motion";
 import { Avatar } from "../components/Avatar";
 import { BackIcon } from "../components/Icons";
-import { markBack, usePageTransition } from "../features/navigation/pageTransition";
+import { SkeletonRows } from "../components/Skeleton";
+import { usePageTransition } from "../features/navigation/pageTransition";
 import { useSectionBack } from "../useSectionBack";
 
 type Page = { people: Author[]; total: number; hasMore: boolean };
@@ -10,8 +13,6 @@ type Page = { people: Author[]; total: number; hasMore: boolean };
 type Row = { person: Author; i: number };
 type List = { q: string; rows: Row[]; total: number; hasMore: boolean };
 
-// Lo que dura el cierre de una fila al desbloquear (igual que en styles.css)
-const LEAVE_MS = 260;
 
 export function BlockedPeople() {
   const goBack = useSectionBack("/yo/configuracion");
@@ -84,7 +85,7 @@ export function BlockedPeople() {
           next.delete(person.id);
           return next;
         });
-      }, LEAVE_MS);
+      }, motionMs("--dur-base")); // lo que dura el cierre de la fila (.blocked__row--leaving)
     } catch {
       setNotice("No se pudo desbloquear. Probá de nuevo.");
     } finally {
@@ -97,7 +98,7 @@ export function BlockedPeople() {
   return (
     <div className={`page ${enter}`} ref={pageRef}>
       <header className="topbar topbar--thread">
-        <button type="button" className="iconbtn" aria-label="Volver a Configuración" onClick={() => { markBack(); goBack(); }}><BackIcon /></button>
+        <button type="button" className="iconbtn" aria-label="Volver a Configuración" onClick={goBack}><BackIcon /></button>
         <h1 className="topbar__title">Personas bloqueadas</h1>
       </header>
 
@@ -116,7 +117,7 @@ export function BlockedPeople() {
           <p className="muted">Si bloqueás a alguien, va a aparecer acá y lo vas a poder desbloquear cuando quieras.</p>
         </div>
       ) : list == null ? (
-        failed ? <ListError onRetry={() => void load(q, 0)} /> : null
+        failed ? <ListError onRetry={() => void load(q, 0)} /> : <SkeletonRows count={6} avatar={44} lines={1} className="blocked" />
       ) : list.rows.length === 0 && list.q ? (
         <div className="empty empty--in" role="status"><p className="empty__title">Nadie con ese nombre</p></div>
       ) : (
@@ -130,7 +131,7 @@ export function BlockedPeople() {
               >
                 <div className="blocked__inner">
                   <Avatar src={person.photo} name={person.name} size={44} appear />
-                  <span className="blocked__name"><bdi>{person.name}</bdi></span>
+                  <span className="blocked__name"><UserName name={person.name} /></span>
                   <button className="linkbtn" disabled={busyId === person.id || leaving.has(person.id)} onClick={() => void unblock(person)}>
                     Desbloquear
                   </button>

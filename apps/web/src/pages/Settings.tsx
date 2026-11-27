@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Link } from "react-router";
 import { api, ApiError, authClient, closeSocket, type NotifyKind } from "../api";
 import { useMe } from "../App";
 import { APP_NAME, THEME_LABELS, themes, type ThemeName } from "../brand";
 import { BackIcon, ChevronRightIcon } from "../components/Icons";
 import { usePageTransition } from "../features/navigation/pageTransition";
+import { useSectionBack } from "../useSectionBack";
 import { useRememberScroll } from "../features/navigation/viewMemory";
 import { disablePush, enablePush, pushHelp, pushState, testPush, type PushState } from "../push";
 import { getTheme, setTheme } from "../theme";
@@ -119,7 +121,7 @@ function NotificationsSetting({ prefs, staff, owner }: { prefs: Partial<Record<N
 
 function ThemeSetting() {
   const [theme, setCurrent] = useState(getTheme);
-  const choose = (t: ThemeName) => { setTheme(t); setCurrent(t); };
+  const choose = (t: ThemeName) => setTheme(t, () => flushSync(() => setCurrent(t)));
   return (
     <section className="section">
       <h2 className="section__title section__title--tight">Apariencia</h2>
@@ -136,6 +138,7 @@ function ThemeSetting() {
 export function Settings() {
   const { me, reload } = useMe();
   const enter = usePageTransition();
+  const goBack = useSectionBack("/yo");
   const pageRef = useRef<HTMLDivElement>(null);
   // Al volver (por ejemplo, de Personas bloqueadas) queda donde estabas; al entrar desde Mi perfil arranca arriba
   useRememberScroll(pageRef, enter !== "page--forward");
@@ -163,7 +166,7 @@ export function Settings() {
     }
   }
 
-  function updatePrivacy(json: { incognito?: boolean; showDistance?: boolean; showAge?: boolean }) {
+  function updatePrivacy(json: { incognito?: boolean; showDistance?: boolean; showAge?: boolean; hideExplicit?: boolean }) {
     return change(async () => {
       await api("/me/privacy", { method: "PUT", json });
       await reload();
@@ -197,13 +200,29 @@ export function Settings() {
   return (
     <div className={`page ${enter}`} ref={pageRef}>
       <header className="topbar topbar--thread">
-        <Link to="/yo" className="iconbtn" aria-label="Volver a Mi perfil"><BackIcon /></Link>
+        <button type="button" className="iconbtn" onClick={goBack} aria-label="Volver a Mi perfil"><BackIcon /></button>
         <h1 className="topbar__title">Configuración</h1>
       </header>
 
       <ThemeSetting />
       <NotificationsSetting prefs={me.profile.notifyPrefs ?? {}} staff={(me.user.access ?? []).length > 0} owner={(me.user.access ?? []).includes("owner")} />
       {error && <p className="notice notice--error" role="alert">{error}</p>}
+      <section className="section">
+        <h2 className="section__title">Fotos</h2>
+        <div className="stack">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={me.profile.hideExplicit}
+              disabled={busy}
+              onChange={(e) => updatePrivacy({ hideExplicit: e.currentTarget.checked })}
+            />
+            <span><b>Tapar fotos explícitas en la grilla.</b> Las fotos con genitales o culo al descubierto se ven borrosas en la grilla y en los perfiles, con un botón para verlas igual. Tus fotos las ves siempre normales.</span>
+          </label>
+          <p className="muted small">Las reconoce un modelo que corre en nuestro servidor: ninguna foto sale a otra empresa. Puede equivocarse; no se usa para nada más que taparlas.</p>
+        </div>
+      </section>
+
       <section className="section">
         <h2 className="section__title">Privacidad y ubicación</h2>
         <div className="stack">

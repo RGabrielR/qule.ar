@@ -74,7 +74,7 @@ La lista está en `MINOR_SIGNALS` (`apps/api/src/moderation.ts`). Si aparece una
 
 ## Reportes de mala fe
 
-Hay quien reporta mucho y sin fundamento: para tapar los reportes de verdad, para llenar de avisos a moderación o para intentar que oculten o suspendan a alguien. Arriba de los reportes abiertos, quien tiene el permiso Suspensiones (o la administración general) ve **Quién reporta**: cuentas que reportan de una forma para mirar, con sus números de los últimos 90 días (cuántos reportes, cuántos descartados, cuántos con una medida y cuántos sin revisar) y por qué aparecen:
+Hay quien reporta mucho y sin fundamento: para tapar los reportes de verdad, para llenar de avisos a moderación o para intentar que oculten o suspendan a alguien. Quien tiene el permiso Suspensiones (o la administración general) ve la pestaña **Quién reporta**, aparte de Abiertos para que no tape los reportes (la pestaña muestra cuántas cuentas hay para mirar): cuentas que reportan de una forma para mirar, con sus números de los últimos 90 días (cuántos reportes, cuántos descartados, cuántos con una medida y cuántos sin revisar) y por qué aparecen:
 
 - reportó a **5 o más personas o grupos distintos en una hora**;
 - de sus reportes ya revisados (al menos 5), **se descartó el 80 % o más**;
@@ -117,6 +117,17 @@ Fotos o videos íntimos de alguien compartidos sin su permiso. La Ley 27.736 ("L
 - Primera vez y leve: descartá el reporte o borrá el mensaje, según el caso.
 - Si se repite (el panel muestra cuántos reportes tiene la cuenta en total) o es grave: suspendé.
 - Ante la duda, mirá el [Código de conducta](../CODE_OF_CONDUCT.md).
+
+## Fotos tapadas (fotos explícitas)
+
+Un modelo que corre en nuestro servidor marca las fotos del perfil con genitales o culo al descubierto, para que se vean borrosas a quien eligió taparlas (Configuración → Fotos). **No es un reporte ni una sanción**: subir fotos así está permitido, la marca no baja la foto, no cambia el orden de la grilla y no suma en el historial de nadie (discusión #255).
+
+En la pestaña **Fotos tapadas** (permiso Reportes) se corrige al modelo cuando se equivoca:
+
+- **Revisión pedida:** fotos que quien las subió pidió revisar desde Editar perfil.
+- **Marcadas por el modelo:** las últimas marcadas que nadie revisó, para corregir sin esperar un pedido.
+- **No es explícita** la destapa; **Sí, dejarla tapada** la deja como está. El modelo no vuelve a tocar lo que decidió moderación. Queda en el registro, con la foto como destino (no la cuenta).
+- Cuenta como explícito solo genitales o culo al descubierto. Torsos sin remera, malla o ropa interior, no.
 
 ## Las pruebas
 
