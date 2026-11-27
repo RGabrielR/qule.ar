@@ -1,6 +1,6 @@
 export const ZODIAC_SIGNS = [
-  "Aries", "Tauro", "Géminis", "Cáncer", "Leo", "Virgo",
-  "Libra", "Escorpio", "Sagitario", "Capricornio", "Acuario", "Piscis",
+  "aries", "tauro", "geminis", "cancer", "leo", "virgo",
+  "libra", "escorpio", "sagitario", "capricornio", "acuario", "piscis",
 ] as const;
 
 export type ZodiacSign = (typeof ZODIAC_SIGNS)[number];

@@ -1,8 +1,11 @@
 import { REPORT_RESPONSE_EVENT } from "@mortero/shared/realtime";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
+import { usePageTransition } from "../features/navigation/pageTransition";
+import { useSectionBack } from "../useSectionBack";
 import { api, getSocket } from "../api";
 import { BackIcon } from "../components/Icons";
+import { SkeletonRows } from "../components/Skeleton";
 
 type ReportSummary = {
   id: string;
@@ -56,15 +59,17 @@ function useReportData<T>(path: string, id?: string) {
 
 export function MyReports() {
   const { data: reports, error } = useReportData<ReportSummary[]>("/me/reportes");
+  const goBack = useSectionBack("/yo/configuracion");
+  const enter = usePageTransition();
 
   return (
-    <div className="page">
+    <div className={`page ${enter}`}>
       <header className="topbar topbar--thread">
-        <Link to="/yo/configuracion" className="iconbtn" aria-label="Volver a Configuración"><BackIcon /></Link>
+        <button type="button" className="iconbtn" onClick={goBack} aria-label="Volver a Configuración"><BackIcon /></button>
         <h1 className="topbar__title topbar__title--sm">Mis reportes</h1>
       </header>
       {error ? <p className="notice notice--error" role="alert">No pudimos cargar tus reportes.</p>
-        : !reports ? <p className="empty muted" role="status">Cargando…</p>
+        : !reports ? <SkeletonRows count={4} />
         : reports.length === 0 ? <p className="empty muted">Todavía no enviaste reportes.</p>
         : (
           <ul className="inbox reports-inbox">
@@ -96,11 +101,13 @@ export function MyReport() {
 
 function ReportConversation({ id }: { id: string }) {
   const { data: report, error } = useReportData<ReportThread>(`/me/reportes/${encodeURIComponent(id)}`, id);
+  const goBack = useSectionBack("/yo/reportes");
+  const enter = usePageTransition();
 
   return (
-    <div className="page">
+    <div className={`page ${enter}`}>
       <header className="topbar topbar--thread">
-        <Link to="/yo/reportes" className="iconbtn" aria-label="Volver a Mis reportes"><BackIcon /></Link>
+        <button type="button" className="iconbtn" onClick={goBack} aria-label="Volver a Mis reportes"><BackIcon /></button>
         <h1 className="topbar__title topbar__title--sm">{report?.targetName ?? "Reporte"}</h1>
       </header>
       {error ? <p className="notice notice--error" role="alert">{error}</p>

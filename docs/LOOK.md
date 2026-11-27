@@ -35,7 +35,7 @@ Las controla `npm run lint` (stylelint + `scripts/check-brand.mjs`) y corre en c
 
 1. **En el CSS no hay valores sueltos** de color, radio, sombra, capa (`z-index`), familia o tamaño de letra. Se usa la variable: `var(--danger)`, `var(--radius-xl)`, `var(--text-sm)`.
 2. **Si falta una variable, se agrega en `packages/brand`**, con un nombre por uso (`--queue-soft`), no por valor (`--amarillo-claro`). Y se suma a esta guía.
-3. **Las variables de la marca no se definen en el CSS.** En `styles.css` solo hay variables de layout (`--tabbar-h`, `--tabbar-inset`, `--safe-b`, `--composer-action-height`). El alto de las acciones del chat coincide con el mínimo del campo de mensaje.
+3. **Las variables de la marca no se definen en el CSS.** En `styles.css` solo hay variables de layout (`--tabbar-h`, `--tabbar-inset`, `--safe-b`, `--composer-action-height`, `--people-grid-columns`) y las que eligen la entrada de cada pantalla (`--enter`, `--enter-time`, `--enter-ease`), que toman sus valores de los tokens de movimiento. El alto de las acciones del chat coincide con el mínimo del campo de mensaje. La cantidad de columnas de Gente se usa también para calcular cuántos perfiles cargar.
 4. **Sin colores en TS/TSX.** La única excepción es la "G" de Google (`components/GoogleMark.tsx`).
 5. **Sin `style={{ … }}` para cosas fijas.** Un margen va en una clase de `styles.css`. `style` queda para valores que se calculan en el momento (el tamaño de un avatar, una barra de progreso).
 6. **Pesos de letra que se cargan:** Inter 400, 500, 600 y 700; Bricolage Grotesque 600 y 800. Si hace falta otro, se agrega en `fonts` (`packages/brand`) para que se cargue de verdad.
@@ -101,8 +101,28 @@ Tamaños (`font-size: var(--…)`):
 
 - **Radios** (`border-radius: var(--radius-…)`): `hair` 3 · `xs` 6 · `sm` 8 · `md` 10 · `lg` 12 · `xl` 14 · `2xl` 18 · `3xl` 20 · `4xl` 22 · `pill` 999. Tarjetas en `xl`; botones, chips y contadores en `pill`; hojas modales en `4xl`.
 - **Sombras**: `--shadow-pop` (menús, toasts, carteles flotantes), `--shadow-icon` (íconos sobre fotos, con `filter: drop-shadow()`), `--shadow-ring-ok` (el puntito de en línea).
+- **Desenfoque de fotos explícitas** (`filter: blur(var(--…))`): `--explicit-blur-tile` 16 px en la grilla, `--explicit-blur-cover` 28 px en la portada del perfil. Es el único `blur` permitido en `filter`; la foto se agranda un poco (`scale(1.2)`) para que no se vean los bordes.
 - **Capas** (`z-index: var(--z-…)`), de abajo hacia arriba: `raised` · `sticky` · `menu` · `sheet` · `toast` · `viewer` · `lightbox`.
 - La grilla de gente es de fotos cuadradas, sin espacio entre ellas, con el nombre y el estado encima.
+
+## Movimiento
+
+Las animaciones hacen que la app se sienta fluida, como una app instalada y no como una web. Las curvas y duraciones están en `motion` (`packages/brand`): `--ease-out`, `--ease-in-out`, `--ease-sheet`, `--dur-press`, `--dur-fast`, `--dur-base`, `--dur-page`, `--dur-sheet`, `--stagger` y `--dur-pulse` (el pulso de los esqueletos). No se escriben curvas ni duraciones sueltas.
+
+- **Cambio de pantalla:** el encabezado queda quieto y solo aparece su contenido (título, flecha) con un fundido. Lo de abajo entra desde la derecha (`.page--forward`); al volver con el botón de la app, desde la izquierda y sin fundido (`.page--back`). Lo arma `usePageTransition()` en `features/navigation/pageTransition.ts`; la clase se saca sola al terminar la entrada. El gesto de volver del sistema no se anima: Safari ya hace el suyo.
+- **Cambio de pestaña:** no desliza. El encabezado, las solapas y la barra de abajo quedan quietos; el título y los botones del encabezado aparecen con un fundido y el contenido se asienta con un fundido y un acercamiento mínimo (`.page--tab`, `tab-in`; `useTabTransition()`). Entre solapas de la misma pestaña (Gente: Cerca y Toques) el encabezado no se funde.
+- **Contenido que llega:** sube y aparece (`rise-in`), escalonado por `--stagger` dentro de cada tanda (`useArrival` en `components/useArrival.ts`); en las grillas de fotos, en diagonal y sin subir (`tile-in`). Lo que ya estaba guardado al abrir la pantalla no se anima, y cada fila se anima una sola vez. Las fotos aparecen con un fundido al terminar de cargar (`photoAppear`), sin fundido si ya estaban en caché.
+- **No repetir lo ya visto:** la entrada completa de una lista va la primera vez y cuando se fuerza (tirar para actualizar, otros filtros). Al volver a una pantalla, lo guardado aparece al instante y se revalida por detrás; solo lo nuevo entra animado.
+- **Esperas:** esqueletos con la forma de lo que va a llegar, en vez de "Cargando…" (`components/Skeleton.tsx`). Aparecen recién si la espera pasa de un instante y laten despacio con la opacidad; nada de brillos que se desplazan.
+- **Toques:** respuesta inmediata y corta (`--dur-press`). El hover solo en compu (`@media (hover: hover) and (pointer: fine)`).
+- **Hojas:** suben con `--ease-sheet` (`sheet-up`) y al cerrar bajan (`sheet-down`) antes de desmontarse: `useSheetExit` en `components/useSheetExit.ts`.
+- **Menús y fotos a pantalla completa:** crecen desde 0,95 (`menu-in`, desde el botón que los abrió) o 0,96 (`photo-in`).
+- **Avisos:** suben (`rise-in`) o bajan desde arriba (`drop-in`). **Contadores:** `pop-in` al aparecer o cambiar.
+- **Listas:** `useArrival` (`components/useArrival.ts`) y la clase `.arrive`; fotos con `photoAppear` (`components/photoAppear.ts`) o `<Avatar appear>`; esperas con `components/Skeleton.tsx`.
+- Para esperar a que termine una animación desde TS: `motionMs("--dur-base")` (`src/motion.ts`), nunca milisegundos escritos a mano.
+- Solo `transform`, `scale` y `opacity`. Nada de `scale(0)`: lo que aparece arranca de 0,85 o más.
+- Con movimiento reducido (`prefers-reduced-motion`), todo pasa a fundidos simples.
+- Lo que se repite muchas veces por minuto (escribir, pasar fotos rápido) no se anima o se anima casi nada.
 
 ## Íconos
 

@@ -11,6 +11,8 @@ const server = spawn(process.execPath, ["--import", "tsx", "apps/api/src/index.t
     PORT: process.env.PORT,
     APP_URL: process.env.APP_URL,
     DATA_DIR: dataDir,
+    // Fotos explícitas con un detector de mentira (marca las fotos rojas), sin el modelo de verdad
+    EXPLICIT_CHECK: "test",
   },
 });
 

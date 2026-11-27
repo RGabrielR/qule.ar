@@ -18,7 +18,7 @@ test("permite elegir, cambiar y borrar el signo y filtrar perfiles en Gente", as
   const unassigned = await createAccount(baseURL!, "Luz Sin Signo");
   await signIn(page, owner);
   await page.getByRole("link", { name: "Yo", exact: true }).click();
-  await changeSign(page, "", "Géminis");
+  await changeSign(page, "", "geminis");
   await expect(page.getByText("Géminis", { exact: true })).toBeVisible();
 
   const viewerContext = await browser.newContext({ baseURL, viewport: { width: 375, height: 812 } });
@@ -26,7 +26,7 @@ test("permite elegir, cambiar y borrar el signo y filtrar perfiles en Gente", as
     const grid = await viewerContext.newPage();
     await grid.addInitScript(() => localStorage.setItem("mortero:tema", "penumbra"));
     await signIn(grid, viewer);
-    await grid.goto("/gente");
+    await grid.goto("/cerca");
     await expect(grid.locator("html")).toHaveAttribute("data-theme", "penumbra");
     const listedOwner = grid.getByRole("link", { name: new RegExp(`^${owner.name}(?:,|$)`) });
     const listedUnassigned = grid.getByRole("link", { name: new RegExp(`^${unassigned.name}(?:,|$)`) });
@@ -41,9 +41,9 @@ test("permite elegir, cambiar y borrar el signo y filtrar perfiles en Gente", as
     await listedOwner.click();
     await expect(grid.getByText("Géminis", { exact: true })).toBeVisible();
 
-    await changeSign(page, "Géminis", "Piscis");
+    await changeSign(page, "geminis", "piscis");
     await expect(page.getByText("Piscis", { exact: true })).toBeVisible();
-    await grid.goto("/gente");
+    await grid.goto("/cerca");
     await expect(grid.getByRole("button", { name: "Filtros · 1", exact: true })).toBeVisible();
     await expect(listedOwner).toHaveCount(0);
 
@@ -52,7 +52,7 @@ test("permite elegir, cambiar y borrar el signo y filtrar perfiles en Gente", as
     await filter.getByRole("button", { name: "Aplicar", exact: true }).click();
     await expect(listedOwner).toBeVisible();
 
-    await changeSign(page, "Piscis", "");
+    await changeSign(page, "piscis", "");
     await expect(page.getByText("Signo", { exact: true })).toHaveCount(0);
     await grid.reload();
     await grid.getByRole("button", { name: "Filtros · 1", exact: true }).click();

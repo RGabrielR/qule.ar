@@ -208,8 +208,29 @@
     {
       "idx": 29,
       "version": "7",
-      "when": 1795717814114,
-      "tag": "0029_perfil_signo_zodiacal",
+      "when": 1795713797332,
+      "tag": "0029_acciones_chats_privados",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1795713797710,
+      "tag": "0030_fotos_grupos_piloto",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795721905290,
+      "tag": "0031_fotos_explicitas",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795813540018,
+      "tag": "0032_perfil_signo_zodiacal",
       "breakpoints": true
     }
   ]

@@ -6,11 +6,13 @@ import { albumCount, AlbumViewer } from "../components/AlbumViewer";
 import { EditIcon, EyeIcon, LockIcon, SettingsIcon, StarIcon } from "../components/Icons";
 import { ProfileCover, ProfileStats } from "../components/ProfileContent";
 import { VerifyEmailBanner } from "../features/auth/VerifyEmailBanner";
+import { useTabTransition } from "../features/navigation/pageTransition";
 
 export function MyProfileOverview() {
   const { me } = useMe();
   const [viewingAlbum, setViewingAlbum] = useState<string | null>(null);
   const [unseen, setUnseen] = useState(0);
+  const enter = useTabTransition();
 
   useEffect(() => {
     api<{ count: number }>("/toques/unseen").then(({ count }) => setUnseen(count)).catch(() => {});
@@ -27,7 +29,7 @@ export function MyProfileOverview() {
   const viewing = albums.find((a) => a.id === viewingAlbum);
 
   return (
-    <div className="page profile">
+    <div className={`page profile ${enter}`}>
       <header className="topbar">
         <p className="topbar__title">Mi perfil</p>
         <Link to="/yo/configuracion" className="iconbtn" aria-label="Configuración" title="Configuración">
@@ -46,7 +48,7 @@ export function MyProfileOverview() {
           <nav className="quicklinks" aria-label="Tu actividad">
             <Link to="/visitas" className="quicklink"><EyeIcon /> Quién me vio</Link>
             <Link to="/favoritos" className="quicklink"><StarIcon size={18} /> Favoritos</Link>
-            <Link to="/toques" className="quicklink">
+            <Link to="/cerca/toques" className="quicklink">
               <img src="/reacciones/rayo.svg" alt="" width={18} height={18} /> Toques
               {unseen > 0 && <span className="badge badge--inline" aria-label={`${unseen} sin ver`}>{unseen}</span>}
             </Link>

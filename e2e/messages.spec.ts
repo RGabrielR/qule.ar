@@ -2,11 +2,86 @@ import { expect, test } from "@playwright/test";
 import sharp from "sharp";
 import { createAccount, openProfile, signIn } from "./fixtures";
 
+test.describe("fechas en chats privados", () => {
+  test.use({ timezoneId: "America/Argentina/Buenos_Aires", viewport: { width: 375, height: 812 } });
+
+  test("agrupa por día local y actualiza Hoy a medianoche", async ({ page, baseURL }) => {
+    const sender = await createAccount(baseURL!, "Ana Fechas");
+    const recipient = await createAccount(baseURL!, "Sol Fechas");
+    await signIn(page, sender);
+    await openProfile(page, recipient);
+    await page.getByRole("button", { name: "Mandar mensaje" }).click();
+    await page.getByRole("textbox", { name: "Mensaje", exact: true }).waitFor();
+    const path = new URL(page.url()).pathname.replace("/mensajes/", "/api/conversations/");
+    const dates = new Map<string, string>();
+    for (const [body, createdAt] of [
+      ["Mensaje del domingo", "2026-11-22T23:00:00.000Z"],
+      ["Otro mensaje del domingo", "2026-11-23T02:30:00.000Z"],
+      ["Respuesta del miércoles", "2026-11-25T20:10:00.000Z"],
+    ]) {
+      const response = await page.request.post(`${path}/messages`, { data: { body }, headers: { Origin: baseURL! } });
+      await expect(response).toBeOK();
+      dates.set((await response.json()).id, createdAt);
+    }
+    await page.route(`**${path}/messages`, async (route) => {
+      const response = await route.fetch();
+      const history = await response.json();
+      for (const message of history.messages) message.createdAt = dates.get(message.id);
+      await route.fulfill({ response, json: history });
+    });
+    await page.clock.install({ time: new Date("2026-11-26T02:50:00Z") });
+    await page.reload();
+
+    const log = page.getByRole("log", { name: "Mensajes" });
+    const chips = log.locator(".chat__date");
+    await expect(chips).toHaveText(["22 de noviembre de 2026", "Hoy"]);
+    await expect(log.locator(".chat__date, .bubble p")).toHaveText([
+      "22 de noviembre de 2026", "Mensaje del domingo", "Otro mensaje del domingo", "Hoy", "Respuesta del miércoles",
+    ]);
+    await expect(log.locator(".bubble time")).toHaveText(Array.from(dates, () => /\d{2}:\d{2}/));
+
+    for (const theme of ["oscuro", "penumbra"]) {
+      await page.locator("html").evaluate((root, theme) => { root.dataset.theme = theme; }, theme);
+      const chip = await chips.last().boundingBox();
+      const list = await log.boundingBox();
+      expect(chip).not.toBeNull();
+      expect(list).not.toBeNull();
+      expect(chip!.x + chip!.width / 2).toBeCloseTo(list!.x + list!.width / 2, 0);
+    }
+
+    await page.clock.fastForward(11 * 60 * 1000);
+    await expect(chips).toHaveText(["22 de noviembre de 2026", "25 de noviembre de 2026"]);
+  });
+});
+
 function gate() {
   let release!: () => void;
   const wait = new Promise<void>((resolve) => { release = resolve; });
   return { wait, release };
 }
+
+test("el espacio libre de la barra del chat privado abre el perfil", async ({ page, baseURL }) => {
+  const sender = await createAccount(baseURL!, "Luz Chat");
+  const recipient = await createAccount(baseURL!, "Mar Chat");
+  await page.setViewportSize({ width: 375, height: 700 });
+  await signIn(page, sender);
+  await openProfile(page, recipient);
+  const profileUrl = page.url();
+  await page.getByRole("button", { name: "Mandar mensaje" }).click();
+
+  const back = page.getByRole("button", { name: "Volver", exact: true });
+  const header = page.locator("header").filter({ has: back });
+  await expect(header.getByRole("link", { name: new RegExp(recipient.name) })).toBeVisible();
+  const chatUrl = page.url();
+  const bounds = (await header.boundingBox())!;
+  await header.click({ position: { x: bounds.width - 4, y: bounds.height / 2 } });
+  await expect(page).toHaveURL(profileUrl);
+
+  await page.goBack();
+  await expect(page).toHaveURL(chatUrl);
+  await back.click();
+  await expect(page).toHaveURL(profileUrl);
+});
 
 test("abre una foto del chat para quien la manda y quien la recibe", async ({ page, browser, baseURL }) => {
   const sender = await createAccount(baseURL!, "Luz Fotos");
@@ -493,7 +568,8 @@ test("muestra el mensaje antes de confirmar y lo reintenta tras un corte", async
     await expect.poll(() => keys.length).toBe(2);
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBe(keys[0]);
-    await expect(page.getByRole("button", { name: "Reaccionar u opciones del mensaje" })).toBeVisible();
+    // Ya confirmado, el mensaje tiene sus acciones (se abren manteniéndolo apretado)
+    await expect(page.locator(".message-gesture").filter({ hasText: "Mensaje con mala señal" })).toBeVisible();
     await page.reload();
     await expect(page.getByText("Mensaje con mala señal", { exact: true })).toHaveCount(1);
   } finally {

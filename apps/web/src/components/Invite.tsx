@@ -5,6 +5,7 @@ import { Avatar } from "./Avatar";
 import { GroupAvatar } from "./GroupAvatar";
 import { GroupIcon } from "./Icons";
 import { DialogFocus } from "./DialogFocus";
+import { useSheetExit } from "./useSheetExit";
 
 /**
  * Botón de invitar según dónde está la persona en el grupo.
@@ -60,7 +61,7 @@ function candidatesUrl(groupId: string, q: string, f: CandidateFilters, offset: 
 }
 
 /**
- * Desde la info de un grupo: la lista larga de gente para invitar, de la más cercana a la más lejana,
+ * Desde Invitaciones: la lista larga de gente para invitar, de la más cercana a la más lejana,
  * con búsqueda por nombre y filtros (distancia, en línea, ya chateamos, favoritos, con foto, edad).
  */
 export function InvitePeopleSheet({ groupId, groupName, onClose, onChange }: {
@@ -75,6 +76,7 @@ export function InvitePeopleSheet({ groupId, groupName, onClose, onChange }: {
   const [data, setData] = useState<InviteCandidates | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const { close, backdrop } = useSheetExit(onClose);
 
   const load = useCallback(
     (query: string, filters: CandidateFilters) =>
@@ -115,9 +117,9 @@ export function InvitePeopleSheet({ groupId, groupName, onClose, onChange }: {
   const active = JSON.stringify(f) !== JSON.stringify(NO_FILTERS);
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
+    <div className="sheet-backdrop" {...backdrop}>
       <div className="sheet sheet--list invite-sheet" role="dialog" aria-modal aria-labelledby="invite-title" onClick={(e) => e.stopPropagation()}>
-        <DialogFocus onClose={onClose} />
+        <DialogFocus onClose={close} />
         <h2 id="invite-title">Invitar a {groupName}</h2>
         <input
           className="input"
@@ -193,7 +195,7 @@ export function InvitePeopleSheet({ groupId, groupName, onClose, onChange }: {
           <button className="btn btn--ghost" disabled={loadingMore} onClick={more}>{loadingMore ? "Cargando…" : "Ver más gente"}</button>
         )}
         <p className="muted small">La persona recibe la invitación y elige si entra.</p>
-        <button className="btn" onClick={onClose}>Listo</button>
+        <button className="btn" onClick={() => close()}>Listo</button>
       </div>
     </div>
   );
@@ -204,6 +206,7 @@ export function InviteToGroups({ userId, name }: { userId: string; name: string 
   const [groups, setGroups] = useState<InvitableGroup[] | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
+  const sheet = useSheetExit(() => setOpen(false));
 
   useEffect(() => {
     api<InvitableGroup[]>(`/groups/invitable/${userId}`).then(setGroups).catch(() => setGroups([]));
@@ -225,9 +228,9 @@ export function InviteToGroups({ userId, name }: { userId: string; name: string 
     <>
       <button className="btn btn--ghost" onClick={() => setOpen(true)}><GroupIcon /> Invitar a un grupo</button>
       {open && (
-        <div className="sheet-backdrop" onClick={() => setOpen(false)}>
+        <div className="sheet-backdrop" {...sheet.backdrop}>
           <div className="sheet sheet--list" role="dialog" aria-modal aria-labelledby="invite-groups-title" onClick={(e) => e.stopPropagation()}>
-            <DialogFocus onClose={() => setOpen(false)} />
+            <DialogFocus onClose={sheet.close} />
             <h2 id="invite-groups-title">Invitar a {name}</h2>
             <p className="muted small">Estos son los grupos que moderás. {name} recibe la invitación y elige si entra.</p>
             {error && <p className="error" role="alert">{error}</p>}
@@ -242,7 +245,7 @@ export function InviteToGroups({ userId, name }: { userId: string; name: string 
                 </li>
               ))}
             </ul>
-            <button className="btn" onClick={() => setOpen(false)}>Listo</button>
+            <button className="btn" onClick={() => sheet.close()}>Listo</button>
           </div>
         </div>
       )}

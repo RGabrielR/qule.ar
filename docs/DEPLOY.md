@@ -137,6 +137,28 @@ Node usa un solo núcleo por proceso. Con Postgres (`DATABASE_URL`), la app arra
 - Si un proceso se cae, se levanta otro solo. Si el líder no llega a arrancar (por ejemplo, falla una migración), se corta todo y Docker lo reinicia con el error en el log.
 - Cada proceso usa su propia memoria. Mirá `docker stats` después de subir: si el servidor queda justo, bajá `WORKERS`.
 
+### Fotos explícitas (contenedor aparte)
+
+Un modelo abierto ([NudeNet](https://github.com/notAI-tech/NudeNet), AGPL-3.0) revisa las fotos del perfil y marca las que muestran genitales o culo al descubierto, para taparlas a quien eligió no verlas (discusión #255). Corre en el servidor: **ninguna foto sale a otro lado**. La marca no ordena la grilla, no filtra y no cuenta en moderación. Código en `apps/api/src/explicit/`.
+
+Corre en su propio contenedor, con la misma imagen, el mismo `app.env` y el mismo volumen, y con CPU y memoria limitadas por Docker: así nunca le saca recursos al chat ni a la grilla. Si no está corriendo, la app anda igual y las fotos nuevas quedan sin revisar hasta que vuelva.
+
+```bash
+docker run -d --name mortero-fotos --restart unless-stopped --network mortero \
+  --env-file /opt/mortero/app.env \
+  -v mortero-data:/data \
+  --cpus=0.5 --memory=512m \
+  mortero:latest node --import tsx src/explicitWorker.ts
+docker logs -f mortero-fotos   # tiene que decir "Fotos explícitas: revisando (NudeNet, hasta 30 por minuto, N pendientes)"
+```
+
+- **Qué pesa:** el modelo (`320n.onnx`) son 12 MB y onnxruntime para Linux suma unos 47 MB a la imagen. El modelo se baja al construir la imagen (del paquete de NudeNet en PyPI) y se verifica por hash: ver `apps/api/scripts/nudenet-model.mjs`.
+- **Qué usa:** el proceso entero ronda los 200 MB de RAM (el modelo cargado, unos 55 MB). Cada foto lleva unos 40 ms de CPU en una Mac M1; en un VPS calculá entre 100 y 150 ms. Con el tope de 30 por minuto son unos segundos de CPU por minuto, y `--cpus=0.5` es el techo aunque algo salga mal.
+- **Límite de trabajo:** `EXPLICIT_PER_MINUTE` (por defecto 30) es cuántas fotos revisa por minuto, como mucho, de a una y con un hilo (`EXPLICIT_THREADS=1`). Las fotos nuevas van primero; las que ya estaban se revisan con lo que sobra. La primera pasada tarda: con 20.000 fotos de perfil y 30 por minuto, unas 11 horas.
+- **Cuándo marca:** `EXPLICIT_MIN_SCORE` (por defecto 0.5) es qué tan seguro tiene que estar el modelo. El puntaje queda guardado en `photo.explicit_score`, para poder ajustar el umbral.
+- `EXPLICIT_CHECK` en el API queda sin poner (en producción el API no corre el modelo). En desarrollo corre adentro del API si bajaste el modelo con `npm run model --workspace api`; sin el modelo, no revisa nada.
+- Moderación corrige al modelo en el panel, pestaña **Fotos tapadas** (permiso Reportes): ve los pedidos de revisión y las últimas fotos marcadas. Lo que decide moderación, el modelo no lo pisa.
+
 ## 5. nginx y HTTPS
 
 ```bash
@@ -258,6 +280,8 @@ cd /opt/mortero/src && git pull
 docker build -t mortero:latest --build-arg APP_URL=https://tu.dominio.com .
 docker rm -f mortero-app
 docker run -d --name mortero-app ...   # el mismo comando del paso 4
+docker rm -f mortero-fotos
+docker run -d --name mortero-fotos ... # el mismo comando de "Fotos explícitas"
 ```
 
 Usá el mismo `APP_URL` que figura en `/opt/mortero/app.env` para conservar el dominio de las vistas previas al actualizar.

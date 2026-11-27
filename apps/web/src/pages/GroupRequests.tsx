@@ -5,6 +5,7 @@ import { BackIcon } from "../components/Icons";
 import { JoinRequests } from "../features/groups/JoinRequests";
 import { useTabData } from "../features/navigation/tabData";
 import { useSectionBack } from "../useSectionBack";
+import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 
 export function GroupRequests() {
   const { id = "" } = useParams();
@@ -14,10 +15,12 @@ export function GroupRequests() {
   const chat = `/grupos/${id}`;
   const backFromNotification = useSectionBack(`${chat}?aviso=1`);
   const fromNotification = new URLSearchParams(search).get("aviso") === "1";
+  const enter = usePageTransition();
   const [group, setGroup] = useState<GroupInfo | null>(null);
   const [error, setError] = useState("");
 
   function goBack() {
+    markBack();
     if (fromNotification) backFromNotification();
     else if (state?.groupRequestsFrom === "details" || state?.groupRequestsFrom === "chat") navigate(-1);
     else navigate(chat, { replace: true });
@@ -62,7 +65,7 @@ export function GroupRequests() {
   }, [chat, id, navigate]);
 
   return (
-    <div className="page">
+    <div className={`page ${enter}`}>
       <header className="topbar topbar--thread">
         <button type="button" className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
         <div className="topbar__grow">

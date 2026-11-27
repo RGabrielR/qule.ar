@@ -59,7 +59,7 @@ before(async () => {
         bodyType: maybe(pick(BODY)),
         position: maybe(pick(POS)),
         relationship: maybe(pick(REL)),
-        zodiacSign: (["Géminis", "Piscis", null] as const)[i % 3],
+        zodiacSign: (["geminis", "piscis", null] as const)[i % 3],
         hasPlace: maybe(pick(["si", "no"]), 0.6),
         tribes: some(TRIBES),
         lookingFor: some(LOOKING),
@@ -132,7 +132,7 @@ async function reference(me: { userId: string; cellLat: number | null; cellLng: 
     hasMore: list.length > f.offset + 60,
     total: list.length,
     people: page.map(({ p, km, age }) => ({
-      id: p.userId, name: p.displayName, age, photo: thumbUrl(first.get(p.userId)), coverPhoto: imageUrl(first.get(p.userId)), online: false,
+      id: p.userId, name: p.displayName, age, photo: thumbUrl(first.get(p.userId)), coverPhoto: imageUrl(first.get(p.userId)), blur: false, online: false,
       recent: Date.now() - p.lastSeenAt.getTime() < 15 * 60_000, favorite: favs.has(p.userId),
       distance: km != null ? distanceLabel(km) : null,
     })),
@@ -149,8 +149,8 @@ const CASES: Record<string, string>[] = [
   { ageMax: "40", heightMin: "170", weightMax: "80" },
   { bodyType: "atletico,grande", position: "versatil" },
   { relationship: "soltero" },
-  { zodiacSign: "Géminis" },
-  { zodiacSign: "Géminis,Piscis", ageMin: "30", offset: "60" },
+  { zodiacSign: "geminis" },
+  { zodiacSign: "geminis,piscis", ageMin: "30", offset: "60" },
   { hasPlace: "si" },
   { hasPlace: "no", offset: "60" },
   { hasPlace: "si,no" },
@@ -189,7 +189,7 @@ test("acomoda los filtros raros en vez de rechazarlos y conserva el texto como v
   assert.deepEqual(parseNearbyFilters({ tribes: `oso,${"a".repeat(61)},nutria` }).tribes, ["oso", "nutria"]);
   assert.equal(parseNearbyFilters({ position: Array(25).fill("versatil").join(",") }).position.length, 20);
   assert.equal(parseNearbyFilters({ lookingFor: "x,".repeat(100_000) }).lookingFor.length, 20);
-  assert.deepEqual(parseNearbyFilters({ zodiacSign: "inventado,Géminis" }).zodiacSign, ["Géminis"]);
+  assert.deepEqual(parseNearbyFilters({ zodiacSign: "inventado,geminis" }).zodiacSign, ["geminis"]);
   // Lo que no es un número sí da error
   const notNumbers: Record<string, string>[] = [{ ageMin: "abc" }, { heightMax: "Infinity" }, { offset: "-1" }];
   for (const q of notNumbers) assert.throws(() => parseNearbyFilters(q));
@@ -232,6 +232,17 @@ test("no aparecen bloqueos, ocultos por reportes, incógnito ni suspendidos", as
   assert.equal(seen.size, got.total);
   for (const id of ["u3", "u22", "u40", "u59", "u700", ME]) assert.ok(!seen.has(id), id);
   assert.ok(seen.has("u800"), "dos reportes no alcanzan para ocultar");
+});
+
+test("Cerca permite completar una tanda y devuelve el siguiente desplazamiento", async () => {
+  const me = MES["con ubicación"];
+  const regular = await nearbyPage(me, parseNearbyFilters({}));
+  const first = await nearbyPage(me, parseNearbyFilters({ limit: "3" }));
+  const next = await nearbyPage(me, parseNearbyFilters({ offset: String(first.nextOffset), limit: "4" }));
+  assert.equal(first.nextOffset, 3);
+  assert.equal(next.nextOffset, 7);
+  assert.deepEqual([...first.people, ...next.people], regular.people.slice(0, 7));
+  assert.throws(() => parseNearbyFilters({ limit: "61" }));
 });
 
 test("tener lugar: sin filtro no deja a nadie afuera, y con los dos solo quedan quienes lo dijeron", async () => {

@@ -37,8 +37,11 @@ test("reaccionar a un mensaje viejo no lleva la vista al final de la charla", as
 
     const first = page.locator(".chat__list .bubble").first();
     await expect(first).toContainText("Mensaje 1 para poder scrollear");
-    await first.getByRole("button", { name: "Reaccionar u opciones del mensaje" }).click();
-    await page.getByRole("button", { name: "Jaja", exact: true }).click();
+    // Las acciones del mensaje se abren manteniéndolo apretado o con el teclado
+    await first.press("Enter");
+    // También se elige con el teclado: el clic de Playwright desplaza la lista para mostrar el botón mientras el
+    // menú todavía entra animado, y eso movía la vista por su cuenta, no por la reacción
+    await page.getByRole("button", { name: "Jaja", exact: true }).press("Enter");
     await expect(first.getByRole("button", { name: /Jaja/ })).toBeVisible();
 
     expect(await list.evaluate((el) => el.scrollTop)).toBeLessThan(100);

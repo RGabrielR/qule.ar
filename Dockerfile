@@ -7,7 +7,12 @@ COPY apps/web/package.json apps/web/
 COPY packages/brand/package.json packages/brand/
 COPY packages/shared/package.json packages/shared/
 RUN npm ci --no-audit --no-fund
+# onnxruntime (para el modelo de fotos explícitas) trae binarios para todas las plataformas: quedan solo los de esta
+RUN cd node_modules/onnxruntime-node/bin/napi-v6 && rm -rf darwin win32 \
+ && find linux -mindepth 1 -maxdepth 1 ! -name "$(node -p process.arch)" -exec rm -rf {} +
 COPY . .
+# Modelo de NudeNet para las fotos explícitas (12 MB), verificado por hash. Ver apps/api/scripts/nudenet-model.mjs
+RUN node apps/api/scripts/nudenet-model.mjs
 # URL pública para og:url, canonical y og:image (ver --build-arg en docs/DEPLOY.md)
 ARG APP_URL=https://qule.ar
 ENV APP_URL=$APP_URL

@@ -1,5 +1,5 @@
 {
-  "id": "25cb6906-0acd-4434-88ea-25c89e546b70",
+  "id": "56e4ec15-d3a5-4c3c-a5ba-86e567279e74",
   "prevId": "9c9f1f3d-2d68-4e5d-8f20-eed90d3f1e42",
   "version": "7",
   "dialect": "postgresql",
@@ -687,6 +687,95 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.conversation_settings": {
+      "name": "conversation_settings",
+      "schema": "",
+      "columns": {
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "muted": {
+          "name": "muted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "cleared_at": {
+          "name": "cleared_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "conv_settings_conversation_idx": {
+          "name": "conv_settings_conversation_idx",
+          "columns": [
+            {
+              "expression": "conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "conversation_settings_conversation_id_conversation_id_fk": {
+          "name": "conversation_settings_conversation_id_conversation_id_fk",
+          "tableFrom": "conversation_settings",
+          "tableTo": "conversation",
+          "columnsFrom": [
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "conversation_settings_user_id_user_id_fk": {
+          "name": "conversation_settings_user_id_user_id_fk",
+          "tableFrom": "conversation_settings",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "conversation_settings_user_id_conversation_id_pk": {
+          "name": "conversation_settings_user_id_conversation_id_pk",
+          "columns": [
+            "user_id",
+            "conversation_id"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -2210,12 +2299,6 @@
         },
         "pronouns": {
           "name": "pronouns",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "zodiac_sign": {
-          "name": "zodiac_sign",
           "type": "text",
           "primaryKey": false,
           "notNull": false

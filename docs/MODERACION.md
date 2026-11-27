@@ -44,13 +44,20 @@ Un grupo **no se puede crear ni editar** si el nombre o la descripción apuntan 
 
 - **menores** ("+14", "-18", "15 años", "sub 18", "menorcitos", "teens", "busco menores"…). Además, el intento le llega a moderación como alerta urgente sobre quien lo intentó;
 - **vender o comprar** cosas o servicios ("vendo", "venta", "precio", "$ 500", "stock", "delivery"…);
-- **masajes, acompañantes o servicios sexuales**.
+- **masajes, acompañantes o servicios sexuales**;
+- **convocatorias explícitas a sexo en lugares donde otras personas lo pueden ver sin querer** ("sexo en la plaza", "garchar en parques", "coger en baños públicos"…).
+
+**Encuentros sexuales en lugares públicos: se mira la conducta, no la palabra** (discusión #270). "Cruising" por sí solo no se bloquea: también puede ser ir a un sauna, a un bar o conocer gente. Lo que no se permite es **organizar encuentros sexuales en lugares donde otras personas los puedan ver sin querer** (vía pública, plazas, baños públicos, transporte): el art. 129 del Código Penal sanciona la exhibición obscena expuesta a la vista involuntaria de terceros, más grave si la pueden ver menores. En lugares privados o habilitados, sí.
+
+- **"Nos vemos en tal plaza"**, sin más: puede ser solo juntarse. No se actúa.
+- **Un relato** ("estuve en ese baño y…"): es algo que ya pasó. Se evalúa el contexto.
+- **Una convocatoria concreta** ("vamos a coger en el baño de tal lugar"): si se reporta, se revisa pronto, se borra el mensaje y, según el caso, se suspende. Siempre queda registrado qué se hizo.
 
 **Las drogas no se filtran por palabras.** Hablar de consumo cuidado y de reducción de daños está permitido, y esos grupos son bienvenidos. Lo que no se permite es vender u ofrecer drogas: eso se reporta a mano (ver "Mensajes", más abajo).
 
 La persona ve un mensaje que explica por qué no se puede. Las listas están en `FORBIDDEN_GROUP` (`apps/api/src/moderation.ts`), probadas para no frenar grupos inocentes: "Promo 2010" o "Juegos de mesa +18" pasan sin problema. Si aparece una forma nueva de esquivarlas, se suma ahí.
 
-Los grupos que **ya existían** con esos nombres se revisan al arrancar la app y van a moderación como alerta automática, con el motivo "menor de edad" o "venta o drogas" (este último, para los de venta y servicios). No se repiten: si moderación ya lo revisó y el texto no cambió, no vuelve a aparecer.
+Los grupos que **ya existían** con esos nombres se revisan al arrancar la app y van a moderación como alerta automática, con el motivo "menor de edad", "venta o drogas" (para los de venta y servicios) u "otro" (para las convocatorias a sexo en lugares públicos). No se repiten: si moderación ya lo revisó y el texto no cambió, no vuelve a aparecer.
 
 **Mensajes:** las reglas se aplican a nombres y descripciones, no a lo que se escribe adentro. Si alguien vende u ofrece drogas o vende algo en un chat, se reporta con el motivo **"venta o drogas"** y moderación borra el mensaje o suspende la cuenta.
 
@@ -67,7 +74,7 @@ La lista está en `MINOR_SIGNALS` (`apps/api/src/moderation.ts`). Si aparece una
 
 ## Reportes de mala fe
 
-Hay quien reporta mucho y sin fundamento: para tapar los reportes de verdad, para llenar de avisos a moderación o para intentar que oculten o suspendan a alguien. Arriba de los reportes abiertos, quien tiene el permiso Suspensiones (o la administración general) ve **Quién reporta**: cuentas que reportan de una forma para mirar, con sus números de los últimos 90 días (cuántos reportes, cuántos descartados, cuántos con una medida y cuántos sin revisar) y por qué aparecen:
+Hay quien reporta mucho y sin fundamento: para tapar los reportes de verdad, para llenar de avisos a moderación o para intentar que oculten o suspendan a alguien. Quien tiene el permiso Suspensiones (o la administración general) ve la pestaña **Quién reporta**, aparte de Abiertos para que no tape los reportes (la pestaña muestra cuántas cuentas hay para mirar): cuentas que reportan de una forma para mirar, con sus números de los últimos 90 días (cuántos reportes, cuántos descartados, cuántos con una medida y cuántos sin revisar) y por qué aparecen:
 
 - reportó a **5 o más personas o grupos distintos en una hora**;
 - de sus reportes ya revisados (al menos 5), **se descartó el 80 % o más**;
@@ -110,6 +117,17 @@ Fotos o videos íntimos de alguien compartidos sin su permiso. La Ley 27.736 ("L
 - Primera vez y leve: descartá el reporte o borrá el mensaje, según el caso.
 - Si se repite (el panel muestra cuántos reportes tiene la cuenta en total) o es grave: suspendé.
 - Ante la duda, mirá el [Código de conducta](../CODE_OF_CONDUCT.md).
+
+## Fotos tapadas (fotos explícitas)
+
+Un modelo que corre en nuestro servidor marca las fotos del perfil con genitales o culo al descubierto, para que se vean borrosas a quien eligió taparlas (Configuración → Fotos). **No es un reporte ni una sanción**: subir fotos así está permitido, la marca no baja la foto, no cambia el orden de la grilla y no suma en el historial de nadie (discusión #255).
+
+En la pestaña **Fotos tapadas** (permiso Reportes) se corrige al modelo cuando se equivoca:
+
+- **Revisión pedida:** fotos que quien las subió pidió revisar desde Editar perfil.
+- **Marcadas por el modelo:** las últimas marcadas que nadie revisó, para corregir sin esperar un pedido.
+- **No es explícita** la destapa; **Sí, dejarla tapada** la deja como está. El modelo no vuelve a tocar lo que decidió moderación. Queda en el registro, con la foto como destino (no la cuenta).
+- Cuenta como explícito solo genitales o culo al descubierto. Torsos sin remera, malla o ropa interior, no.
 
 ## Las pruebas
 

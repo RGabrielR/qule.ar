@@ -1,4 +1,4 @@
-import { compareDmOrder, DM_EVENTS, INBOX_LIMIT, type DmReadReceipt } from "@mortero/shared/realtime";
+import { compareDmOrder, DM_EVENTS, INBOX_LIMIT, type DmReadReceipt, type DmSettingsChange } from "@mortero/shared/realtime";
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { api, ApiError, getSocket, type ConversationSummary, type Dm } from "../../api";
 
@@ -24,7 +24,8 @@ function replaceConversation(list: ConversationSummary[], id: string, summary: C
   const index = next.findIndex((chat) => compareConversations(summary, chat) > 0);
   if (index === -1) next.push(summary);
   else next.splice(index, 0, summary);
-  return next.slice(0, INBOX_LIMIT);
+  // Sin recortar: si la persona cargó chats anteriores, el que queda último no tiene que desaparecer.
+  return next;
 }
 
 function addMessage(chat: ConversationSummary, message: Dm, userId: string): ConversationSummary {
@@ -131,7 +132,7 @@ export function useLiveInbox(
       const list = currentData.current;
       const hidesPreview = list?.some((chat) => chat.id === conversationId && chat.last.id === id);
       if (list && hidesPreview) update(replaceConversation(list, conversationId, null));
-      void refreshConversation(conversationId, Boolean(hidesPreview && list?.length === INBOX_LIMIT));
+      void refreshConversation(conversationId, Boolean(hidesPreview && (list?.length ?? 0) >= INBOX_LIMIT));
     }
 
     // El socket y la respuesta HTTP pueden confirmar la misma escritura en cualquier orden.
@@ -147,6 +148,10 @@ export function useLiveInbox(
 
     function onRead(receipt: DmReadReceipt) {
       if (receipt.audience === "reader") refreshAfterRead(receipt.conversationId, receipt.receiptId);
+    }
+
+    function onSettings({ conversationId, change }: DmSettingsChange) {
+      void refreshConversation(conversationId, change === "cleared" && (currentData.current?.length ?? 0) >= INBOX_LIMIT);
     }
 
     reconcileInitialChanges.current = () => {
@@ -167,6 +172,7 @@ export function useLiveInbox(
     socket.on(DM_EVENTS.updated, onUpdated);
     socket.on(DM_EVENTS.read, onRead);
     socket.on(DM_EVENTS.deleted, onDeleted);
+    socket.on(DM_EVENTS.settings, onSettings);
     socket.on(DM_EVENTS.access, reset);
     socket.io.on("reconnect", reset);
     return () => {
@@ -175,6 +181,7 @@ export function useLiveInbox(
       socket.off(DM_EVENTS.updated, onUpdated);
       socket.off(DM_EVENTS.read, onRead);
       socket.off(DM_EVENTS.deleted, onDeleted);
+      socket.off(DM_EVENTS.settings, onSettings);
       socket.off(DM_EVENTS.access, reset);
       socket.io.off("reconnect", reset);
       cancelRequests();

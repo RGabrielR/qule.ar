@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./nearby": "./src/nearby.ts",
     "./realtime": "./src/realtime.ts",
     "./zodiac": "./src/zodiac.ts"
   }

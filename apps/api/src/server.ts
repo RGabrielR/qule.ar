@@ -30,12 +30,15 @@ import { sweepExpiredPhotos } from "./expiring.js";
 import { purgeRemovedGroups, scanExistingGroups } from "./moderation.js";
 import { runAutoSuspensions } from "./autoSuspend.js";
 import { signalReady } from "./shared.js";
+import { explicitMode, startExplicitQueue } from "./explicit/index.js";
 
 checkDataKey();
 
 // Con varios procesos (ver cluster.ts), lo que no se puede repetir lo hace solo el líder: migrar la base,
 // las tareas cada tanto y publicar los mensajes en cola. Con un solo proceso, este es el líder.
 const leader = !cluster.isWorker || process.env.LEADER === "1";
+/** Se corta al apagar: frena las tareas largas en segundo plano. */
+const stopping = new AbortController();
 
 if (leader) {
   if (!env.DATABASE_URL || env.MIGRATE_ON_STARTUP) await runMigrations();
@@ -62,6 +65,13 @@ if (leader) {
     .catch((e) => console.error("runAutoSuspensions", e));
   await autoSuspend();
   setInterval(autoSuspend, 15 * 60_000).unref();
+
+  // Fotos explícitas: en desarrollo y en las pruebas, el modelo corre acá. En producción, en su propio contenedor
+  // (ver src/explicitWorker.ts y docs/DEPLOY.md). Nunca frena el arranque.
+  const explicit = explicitMode();
+  if (explicit !== "off") {
+    void startExplicitQueue(explicit, stopping.signal).catch((e) => console.error("Fotos explícitas", e));
+  }
 
   // El chat general existe siempre
   const [general] = await db.select().from(schema.group).where(eq(schema.group.isGeneral, true));
@@ -154,6 +164,7 @@ async function shutdown(signal: string) {
   if (closing) return;
   closing = true;
   console.log(`${signal}: cerrando…`);
+  stopping.abort();
   const force = setTimeout(() => process.exit(1), 5_000);
   force.unref();
   (server as HttpServer).close();
