@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from "react-router";
+import { Navigate, NavLink, Outlet, Route, Routes, useLocation, useParams } from "react-router";
 import { api, ApiError, closeSocket, getSocket, type Me } from "./api";
 import { Admin } from "./pages/Admin";
 import { Suspended } from "./pages/Suspended";
@@ -33,7 +33,10 @@ import { MyReport, MyReports } from "./pages/MyReports";
 import { MyProfileOverview } from "./pages/MyProfileOverview";
 import { Settings } from "./pages/Settings";
 import { BlockedPeople } from "./pages/BlockedPeople";
-import { ChatIcon, GridIcon, GroupIcon, UserIcon } from "./components/Icons";
+import { ChatIcon, GridIcon, GroupIcon, ShieldIcon, UserIcon } from "./components/Icons";
+import { Wordmark } from "./components/Wordmark";
+import { SplitView, ThreadWithAside } from "./features/desktop/SplitView";
+import { useDesktop } from "./features/desktop/useDesktop";
 import { Nearby } from "./pages/Nearby";
 import { Favorites, Toques, Views } from "./pages/People";
 import { PeopleTabs } from "./features/people/PeopleTabs";
@@ -84,14 +87,18 @@ export function App() {
           <Route path="/" element={<Navigate to="/cerca" replace />} />
           <Route path="/cerca" element={<PeopleView />} />
           <Route path="/cerca/toques" element={<PeopleView showToques />} />
-          <Route path="/grupos" element={<Groups />} />
-          <Route path="/grupos/:id" element={<GroupChat />} />
-          <Route path="/grupos/:id/info" element={<GroupInfo />} />
-          <Route path="/grupos/:id/editar" element={<GroupEdit />} />
-          <Route path="/grupos/:id/invitaciones" element={<GroupInvitations />} />
-          <Route path="/grupos/:id/solicitudes" element={<GroupRequests />} />
-          <Route path="/mensajes" element={<Inbox />} />
-          <Route path="/mensajes/:id" element={<Conversation />} />
+          {/* En compu, la lista queda a la izquierda y lo abierto a la derecha (ver features/desktop/SplitView.tsx) */}
+          <Route path="/grupos" element={<SplitView list={<Groups />} empty={GROUPS_EMPTY} />}>
+            <Route path=":id" element={<GroupRoute />}>
+              <Route path="info" element={<GroupInfo />} />
+              <Route path="editar" element={<GroupEdit />} />
+              <Route path="invitaciones" element={<GroupInvitations />} />
+              <Route path="solicitudes" element={<GroupRequests />} />
+            </Route>
+          </Route>
+          <Route path="/mensajes" element={<SplitView list={<Inbox />} empty={MESSAGES_EMPTY} />}>
+            <Route path=":id" element={<ConversationRoute />} />
+          </Route>
           <Route path="/perfil/:id" element={<ProfilePage />} />
           <Route path="/yo" element={<MyProfileOverview />} />
           <Route path="/yo/reportes" element={<MyReports />} />
@@ -144,6 +151,20 @@ function RequirePermission({ allows }: { allows: (me: Me) => boolean }) {
   const { me } = useMe();
   if (!me || !allows(me)) return <Navigate to="/" replace />;
   return <Outlet />;
+}
+
+const MESSAGES_EMPTY = { title: "Elegí una charla", text: "Se abre acá, al lado de la lista, y podés pasar de una a otra sin volver." };
+const GROUPS_EMPTY = { title: "Elegí un grupo", text: "El chat se abre acá. Los detalles del grupo, a la derecha del chat." };
+
+// Cada charla y cada grupo arrancan de cero: en compu se pasa de uno a otro sin salir de la pantalla
+function ConversationRoute() {
+  const { id } = useParams();
+  return <Conversation key={id} />;
+}
+
+function GroupRoute() {
+  const { id } = useParams();
+  return <ThreadWithAside key={id} thread={<GroupChat />} />;
 }
 
 const UnseenToquesContext = createContext(0);
@@ -211,8 +232,10 @@ function ShellContent() {
     else nav.clearAppBadge?.().catch(() => {});
   }, [unread, pending]);
 
-  // En una conversación abierta, la barra de abajo se esconde para dejar lugar al teclado
-  const inThread = /^\/mensajes\/.+/.test(loc.pathname) || /^\/grupos\/[^/]+\/?$/.test(loc.pathname);
+  // En una conversación abierta, la barra de abajo se esconde para dejar lugar al teclado.
+  // En compu no: la barra va al costado y el chat comparte la pantalla con la lista.
+  const desktop = useDesktop();
+  const inThread = !desktop && (/^\/mensajes\/.+/.test(loc.pathname) || /^\/grupos\/[^/]+\/?$/.test(loc.pathname));
   const chatShell = useChatViewport(inThread);
   const inMyProfile = /^\/yo(?:\/|$)/.test(loc.pathname);
   const nearbyEntry = loc.pathname.startsWith("/perfil/") ? loc.state?.nearbyEntry : undefined;
@@ -236,6 +259,7 @@ function ShellContent() {
       )}
       {!inThread && (
         <nav className="tabbar" aria-label="Secciones">
+          {desktop && <div className="tabbar__brand"><Logo className="tabbar__logo" /><Wordmark /></div>}
           <NavLink to={TAB_PATHS[0]} state={nearbyEntry ? { nearbyEntry } : undefined} className="tabbar__item">
             <GridIcon /> <span>Gente</span>
             {toques > 0 && <b className="badge" aria-label={toques === 1 ? "1 toque nuevo" : `${toques > 99 ? "99+" : toques} toques nuevos`}>{toques > 99 ? "99+" : toques}</b>}
@@ -251,6 +275,12 @@ function ShellContent() {
           <NavLink to={TAB_PATHS[3]} className="tabbar__item">
             <UserIcon /> <span>Yo</span>
           </NavLink>
+          {/* En el celular, Moderación se abre desde Yo; en compu está a mano en la barra */}
+          {desktop && me?.user.isAdmin && (
+            <NavLink to="/admin" className="tabbar__item tabbar__item--end">
+              <ShieldIcon /> <span>Moderación</span>
+            </NavLink>
+          )}
         </nav>
       )}
     </div>

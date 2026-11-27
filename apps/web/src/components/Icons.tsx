@@ -101,3 +101,6 @@ export const BellIcon = () => (
 export const BellOffIcon = () => (
   <svg {...base} width={16} height={16}><path d="m3 3 18 18M6 7a7 7 0 0 0-.5 2c0 5-2 6.5-2 6.5H15m4.5-1A13 13 0 0 1 18 9a6 6 0 0 0-8.3-5.5M10 19.5a2.2 2.2 0 0 0 4 0" /></svg>
 );
+export const ShieldIcon = () => (
+  <svg {...base}><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.2-7.5 9.5-4.4-1.3-7.5-4.9-7.5-9.5V6z" /><path d="M9 12l2 2 4-4" /></svg>
+);

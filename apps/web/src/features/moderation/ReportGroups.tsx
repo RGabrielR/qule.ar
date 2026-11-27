@@ -34,37 +34,27 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
  * Reportes agrupados por tema: si varias personas reportan a la misma persona o al mismo grupo, se ve una sola
  * tarjeta con todos los motivos, los mensajes reportados y las acciones. Se puede buscar, filtrar y ordenar.
  */
-export function ReportGroups({ reports, status, has, act, onSuspend, onRemoveGroup, onRefresh }: {
-  reports: Report[];
-  status: "open" | "closed";
-  has: (...need: StaffAccess[]) => boolean;
-  act: (fn: () => Promise<unknown>) => void;
-  onSuspend: (r: Report) => void;
-  onRefresh: () => void;
-  onRemoveGroup: (r: Report) => void;
-}) {
+/** Filtros de los reportes (búsqueda, motivo, orden, tipo, urgentes), compartidos por la lista del celular y la mesa de compu. */
+export function useReportFilters(reports: Report[], onChange?: () => void) {
   const [filters, setFilters] = useState<ReportFilters>(NO_FILTERS);
-  const [shown, setShown] = useState(PAGE);
   const groups = useMemo(() => groupReports(reports), [reports]);
   const visible = useMemo(() => filterGroups(groups, filters), [groups, filters]);
   const reasons = useMemo(() => [...new Set(reports.map((r) => r.reason))].sort(), [reports]);
-  const urgentCount = groups.filter((g) => g.urgent).length;
   const set = (patch: Partial<ReportFilters>) => {
     setFilters((f) => ({ ...f, ...patch }));
-    setShown(PAGE);
+    onChange?.();
   };
+  return { filters, set, groups, visible, reasons };
+}
+
+type FilterState = ReturnType<typeof useReportFilters>;
+
+export function ReportFilterBar({ state, status }: { state: FilterState; status: "open" | "closed" }) {
+  const { filters, set, groups, visible, reasons } = state;
+  const urgentCount = groups.filter((g) => g.urgent).length;
   const filtered = filters.q !== "" || filters.reason !== "" || filters.type !== "todo" || filters.urgentOnly;
-
-  if (!reports.length) {
-    return (
-      <div className="empty">
-        <p className="muted">{status === "open" ? "No hay reportes pendientes." : "Todavía no se resolvió ningún reporte."}</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="modreports">
+    <>
       {status === "open" && urgentCount > 0 && !filters.urgentOnly && (
         <button type="button" className="modreports__urgent" onClick={() => set({ urgentOnly: true })}>
           {urgentCount === 1 ? "Hay 1 tema urgente." : `Hay ${urgentCount} temas urgentes.`} <u>Ver solo esos</u>
@@ -104,6 +94,32 @@ export function ReportGroups({ reports, status, has, act, onSuspend, onRemoveGro
           {filtered && <> · <button type="button" className="linkbtn" onClick={() => set(NO_FILTERS)}>Sacar filtros</button></>}
         </p>
       </div>
+    </>
+  );
+}
+
+/**
+ * Reportes agrupados por tema: si varias personas reportan a la misma persona o al mismo grupo, se ve una sola
+ * tarjeta con todos los motivos, los mensajes reportados y las acciones. Se puede buscar, filtrar y ordenar.
+ */
+export function ReportGroups({ reports, status, has, act, onSuspend, onRemoveGroup, onRefresh }: {
+  reports: Report[];
+  status: "open" | "closed";
+  has: (...need: StaffAccess[]) => boolean;
+  act: (fn: () => Promise<unknown>) => void;
+  onSuspend: (r: Report) => void;
+  onRefresh: () => void;
+  onRemoveGroup: (r: Report) => void;
+}) {
+  const [shown, setShown] = useState(PAGE);
+  const state = useReportFilters(reports, () => setShown(PAGE));
+  const { visible } = state;
+
+  if (!reports.length) return <NoReports status={status} />;
+
+  return (
+    <div className="modreports">
+      <ReportFilterBar state={state} status={status} />
 
       {visible.length === 0 ? (
         <div className="empty"><p className="muted">Ningún reporte coincide con los filtros.</p></div>
@@ -123,15 +139,26 @@ export function ReportGroups({ reports, status, has, act, onSuspend, onRemoveGro
   );
 }
 
-function GroupCard({ g, has, act, onSuspend, onRemoveGroup, onRefresh }: {
+export function NoReports({ status }: { status: "open" | "closed" }) {
+  return (
+    <div className="empty">
+      <p className="muted">{status === "open" ? "No hay reportes pendientes." : "Todavía no se resolvió ningún reporte."}</p>
+    </div>
+  );
+}
+
+export function GroupCard({ g, has, act, onSuspend, onRemoveGroup, onRefresh, as = "li" }: {
   g: ReportGroup;
   has: (...need: StaffAccess[]) => boolean;
   act: (fn: () => Promise<unknown>) => void;
   onSuspend: (r: Report) => void;
   onRefresh: () => void;
   onRemoveGroup: (r: Report) => void;
+  /** En la mesa de compu la tarjeta va sola en el panel de la derecha, no dentro de una lista. */
+  as?: "li" | "section";
 }) {
   const r = g.first;
+  const Card = as;
   const [verifying, setVerifying] = useState(false);
   const verifiable = g.reports.filter((report) => report.photoVerification);
   const open = g.reports.filter((x) => x.status === "open");
@@ -144,7 +171,7 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup, onRefresh }: {
   const dismissAll = () => act(() => api("/admin/reports/dismiss", { method: "POST", json: { ids: open.map((x) => x.id) } }));
 
   return (
-    <li className={`rcard${g.urgent && isOpen ? " rcard--urgent" : ""}`}>
+    <Card className={`rcard${g.urgent && isOpen ? " rcard--urgent" : ""}`}>
       <div className="rcard__head">
         <span className="rcard__pills">
           {g.urgent && isOpen && <span className="pill pill--urgent">Urgente</span>}
@@ -237,7 +264,7 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup, onRefresh }: {
         <VerifyReportPhoto reports={verifiable} canSuspend={has("sanctions")}
           onClose={(refresh) => { setVerifying(false); if (refresh) onRefresh(); }} />
       )}
-    </li>
+    </Card>
   );
 }
 

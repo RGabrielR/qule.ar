@@ -12,6 +12,8 @@ import { ModerationNotices } from "../features/moderation/ModerationNotices";
 import { ReportSpamAlerts, type ReportSpamData } from "../features/moderation/ReportSpamAlerts";
 import { ReportGroups } from "../features/moderation/ReportGroups";
 import { ExplicitReviews } from "../features/moderation/ExplicitReviews";
+import { ReportDesk } from "../features/moderation/ReportDesk";
+import { useDesktop } from "../features/desktop/useDesktop";
 import type { Report } from "../features/moderation/types";
 
 type Suspended = Author & {
@@ -72,6 +74,9 @@ export function Admin() {
   const has = (...need: StaffAccess[]) => need.some((a) => access.includes(a));
   const tabs = TABS.filter((t) => has(...t.need));
   const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "open");
+  // En compu, los reportes se ven en una mesa: lista densa a la izquierda y el tema elegido a la derecha
+  const desktop = useDesktop();
+  const desk = desktop && (tab === "open" || tab === "closed");
   const [appeals, setAppeals] = useState<AdminAppeal[] | null>(null);
   const [appealsClosed, setAppealsClosed] = useState(false);
   const [resolving, setResolving] = useState<{ appeal: AdminAppeal; decision: "uphold" | "lift" } | null>(null);
@@ -133,6 +138,16 @@ export function Admin() {
     }
   }
 
+  const suspendReport = (r: Report) => {
+    if (r.target?.id) setSuspending({
+      url: `/admin/users/${r.target.id}/suspend`, name: r.target.name, reason: `Reportes por ${r.reason}`, preventive: !has("sanctions"),
+    });
+  };
+
+  const reportProps = (tab === "open" || tab === "closed") && reports
+    ? { reports, status: tab, has, act, onSuspend: suspendReport, onRefresh: load, onRemoveGroup: setRemoving }
+    : null;
+
   if (denied) return <Navigate to="/" replace />;
 
   const topbar = (
@@ -159,7 +174,7 @@ export function Admin() {
   }
 
   return (
-    <div className="page">
+    <div className={`page admin${desk ? " admin--desk" : ""}`}>
       {topbar}
 
       <dl className="kpis">
@@ -189,20 +204,7 @@ export function Admin() {
         <ReportSpamAlerts data={reporters} act={act} onSuspend={(t) => setSuspending({ ...t, preventive: false })} />
       )}
 
-      {(tab === "open" || tab === "closed") && reports && (
-        <ReportGroups
-          key={tab}
-          reports={reports}
-          status={tab}
-          has={has}
-          act={act}
-          onSuspend={(r) => r.target?.id && setSuspending({
-            url: `/admin/users/${r.target.id}/suspend`, name: r.target.name, reason: `Reportes por ${r.reason}`, preventive: !has("sanctions"),
-          })}
-          onRefresh={load}
-          onRemoveGroup={setRemoving}
-        />
-      )}
+      {reportProps && (desk ? <ReportDesk key={tab} {...reportProps} /> : <ReportGroups key={tab} {...reportProps} />)}
 
       {tab === "suspended" && has("sanctions") && (
         <section className="rcard" aria-label="Buscar cuenta por ID">
