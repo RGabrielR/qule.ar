@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { api, ApiError, type Author, type StaffAccess } from "../api";
@@ -223,7 +224,7 @@ export function Admin() {
               <li key={s.id} className="rcard">
                 <div className="rcard__who">
                   <Avatar src={s.photo} name={s.name} size={40} />
-                  <span><b>{s.name}</b><span className="muted small rcard__count">desde {fmt(s.suspendedAt)}</span></span>
+                  <span><b><UserName name={s.name} /></b><span className="muted small rcard__count">desde {fmt(s.suspendedAt)}</span></span>
                 </div>
                 {s.reason && <p className="rcard__details">{s.reason}</p>}
                 {s.preventive && (
@@ -294,7 +295,7 @@ export function Admin() {
                   <div className="rcard__who">
                     <Avatar src={a.person.photo} name={a.person.name} size={40} />
                     <span>
-                      <b>{a.person.name}</b> <span className="muted">{a.person.age || ""}</span>
+                      <b><UserName name={a.person.name} /></b> <span className="muted">{a.person.age || ""}</span>
                       <span className="muted small rcard__count">Suspendida desde {fmt(a.suspendedAt)}</span>
                     </span>
                   </div>
@@ -359,7 +360,7 @@ export function Admin() {
             {log.map((l) => (
               <li key={l.id}>
                 <span className="muted small">{fmt(l.createdAt)}</span><br />
-                <b>{l.actor}</b> · {l.action}
+                <b><UserName name={l.actor} /></b> · {l.action}
                 {l.details && <span className="muted"> · {l.details}</span>}
               </li>
             ))}
@@ -419,7 +420,7 @@ function SuspendDialog({ target, onClose, onDone }: { target: SuspendTarget; onC
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal aria-labelledby="suspend-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
-        <h2 id="suspend-title">Suspender a {target.name}</h2>
+        <h2 id="suspend-title">Suspender a <UserName name={target.name} /></h2>
         <p className="muted small">Se cierran sus sesiones, deja de aparecer en la app y se cierran sus reportes abiertos. También se borran sus mensajes en grupos y todo lo que subió: fotos, álbumes, videos y fotos que mandó por privado. Lo que sea prueba de un reporte queda guardado. La cuenta se puede reactivar después, pero lo borrado no vuelve.</p>
         {preventive && (
           <p className="small">Es una <b>suspensión preventiva</b>: hacela si hay indicios de que es menor de edad. Después alguien con el permiso Suspensiones la revisa y decide si se mantiene.</p>
@@ -503,7 +504,7 @@ function ResolveAppealDialog({ appeal, decision, onClose, onDone }: {
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal aria-labelledby="appeal-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={onClose} />
-        <h2 id="appeal-title">{lift ? `Levantar la suspensión de ${appeal.person.name}` : `Mantener la suspensión de ${appeal.person.name}`}</h2>
+        <h2 id="appeal-title">{lift ? "Levantar" : "Mantener"} la suspensión de <UserName name={appeal.person.name} /></h2>
         <p className="muted small">
           {lift
             ? "La cuenta vuelve a funcionar enseguida y le avisamos por mail."
@@ -555,7 +556,7 @@ function Team({ team, onChange, onPeople }: { team: TeamMember[]; onChange: () =
             <li key={m.id} className="rcard">
               <div className="rcard__who">
                 <Avatar src={m.photo} name={m.name} size={40} />
-                <span><b>{m.name}</b><span className="muted small rcard__count">desde {fmt(m.since)}</span></span>
+                <span><b><UserName name={m.name} /></b><span className="muted small rcard__count">desde {fmt(m.since)}</span></span>
               </div>
               <div className="team__perms">
                 {PERMISSION_LABELS.map((p) => (

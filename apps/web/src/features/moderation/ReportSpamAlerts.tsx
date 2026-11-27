@@ -1,3 +1,4 @@
+import { UserName } from "../../components/UserName";
 import { useState } from "react";
 import { api, type Author } from "../../api";
 import { Avatar } from "../../components/Avatar";
@@ -107,7 +108,7 @@ export function ReportSpamAlerts({ data, act, onSuspend }: {
             <div className="rcard__who">
               {a.reporter && <Avatar src={a.reporter.photo} name={a.reporter.name} size={40} />}
               <span>
-                <b>{name}</b>
+                <b><UserName name={name} /></b>
                 <HistoryLine h={a.history} />
               </span>
             </div>
@@ -168,7 +169,7 @@ export function ReportSpamAlerts({ data, act, onSuspend }: {
                 <span className="rcard__who">
                   {m.reporter && <Avatar src={m.reporter.photo} name={m.reporter.name} size={32} />}
                   <span>
-                    <b>{m.reporter?.name ?? "Una cuenta"}</b> <span className="muted small">desde el {fmt(m.mutedAt)}</span>
+                    <b><UserName name={m.reporter?.name ?? "Una cuenta"} /></b> <span className="muted small">desde el {fmt(m.mutedAt)}</span>
                     <HistoryLine h={m.history} />
                   </span>
                 </span>

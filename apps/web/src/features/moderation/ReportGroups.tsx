@@ -1,3 +1,4 @@
+import { UserName } from "../../components/UserName";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { api, type StaffAccess } from "../../api";
@@ -172,7 +173,7 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup, onRefresh }: {
         <Link to={r.target.id ? `/perfil/${r.target.id}` : "#"} className="rcard__who">
           <Avatar src={r.target.photo} name={r.target.name} size={40} />
           <span>
-            <b>{r.target.name}</b> <span className="muted">{r.target.age || ""}</span>
+            <b><UserName name={r.target.name} /></b> <span className="muted">{r.target.age || ""}</span>
             <span className="muted small rcard__count">
               {plural(r.targetReportCount, "reporte", "reportes")} en total
               {r.targetSuspendedAt && " · suspendida"}
@@ -187,7 +188,7 @@ function GroupCard({ g, has, act, onSuspend, onRemoveGroup, onRefresh }: {
         <b>{plural(g.reports.length, "reporte", "reportes")}</b>
         {g.automatic ? " automáticos de la app" : ` de ${plural(g.reporters, "persona", "personas")}`}
         {g.reports.length > 1 && ` · el primero el ${fmt(g.oldest)}`}
-        {g.reports.length === 1 && !r.automatic && !r.reporterHidden && ` · ${r.reporter?.name ?? "una cuenta borrada"}`}
+        {g.reports.length === 1 && !r.automatic && !r.reporterHidden && <> · <UserName name={r.reporter?.name ?? "una cuenta borrada"} /></>}
         {g.muted > 0 && (g.reports.length === 1 ? " · no cuenta" : ` · ${g.muted} no ${g.muted === 1 ? "cuenta" : "cuentan"}`)}
       </p>
 
@@ -283,7 +284,7 @@ function Note({ r, withMeta }: { r: Report; withMeta?: boolean }) {
   const who = r.automatic ? "la app" : r.reporterHidden ? null : r.reporter?.name ?? "una cuenta borrada";
   return (
     <p className="small rcard__note">
-      {withMeta && <><b>{r.reason}</b> · <span className="muted">{fmt(r.createdAt)}{who && ` · ${who}`}</span>{r.details && <br />}</>}
+      {withMeta && <><b>{r.reason}</b> · <span className="muted">{fmt(r.createdAt)}{who && <> · <UserName name={who} /></>}</span>{r.details && <br />}</>}
       {r.details ? <span className="rcard__details">“{r.details}”</span> : !withMeta && <span className="muted">Sin comentario</span>}
     </p>
   );

@@ -1,3 +1,4 @@
+import { UserName } from "./UserName";
 import { useState, type ReactNode } from "react";
 import type { PublicProfile } from "../api";
 import { hasPlaceLabel } from "../features/place/hasPlace";
@@ -60,7 +61,7 @@ export function ProfileCover({ photos, coverPhoto, photosBlur, coverBlur, displa
       {aside}
       {displayName && <div className={aside ? "profile__name profile__name--with-aside" : "profile__name"}>
         <div className="profile__nameline">
-          <h1>{displayName}</h1>
+          <h1><UserName name={displayName} /></h1>
           {age != null && <span>{age}</span>}
         </div>
         {(status && (status.online || status.recent || status.distance)) && (

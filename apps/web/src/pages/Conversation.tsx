@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { ChatPresenceDot } from "../features/messages/chatPresence";
 import { compareDmOrder, DM_EVENTS, type DmReadReceipt, type DmSettingsChange } from "@mortero/shared/realtime";
 import { privateOutbox, newMessageKey, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
@@ -363,7 +364,7 @@ function ConversationThread({ id }: { id: string }) {
             <span>
               <span className="chat-contact-name">
                 <ChatPresenceDot state={other.presence} />
-                <b>{other.name}</b>
+                <b><UserName name={other.name} /></b>
               </span>
               {typing && <span className="typing-label">escribiendo…</span>}
             </span>
@@ -414,12 +415,12 @@ function ConversationThread({ id }: { id: string }) {
                   aria-label={`Ir al mensaje citado de ${quoted.authorName}`}
                   onClick={() => jumpTo(quoted.id)}
                 >
-                  <span className="quote__name">{quoted.authorName}</span>
+                  <span className="quote__name"><UserName name={quoted.authorName} /></span>
                   <span className="quote__body">{quoted.body ?? "Mensaje borrado"}</span>
                 </button>
               ) : (
                 <div className="quote">
-                  <span className="quote__name">{quoted.authorName ?? "Mensaje borrado"}</span>
+                  <span className="quote__name">{quoted.authorName == null ? "Mensaje borrado" : <UserName name={quoted.authorName} />}</span>
                   {quoted.authorName && quoted.body && <span className="quote__body">{quoted.body}</span>}
                 </div>
               ))}
@@ -521,7 +522,7 @@ function ConversationThread({ id }: { id: string }) {
         {replyTo && (
           <div className="composer__reply">
             <div className="quote quote--static">
-              <span className="quote__name">Respondiendo a {replyTo.senderId === myId ? "tu mensaje" : other?.name ?? "ese mensaje"}</span>
+              <span className="quote__name">Respondiendo a {replyTo.senderId === myId ? "tu mensaje" : other ? <UserName name={other.name} /> : "ese mensaje"}</span>
               <span className="quote__body">{replyPreview(replyTo)}</span>
             </div>
             <button

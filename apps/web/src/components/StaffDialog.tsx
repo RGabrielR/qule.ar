@@ -1,3 +1,4 @@
+import { UserName } from "./UserName";
 import { useEffect, useState } from "react";
 import { api, type StaffAccess } from "../api";
 import { PERMISSION_LABELS, toggleStaffPermission } from "../staff";
@@ -44,13 +45,13 @@ export function StaffDialog({ userId, name, onClose }: { userId: string; name: s
     <div className="sheet-backdrop" {...backdrop}>
       <div className="sheet" role="dialog" aria-modal aria-labelledby="staff-title" onClick={(e) => e.stopPropagation()}>
         <DialogFocus onClose={close} />
-        <h2 id="staff-title">Moderación: {name}</h2>
+        <h2 id="staff-title">Moderación: <UserName name={name} /></h2>
         {state === "done" ? (
           <>
             <p className="muted">
               {perms.length
-                ? `Listo. ${name} ya puede entrar a Moderación con estos permisos.`
-                : `Listo. ${name} ya no tiene permisos de moderación.`}
+                ? <>Listo. <UserName name={name} /> ya puede entrar a Moderación con estos permisos.</>
+                : <>Listo. <UserName name={name} /> ya no tiene permisos de moderación.</>}
             </p>
             <button className="btn btn--primary" onClick={() => close()}>Listo</button>
           </>
@@ -58,7 +59,7 @@ export function StaffDialog({ userId, name, onClose }: { userId: string; name: s
           error ? <p className="error" role="alert">{error}</p> : <p className="muted">Cargando…</p>
         ) : owner ? (
           <>
-            <p className="muted">{name} tiene administración general. Eso se cambia en la configuración del servidor, no desde acá.</p>
+            <p className="muted"><UserName name={name} /> tiene administración general. Eso se cambia en la configuración del servidor, no desde acá.</p>
             <button className="btn" onClick={() => close()}>Cerrar</button>
           </>
         ) : (

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type TouchEvent } from "react";
+import { UserName } from "./UserName";
+import { useEffect, useId, useRef, useState, type TouchEvent } from "react";
 import type { Media } from "../api";
 import { Watermark } from "../features/photos/Watermark";
 
@@ -28,9 +29,10 @@ type Gesture = { x: number; y: number; at: number; width: number; horizontal: bo
  * No se puede evitar una captura de pantalla, pero al menos no se ofrece descargar. Con `watermark` (álbum ajeno), lleva
  * la marca de quién mira y se esconde cuando la app pierde el foco (ver features/photos/Watermark.tsx).
  */
-export function AlbumViewer({ items, start = 0, title, onClose, watermark = false }: {
-  items: Media[]; start?: number; title?: string; onClose: () => void; watermark?: boolean;
+export function AlbumViewer({ items, start = 0, title, ownerName, onClose, watermark = false }: {
+  items: Media[]; start?: number; title?: string; ownerName?: string; onClose: () => void; watermark?: boolean;
 }) {
+  const titleId = useId();
   const n = items.length;
   const [i, setI] = useState(Math.max(0, Math.min(start, n - 1)));
   const [drag, setDrag] = useState(0);
@@ -183,9 +185,9 @@ export function AlbumViewer({ items, start = 0, title, onClose, watermark = fals
   if (!n) return null;
   const dragCss = `calc(${-i * 100}% ${drag < 0 ? "-" : "+"} ${Math.abs(drag)}px)`;
   return (
-    <div className={`lightbox${watermark ? " private-media" : ""}`} role="dialog" aria-modal="true" aria-label={title ?? "Álbum"} onContextMenu={(e) => e.preventDefault()}>
+    <div className={`lightbox${watermark ? " private-media" : ""}`} role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} aria-label={title ? undefined : "Álbum"} onContextMenu={(e) => e.preventDefault()}>
       <header className="lightbox__bar">
-        <span>{title}{n > 1 && <span className="muted"> · {i + 1} de {n}</span>}</span>
+        <span><span id={titleId}>{title}{ownerName && <> · <UserName name={ownerName} /></>}</span>{n > 1 && <span className="muted"> · {i + 1} de {n}</span>}</span>
         <button className="iconbtn" onClick={onClose} aria-label="Cerrar">✕</button>
       </header>
       <div

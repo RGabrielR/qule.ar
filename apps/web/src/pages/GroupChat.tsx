@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { groupOutbox, newMessageKey, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -636,7 +637,7 @@ function GroupChatThread({ id }: { id: string }) {
         <button type="button" className="iconbtn" onClick={goBack} aria-label="Volver a Grupos"><BackIcon /></button>
         <GroupAvatar name={info.name} photo={info.photo} general={info.isGeneral} size="sm" />
         <div className="topbar__grow">
-          <h1 className="topbar__title topbar__title--sm"><Link className="topbar__link" to={`/grupos/${id}/info`} state={{ fromGroupChat: true }}>{info.isGeneral ? "# " : ""}{info.name}</Link></h1>
+          <h1 className="topbar__title topbar__title--sm"><Link className="topbar__link" to={`/grupos/${id}/info`} state={{ fromGroupChat: true }}>{info.isGeneral ? "# " : ""}<UserName name={info.name} /></Link></h1>
           <p className="topbar__sub"><ClockIcon /> {rulesText}</p>
         </div>
         <GroupActions
@@ -685,13 +686,13 @@ function GroupChatThread({ id }: { id: string }) {
               <div className="gmsg__content">
                 {!(grouped && !m.replyTo) && (
                   <div className="gmsg__meta">
-                    <Link to={`/perfil/${m.author.id}`} className="gmsg__name">{m.author.name}</Link>
+                    <Link to={`/perfil/${m.author.id}`} className="gmsg__name"><UserName name={m.author.name} /></Link>
                     <time className="gmsg__time">{fmtTime(m.scheduledAt)}</time>
                   </div>
                 )}
                 {m.replyTo && (
                   <button type="button" className="quote" onClick={() => jumpTo(m.replyTo!)}>
-                    <span className="quote__name">{m.replyTo.authorName}</span>
+                    <span className="quote__name"><UserName name={m.replyTo.authorName} /></span>
                     <span className="quote__body">{m.replyTo.body ?? "Mensaje borrado"}</span>
                   </button>
                 )}
@@ -782,7 +783,7 @@ function GroupChatThread({ id }: { id: string }) {
         {replyTo && !editing && (
           <div className="composer__reply">
             <div className="quote quote--static">
-              <span className="quote__name">Respondiendo a {replyTo.author.name}</span>
+              <span className="quote__name">Respondiendo a <UserName name={replyTo.author.name} /></span>
               <span className="quote__body">{replyTo.body}</span>
             </div>
             <button type="button" className="iconbtn" aria-label="Cancelar respuesta" onClick={() => setReplyTo(null)}>✕</button>

@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { REPORT_RESPONSE_EVENT } from "@mortero/shared/realtime";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
@@ -78,7 +79,7 @@ export function MyReports() {
                 <Link to={`/yo/reportes/${encodeURIComponent(report.id)}`} className="inbox__item">
                   <div className="inbox__text">
                     <div className="inbox__top">
-                      <strong>{report.targetName ?? report.reason}</strong>
+                      <strong>{report.targetName == null ? report.reason : <UserName name={report.targetName} />}</strong>
                       <time dateTime={report.respondedAt ?? report.createdAt}>{date(report.respondedAt ?? report.createdAt)}</time>
                     </div>
                     <p className="inbox__preview">
@@ -108,7 +109,7 @@ function ReportConversation({ id }: { id: string }) {
     <div className={`page ${enter}`}>
       <header className="topbar topbar--thread">
         <button type="button" className="iconbtn" onClick={goBack} aria-label="Volver a Mis reportes"><BackIcon /></button>
-        <h1 className="topbar__title topbar__title--sm">{report?.targetName ?? "Reporte"}</h1>
+        <h1 className="topbar__title topbar__title--sm">{report?.targetName == null ? "Reporte" : <UserName name={report.targetName} />}</h1>
       </header>
       {error ? <p className="notice notice--error" role="alert">{error}</p>
         : !report ? <p className="empty muted" role="status">Cargando…</p>

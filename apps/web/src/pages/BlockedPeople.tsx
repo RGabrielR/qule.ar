@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, type Author } from "../api";
 import { motionMs } from "../motion";
@@ -130,7 +131,7 @@ export function BlockedPeople() {
               >
                 <div className="blocked__inner">
                   <Avatar src={person.photo} name={person.name} size={44} appear />
-                  <span className="blocked__name">{person.name}</span>
+                  <span className="blocked__name"><UserName name={person.name} /></span>
                   <button className="linkbtn" disabled={busyId === person.id || leaving.has(person.id)} onClick={() => void unblock(person)}>
                     Desbloquear
                   </button>

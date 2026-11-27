@@ -3,6 +3,7 @@ import { mailEnabled } from "../mail.js";
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { stripBidiControls } from "../names.js";
 import { db, schema } from "../db/index.js";
 import { ageFrom, mediaOut, newId, requireProfile, requireUser, type AppEnv } from "../lib.js";
 import { syncGroupRoom } from "../realtime.js";
@@ -33,7 +34,7 @@ const albumFullMessage = `Entre todos tus álbumes podés tener hasta ${MAX_ALBU
 
 const shortText = z.string().trim().max(60);
 const profileInput = z.object({
-  displayName: z.string().trim().min(1, "Poné un nombre").max(40),
+  displayName: z.string().transform(stripBidiControls).pipe(z.string().trim().min(1, "Poné un nombre").max(40)),
   birthdate: z.iso.date().optional(),
   about: z.string().trim().max(500).nullish(),
   heightCm: z.number().int().min(120).max(230).nullish(),

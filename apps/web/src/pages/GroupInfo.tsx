@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { api, getSocket, ROLE_LABEL, type GroupInfo as Info, type Member, type MemberPage } from "../api";
@@ -126,7 +127,7 @@ export function GroupInfo() {
     <div className={`page ${enter}`}>
       <header className="topbar topbar--thread">
         <button className="iconbtn" onClick={goBack} aria-label="Volver"><BackIcon /></button>
-        <h1 className="topbar__grow topbar__title topbar__title--sm">{info.isGeneral ? "# " : ""}{info.name}</h1>
+        <h1 className="topbar__grow topbar__title topbar__title--sm">{info.isGeneral ? "# " : ""}<UserName name={info.name} /></h1>
         {(canManageGroup || showChatLink) && (
           <GroupActionMenu hasPendingRequests={hasPendingRequests}>
             {(close) => (
@@ -181,7 +182,7 @@ export function GroupInfo() {
                   <Link to={`/perfil/${m.id}`} className="member__who">
                     <Avatar src={m.photo} name={m.name} size={40} appear />
                     <span>
-                      <b>{m.name}</b>{isMe && <span className="muted"> (vos)</span>}
+                      <b><UserName name={m.name} /></b>{isMe && <span className="muted"> (vos)</span>}
                       {m.role !== "member" && <span className="pill pill--role">{ROLE_LABEL[m.role]}</span>}
                     </span>
                   </Link>
@@ -249,7 +250,7 @@ export function GroupInfo() {
           <div className="stack">
             {confirmLeave ? (
               <div className="confirm">
-                <p>¿Salir de {info.name}? Para volver vas a tener que pedir ingreso de nuevo.{isOwner && " Como sos el dueño, el grupo pasa a un moderador o al miembro más antiguo. Si no queda nadie, se cierra."}</p>
+                <p>¿Salir de <UserName name={info.name} />? Para volver vas a tener que pedir ingreso de nuevo.{isOwner && " Como sos el dueño, el grupo pasa a un moderador o al miembro más antiguo. Si no queda nadie, se cierra."}</p>
                 <div className="row">
                   <button className="btn" onClick={() => setConfirmLeave(false)}>Cancelar</button>
                   <button className="btn btn--danger" onClick={() => act(async () => {

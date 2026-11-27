@@ -6,6 +6,7 @@ import { forgetUnlisted } from "./verification.js";
 import { db, schema } from "./db/index.js";
 import { env } from "./env.js";
 import { resetMail, sendMail, verifyMail } from "./mail.js";
+import { stripBidiControls } from "./names.js";
 import { clustered, hit } from "./shared.js";
 
 export const googleEnabled = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
@@ -50,6 +51,21 @@ export const auth = betterAuth({
       verification: schema.verification,
     },
   }),
+  // Better Auth también escribe nombres al entrar con Google o cambiar los datos de la cuenta.
+  databaseHooks: {
+    user: {
+      create: {
+        before: async ({ name }) => ({ data: { name: stripBidiControls(name).trim() || "Cuenta sin nombre" } }),
+      },
+      update: {
+        before: async ({ name }) => {
+          if (name === undefined) return;
+          if (typeof name !== "string") throw new APIError("BAD_REQUEST", { message: "Poné un nombre" });
+          return { data: { name: stripBidiControls(name).trim() || "Cuenta sin nombre" } };
+        },
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,

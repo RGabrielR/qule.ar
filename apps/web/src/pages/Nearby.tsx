@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type TouchEvent } from "react";
 import { NEARBY_PAGE_SIZE } from "@mortero/shared/nearby";
 import { InstallBanner } from "../components/InstallBanner";
@@ -445,7 +446,7 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
                   <span className="tile__info">
                     <span className="tile__name">
                       {p.online ? <i className="dot dot--on" /> : p.recent ? <i className="dot dot--recent" /> : null}
-                      {p.name}
+                      <UserName name={p.name} />
                     </span>
                     {p.distance && <span className="tile__dist">{p.distance}</span>}
                   </span>

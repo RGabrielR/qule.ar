@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { api, ApiError, getSocket, type GroupInfo, type SentInvite } from "../api";
@@ -138,7 +139,7 @@ export function GroupInvitations() {
                   <li key={invite.id} className="member">
                     <Link to={`/perfil/${invite.user.id}`} className="member__who">
                       <Avatar src={invite.user.photo} name={invite.user.name} size={40} />
-                      <span><b>{invite.user.name}</b> <span className="muted small">· sin responder</span></span>
+                      <span><b><UserName name={invite.user.name} /></b> <span className="muted small">· sin responder</span></span>
                     </Link>
                     <button type="button" className="linkbtn small" disabled={canceling !== null} onClick={() => cancelInvite(invite)}>
                       {canceling === invite.id ? "Cancelando…" : "Cancelar"}

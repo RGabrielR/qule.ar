@@ -50,7 +50,7 @@ export function Onboarding() {
       <form className="auth__card form" onSubmit={submit}>
         <label className="field">
           <span>¿Cómo querés que te vean?</span>
-          <input className="input" required maxLength={40} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+          <input className="input" required maxLength={40} dir="auto" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         </label>
         <label className="field">
           <span>Fecha de nacimiento</span>

@@ -1,3 +1,4 @@
+import { UserName } from "../components/UserName";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigationType } from "react-router";
 import { api, type Author, type Toque, type Viewer } from "../api";
@@ -51,7 +52,7 @@ function PeopleGrid({ title, people, empty, note, tabs }: { title: string; peopl
                   </span>
                 )}
                 <span className="tile__info">
-                  <span className="tile__name">{p.name}</span>
+                  <span className="tile__name"><UserName name={p.name} /></span>
                   {p.sub && <span className="tile__dist">{p.sub}</span>}
                 </span>
               </Link>

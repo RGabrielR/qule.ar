@@ -1,3 +1,4 @@
+import { UserName } from "./UserName";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { api, type InvitableGroup, type InviteCandidate, type InviteCandidates, type InviteState, type MyInvite } from "../api";
@@ -174,7 +175,7 @@ export function InvitePeopleSheet({ groupId, groupName, onClose, onChange }: {
               <Link to={`/perfil/${p.id}`} className="member__who">
                 <Avatar src={p.photo} name={p.name} size={40} />
                 <span className="invite-who">
-                  <span><b>{p.name}</b></span>
+                  <span><b><UserName name={p.name} /></b></span>
                   {(p.online || p.distance) && (
                     <span className="muted small">
                       {p.online && <><i className="dot dot--on" /> En línea</>}
@@ -231,8 +232,8 @@ export function InviteToGroups({ userId, name }: { userId: string; name: string 
         <div className="sheet-backdrop" {...sheet.backdrop}>
           <div className="sheet sheet--list" role="dialog" aria-modal aria-labelledby="invite-groups-title" onClick={(e) => e.stopPropagation()}>
             <DialogFocus onClose={sheet.close} />
-            <h2 id="invite-groups-title">Invitar a {name}</h2>
-            <p className="muted small">Estos son los grupos que moderás. {name} recibe la invitación y elige si entra.</p>
+            <h2 id="invite-groups-title">Invitar a <UserName name={name} /></h2>
+            <p className="muted small">Estos son los grupos que moderás. <UserName name={name} /> recibe la invitación y elige si entra.</p>
             {error && <p className="error" role="alert">{error}</p>}
             <ul className="members invite-list">
               {groups.map((g) => (
@@ -294,7 +295,7 @@ export function MyInvites({ invites, onChange }: { invites: MyInvite[]; onChange
             {inv.group.description && <p className="gcard__desc">{inv.group.description}</p>}
             {inv.invitedBy && (
               <p className="muted small">
-                Te invitó <Link to={`/perfil/${inv.invitedBy.id}`}>{inv.invitedBy.name}</Link>
+                Te invitó <Link to={`/perfil/${inv.invitedBy.id}`}><UserName name={inv.invitedBy.name} /></Link>
               </p>
             )}
             <div className="row">

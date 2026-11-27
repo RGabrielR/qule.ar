@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, notInArray, or, sql
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { stripBidiControls } from "../names.js";
 import { nextSlot } from "../antispam.js";
 import { db, schema } from "../db/index.js";
 import { DEFAULT_SPAM_RULES } from "../db/schema.js";
@@ -143,7 +144,9 @@ async function notifyMods(groupId: string, event: string, payload: unknown) {
 }
 
 const groupInput = z.object({
-  name: z.string().trim().min(3, "El nombre tiene que tener al menos 3 letras").max(40, "Máximo 40 caracteres"),
+  name: z.string().transform(stripBidiControls).pipe(
+    z.string().trim().min(3, "El nombre tiene que tener al menos 3 letras").max(40, "Máximo 40 caracteres"),
+  ),
   description: z.string().trim().max(300, "Máximo 300 caracteres").nullish(),
 });
 
