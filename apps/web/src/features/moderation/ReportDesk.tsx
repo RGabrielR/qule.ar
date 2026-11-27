@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { api, type StaffAccess } from "../../api";
 import { Avatar } from "../../components/Avatar";
@@ -59,14 +59,15 @@ export function ReportDesk({ reports, status, has, act, onSuspend, onRemoveGroup
     if (index >= 0) lastIndex.current = index;
   });
 
-  // Reportes ya resueltos, para ver si el tema elegido ya tuvo reportes antes
+  // Los temas borrados conservan los reportes resueltos que todavía se pueden asociar.
   const [closed, setClosed] = useState<Report[] | null>(null);
+  const needsClosed = status === "open" && !!selected && !selected.first.target?.id && !selected.first.group?.id;
   useEffect(() => {
-    if (status !== "open") return;
+    if (!needsClosed) return;
     let alive = true;
     api<Report[]>("/admin/reports?status=closed").then((r) => alive && setClosed(r)).catch(() => alive && setClosed([]));
     return () => { alive = false; };
-  }, [status, reports]);
+  }, [needsClosed, reports]);
 
   function select(i: number) {
     const g = visible[i];
@@ -155,7 +156,7 @@ export function ReportDesk({ reports, status, has, act, onSuspend, onRemoveGroup
               </button>
             </div>
             <GroupCard key={selected.key} g={selected} as="section" has={has} act={act} onSuspend={onSuspend} onRemoveGroup={onRemoveGroup} onRefresh={onRefresh} />
-            <History g={selected} closed={status === "open" ? closed : null} version={reports} />
+            <History g={selected} closed={status === "open" ? closed : null} version={reports} showSent={has("owner")} />
           </>
         ) : (
           <div className="empty"><p className="muted">Elegí un tema de la lista.</p></div>
@@ -166,9 +167,9 @@ export function ReportDesk({ reports, status, has, act, onSuspend, onRemoveGroup
 }
 
 /** Lo que ya se sabe del tema: el historial completo de la cuenta o, si es un grupo, su estado y los reportes resueltos. */
-function History({ g, closed, version }: { g: ReportGroup; closed: Report[] | null; version: unknown }) {
+function History({ g, closed, version, showSent }: { g: ReportGroup; closed: Report[] | null; version: unknown; showSent: boolean }) {
   const id = g.first.target?.id;
-  return id ? <AccountHistoryCard key={id} id={id} g={g} version={version} /> : <SubjectHistory g={g} closed={closed} />;
+  return id ? <AccountHistoryCard key={id} id={id} g={g} version={version} showSent={showSent} /> : <SubjectHistory g={g} closed={closed} />;
 }
 
 const TIMELINE_START = 12;
@@ -180,7 +181,7 @@ const appealStatus = { open: "Sin responder todavía", upheld: "Se mantuvo la su
  * que hizo, y una línea de tiempo con los reportes ya resueltos, lo que hizo moderación y sus pedidos de revisión.
  * Se vuelve a pedir cuando cambia la lista (por ejemplo, después de suspender o descartar).
  */
-function AccountHistoryCard({ id, g, version }: { id: string; g: ReportGroup; version: unknown }) {
+function AccountHistoryCard({ id, g, version, showSent }: { id: string; g: ReportGroup; version: unknown; showSent: boolean }) {
   const [h, setHistory] = useState<AccountHistory | null>(null);
   const [failed, setFailed] = useState(false);
   const [all, setAll] = useState(false);
@@ -196,6 +197,7 @@ function AccountHistoryCard({ id, g, version }: { id: string; g: ReportGroup; ve
 
   const r = g.first;
 
+  const current = new Set(g.reports.map((report) => report.id));
   const timeline = h ? buildTimeline(h) : [];
   const shown = all ? timeline : timeline.slice(0, TIMELINE_START);
   const open = h?.reports.filter((x) => x.status === "open").length ?? 0;
@@ -251,6 +253,12 @@ function AccountHistoryCard({ id, g, version }: { id: string; g: ReportGroup; ve
           {all && h.more && <p className="muted small">Se ven los últimos 100 reportes y las últimas 100 medidas.</p>}
         </>
       )}
+
+      <details key={r.id} className="rcard__notes">
+        <summary className="muted small">Ver reportes recibidos</summary>
+        <HistoryList reportId={r.id} direction="received" current={current} />
+      </details>
+      {showSent && <HistoryList key={r.id} reportId={r.id} direction="sent" current={current} />}
 
       <div className="rcard__actions">
         <Link className="btn btn--small" to={`/perfil/${id}`} target="_blank" rel="noopener">Abrir el perfil en otra pestaña</Link>
@@ -325,6 +333,7 @@ function buildTimeline(h: AccountHistory): TimelineItem[] {
 function SubjectHistory({ g, closed }: { g: ReportGroup; closed: Report[] | null }) {
   const r = g.first;
   const before = closed?.filter((x) => x.subject === g.key) ?? [];
+  const current = new Set(g.reports.map((report) => report.id));
   return (
     <section className="rcard desk__history" aria-label="Historial">
       <h2 className="small"><b>Historial</b></h2>
@@ -336,7 +345,9 @@ function SubjectHistory({ g, closed }: { g: ReportGroup; closed: Report[] | null
         </ul>
       )}
       {r.target && !r.target.id && <p className="muted small">La cuenta se borró: queda lo que guardaron los reportes.</p>}
-      {closed && (
+      {r.group?.id ? (
+        <HistoryList key={r.id} reportId={r.id} direction="received" current={current} />
+      ) : closed && (
         before.length === 0 ? (
           <p className="muted small">No tiene reportes anteriores ya resueltos.</p>
         ) : (
@@ -355,5 +366,66 @@ function SubjectHistory({ g, closed }: { g: ReportGroup; closed: Report[] | null
         )
       )}
     </section>
+  );
+}
+
+type HistoryEntry = Pick<Report, "id" | "reason" | "details" | "status" | "resolution" | "createdAt"> & {
+  targetName: string | null;
+};
+type HistoryPage = { items: HistoryEntry[]; next: string | null };
+
+function HistoryList({ reportId, direction, current }: {
+  reportId: string;
+  direction: "received" | "sent";
+  current: Set<string>;
+}) {
+  const [page, setPage] = useState<HistoryPage | null>(null);
+  const [request, setRequest] = useState<{ before: string | null; failed: boolean } | null>(null);
+  const active = useRef<AbortController | null>(null);
+  const load = useCallback(async (before: string | null) => {
+    active.current?.abort();
+    const controller = new AbortController();
+    active.current = controller;
+    setRequest({ before, failed: false });
+    const params = new URLSearchParams({ direction });
+    if (before) params.set("before", before);
+    try {
+      const next = await api<HistoryPage>(`/admin/reports/${encodeURIComponent(reportId)}/history?${params}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setPage((prev) => before && prev ? { items: [...prev.items, ...next.items], next: next.next } : next);
+      setRequest(null);
+    } catch {
+      if (!controller.signal.aborted) setRequest({ before, failed: true });
+    }
+  }, [direction, reportId]);
+  useEffect(() => {
+    void load(null);
+    return () => active.current?.abort();
+  }, [load]);
+
+  return (
+    <div className="desk__history-list">
+      <h3 className="small">{direction === "received" ? "Reportes recibidos" : "Reportes enviados por esta cuenta"}</h3>
+      {page && (page.items.length ? (
+        <ul className="desk__before small">
+          {page.items.map((entry) => (
+            <li key={entry.id}>
+              <div className="desk__history-entry">
+                <span className="pill pill--reason">{entry.reason}</span>
+                <time className="muted" dateTime={entry.createdAt}>{fmt(entry.createdAt)}</time>
+                <span>{entry.status === "open" ? "Abierto" : entry.status === "dismissed" ? "Descartado" : entry.resolution ?? "Resuelto"}</span>
+                {direction === "received" && current.has(entry.id) && <span className="muted">En este tema</span>}
+              </div>
+              {entry.targetName && <p><b>{entry.targetName}</b></p>}
+              {entry.details && <p className="muted">{entry.details}</p>}
+            </li>
+          ))}
+        </ul>
+      ) : <p className="muted small">No hay reportes.</p>)}
+      {request?.failed ? (
+        <button type="button" className="btn btn--small" onClick={() => void load(request.before)}>No se pudo cargar. Reintentar</button>
+      ) : request ? <p className="muted small" role="status">Cargando reportes…</p>
+        : page?.next && <button type="button" className="btn btn--small" onClick={() => void load(page.next)}>Mostrar más</button>}
+    </div>
   );
 }

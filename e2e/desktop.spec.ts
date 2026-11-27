@@ -28,6 +28,13 @@ test("en compu, las pestañas van al costado y la charla se abre al lado de la b
   // La bandeja sigue a la vista y marca la charla abierta
   await expect(page.getByRole("heading", { name: "Mensajes" })).toBeVisible();
   await expect(row).toHaveAttribute("aria-current", "page");
+  const active = page.locator(".inbox__row").filter({ has: row });
+  const leftEdge = await active.evaluate((el) => {
+    const marker = getComputedStyle(el, "::before");
+    const avatar = el.querySelector(".inbox__avatar")!.getBoundingClientRect();
+    return marker.content !== "none" && marker.left === "0px" && avatar.x === el.getBoundingClientRect().x;
+  });
+  expect(leftEdge).toBe(true);
   await expect(page.getByRole("textbox", { name: "Mensaje", exact: true })).toBeVisible();
   await expect(nav).toBeVisible();
 });
@@ -62,13 +69,33 @@ test("Moderación en compu: lista de temas y el elegido al lado, con teclado", a
     target: { id: `p${n}`, name, age: 30, photo: null }, group: null, evidenceFiles: 0, photoVerification: false, photoEvidence: false,
     targetSuspendedAt: null, targetReportCount: n,
   });
+  const first = report(1, "Perfil Uno", "spam", "Manda links");
+  const messageReport = {
+    ...first, id: "r3", createdAt: new Date(now - 3 * 60_000).toISOString(), details: null,
+    messageId: "m3", messageKind: "dm", message: { body: "Mensaje reportado", photo: false, hidden: false, deleted: false },
+  };
+  let deleted = false;
+  await page.route("**/api/admin/reports/r3/delete-message", (route) => {
+    deleted = true;
+    return route.fulfill({ json: { ok: true } });
+  });
   await page.route((url) => url.pathname === "/api/admin/reports", (route) => route.fulfill({
     json: new URL(route.request().url()).searchParams.get("status") === "closed" ? [] : [
-      report(1, "Perfil Uno", "spam", "Manda links"),
-      report(2, "Perfil Dos", "acoso", "No para de escribir"),
+      first,
+      { ...report(2, "Perfil Dos", "amenazas o violencia", "Mensaje intimidante"), urgent: true },
+      ...(deleted ? [] : [messageReport]),
     ],
   }));
   await page.route((url) => url.pathname === "/api/admin/report-spam", (route) => route.fulfill({ json: { alerts: [], muted: [] } }));
+  await page.route((url) => /\/api\/admin\/reports\/r\d\/history$/.test(url.pathname), (route) => {
+    const url = new URL(route.request().url());
+    const older = url.searchParams.has("before");
+    return route.fulfill({ json: { items: [{
+      id: older ? "mas-antiguo" : "anterior", reason: "spam", status: "dismissed", resolution: null,
+      createdAt: new Date(now - (older ? 2 : 1) * 86_400_000).toISOString(),
+      details: older ? "Comentario de la segunda página" : "Comentario de un reporte anterior", targetName: null,
+    }], next: !older && url.pathname.endsWith("/r1/history") ? "anterior" : null } });
+  });
   // El historial completo de cada cuenta
   const day = 24 * 60 * 60_000;
   await page.route((url) => /^\/api\/admin\/users\/p\d\/history$/.test(url.pathname), (route) => route.fulfill({
@@ -96,16 +123,30 @@ test("Moderación en compu: lista de temas y el elegido al lado, con teclado", a
   await expect(page.getByRole("navigation", { name: "Secciones" }).getByRole("link", { name: "Moderación" })).toHaveAttribute("aria-current", "page");
   const list = page.getByRole("region", { name: "Temas reportados" });
   const detail = page.getByRole("region", { name: "Tema elegido" });
+  await expect(list.getByRole("list").getByRole("button").first()).toHaveAccessibleName(/Perfil Uno/);
   await expect(list.getByRole("button", { name: /Perfil Uno/ })).toHaveAttribute("aria-current", "true");
+  await expect(detail.getByText("Mensaje reportado", { exact: true })).toBeVisible();
+  await detail.getByText("Ver reportes recibidos", { exact: true }).click();
+  await expect(detail.getByText("Comentario de un reporte anterior")).toBeVisible();
+  await expect(detail.getByText("Descartado", { exact: true })).toBeVisible();
+  await expect(detail.getByRole("heading", { name: "Reportes enviados por esta cuenta" })).toHaveCount(0);
+  await detail.getByRole("button", { name: "Mostrar más" }).click();
+  await expect(detail.getByText("Comentario de la segunda página")).toBeVisible();
+  await detail.getByRole("button", { name: "Borrar este mensaje" }).click();
+  await expect(detail.getByRole("button", { name: "Borrar este mensaje" })).toHaveCount(0);
   await expect(detail.getByText("“Manda links”")).toBeVisible();
+  await expect(detail.getByText("Comentario de la segunda página")).toBeVisible();
+
   const history = detail.getByRole("region", { name: "Historial" });
   await expect(history.getByText("No reportó a nadie")).toBeVisible();
   await expect(history.getByText(/Nada más/)).toBeVisible();
 
   await page.keyboard.press("j");
   await expect(list.getByRole("button", { name: /Perfil Dos/ })).toHaveAttribute("aria-current", "true");
-  await expect(detail.getByText("“No para de escribir”")).toBeVisible();
-  await expect(detail.getByRole("button", { name: "Suspender" })).toBeVisible();
+  await expect(detail.getByText("“Mensaje intimidante”")).toBeVisible();
+  await expect(detail.getByText("Comentario de la segunda página")).toHaveCount(0);
+  await expect(detail.getByRole("button", { name: "Suspender", exact: true }).first()).toBeVisible();
+
   // Lo que ya pasó con esta cuenta: reportes resueltos, medidas y pedidos de revisión, de lo más nuevo a lo más viejo
   await expect(history.getByText("Hizo 4 reportes, 3 descartados")).toBeVisible();
   await expect(history.getByText(/Sus reportes no cuentan desde el/)).toBeVisible();
@@ -118,6 +159,9 @@ test("Moderación en compu: lista de temas y el elegido al lado, con teclado", a
   await expect(events.nth(2)).toContainText("Mensaje borrado");
   await page.keyboard.press("ArrowUp");
   await expect(detail.getByText("Tema 1 de 2")).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(page.getByRole("region", { name: "Temas reportados" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Moderación" })).toBeVisible();
 });
 
 /** El id de una cuenta, buscándola por nombre en la grilla de Gente. */
