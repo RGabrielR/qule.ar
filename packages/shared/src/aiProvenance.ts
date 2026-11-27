@@ -145,13 +145,73 @@ function collectMetadata(b: Uint8Array): Metadata {
   else if (b.length > 12 && ascii(b, 0, 4) === "RIFF" && ascii(b, 8, 4) === "WEBP") readWebp(b, out);
 
   // Any other container (HEIF, MP4, MOV, GIF, TIFF…), or what the walkers missed: XMP packets and the C2PA store are
-  // contiguous there, so a byte search finds them.
-  if (!out.xmp.length) out.xmp.push(...findXmp(b));
+  // contiguous there, so a byte search finds them. In a video only the small metadata boxes are searched, never the
+  // media data, so an 80 MB upload costs the same as a photo.
+  const searchable = videoMetadata(b) ?? b;
+  if (!out.xmp.length) out.xmp.push(...findXmp(searchable));
   if (!out.jumbf.length) {
-    const store = findC2paStore(b);
+    const store = findC2paStore(searchable);
     if (store) out.jumbf.push(store);
   }
   return out;
+}
+
+/** Most metadata boxes are a few KB; a long video's `moov` can reach a few MB. */
+const MAX_VIDEO_METADATA = 4 * 1024 * 1024;
+/** Where an MP4/MOV keeps metadata: C2PA and XMP in top-level `uuid` boxes, XMP and tags in `moov` › `udta`/`meta`. */
+const MEDIA_BOXES = new Set(["mdat", "free", "skip", "wide"]);
+
+/**
+ * For an MP4/MOV (ISO BMFF with a `moov` box), the bytes of every box except the media data, glued together.
+ * Only box headers are read to skip over the rest, so it takes the same time whatever the size of the video.
+ * Anything else (photos, HEIF, whose XMP lives inside `mdat`) returns null and is searched whole.
+ */
+function videoMetadata(b: Uint8Array): Uint8Array | null {
+  if (b.length < 16 || ascii(b, 4, 4) !== "ftyp") return null;
+  const boxes = topLevelBoxes(b, 0, b.length);
+  if (!boxes.some((box) => box.type === "moov")) return null;
+  const keep: Uint8Array[] = [];
+  let total = 0;
+  const add = (part: Uint8Array) => {
+    if (total + part.length > MAX_VIDEO_METADATA) return;
+    keep.push(part);
+    total += part.length;
+  };
+  for (const box of boxes) {
+    if (MEDIA_BOXES.has(box.type)) continue;
+    const part = b.subarray(box.start, box.end);
+    if (box.type === "moov" && part.length > MAX_VIDEO_METADATA) {
+      // A huge `moov` is almost all sample tables: keep only its metadata children
+      for (const child of topLevelBoxes(b, box.start + 8, box.end)) {
+        if (child.type === "udta" || child.type === "meta" || child.type === "uuid") add(b.subarray(child.start, child.end));
+      }
+    } else {
+      add(part);
+    }
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const part of keep) out.set(part, (at += part.length) - part.length);
+  return out;
+}
+
+/** The boxes between `from` and `to`, reading only their headers. Stops at the first malformed one. */
+function topLevelBoxes(b: Uint8Array, from: number, to: number) {
+  const boxes: { type: string; start: number; end: number }[] = [];
+  for (let at = from; at + 8 <= to && boxes.length < 1024;) {
+    let size = u32(b, at);
+    const type = ascii(b, at + 4, 4);
+    if (size === 1) {
+      if (at + 16 > to) break;
+      size = u32(b, at + 8) * 2 ** 32 + u32(b, at + 12);
+    } else if (size === 0) {
+      size = to - at;
+    }
+    if (size < 8 || at + size > to) break;
+    boxes.push({ type, start: at, end: at + size });
+    at += size;
+  }
+  return boxes;
 }
 
 function findXmp(b: Uint8Array): string[] {

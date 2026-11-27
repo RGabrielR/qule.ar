@@ -96,7 +96,7 @@ Las fotos que **dicen en su propio archivo** que las creó una inteligencia arti
 
 - **Qué se mira:** las marcas que ponen los mismos generadores. Content Credentials (C2PA) de ChatGPT, Gemini, Firefly, Bing, Flux, Ideogram y otros; el campo IPTC `DigitalSourceType` (Midjourney, Meta AI, Apple); y los datos que guardan Stable Diffusion, ComfyUI o NovelAI. Se leen antes de borrar los metadatos y queda guardado solo el resultado.
 - **Qué no se mira:** el contenido de la imagen. No hay ningún modelo que "adivine" si una foto es de IA: los que existen se equivocan con muchas fotos reales, y marcar como falsa la foto de una persona real hace daño.
-- **Los videos no se revisan:** pueden pesar hasta 80 MB y recorrerlos enteros traba el servidor para todo el mundo.
+- **En los videos** se miran solo los metadatos del archivo (las cajas chicas del MP4), nunca el video entero: así un video de 80 MB no traba el servidor.
 - **El límite:** una captura de pantalla o una foto reenviada por WhatsApp pierde la marca. Que una foto no tenga el aviso **no prueba que sea real**.
 - **Fotos reales retocadas con IA** (por ejemplo, con el borrador mágico del celu) quedan registradas como "retocada", pero no llevan el aviso.
 - Si alguien usa fotos hechas con IA para hacerse pasar por otra persona, se reporta como **perfil falso**.

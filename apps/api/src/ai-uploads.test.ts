@@ -153,7 +153,7 @@ test("fotos hechas con IA: se marcan al subirlas y la marca viaja a la web", asy
   const groupList = await (await request("/api/groups/piloto-ia/messages", beto)).json() as { messages: GroupPhotoMessage[] };
   assert.equal(groupList.messages.find((m) => m.id === groupMessage.id)?.photoAi, "generated");
 
-  // Videos: no se revisan (pueden pesar 80 MB y recorrerlos traba el API). Aunque el archivo traiga la marca, no se guarda.
+  // Videos: se miran solo las cajas de metadatos del MP4 (no el video entero) y la marca se guarda igual que en las fotos
   if (!videoEnabled) {
     t.diagnostic("sin ffmpeg: no se prueba la subida de videos");
     return;
@@ -163,16 +163,16 @@ test("fotos hechas con IA: se marcan al subirlas y la marca viaja a la web", asy
   const xmp = '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
     + '<rdf:Description rdf:about="" xmlns:Iptc4xmpExt="http://iptc.org/std/Iptc4xmpExt/2008-02-29/" '
     + 'Iptc4xmpExt:DigitalSourceType="http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"/></rdf:RDF></x:xmpmeta>';
-  // Caja `free` al final del MP4: los reproductores la ignoran y el detector la encuentra
-  const freeBox = Buffer.alloc(8 + Buffer.byteLength(xmp));
-  freeBox.writeUInt32BE(freeBox.length, 0);
-  freeBox.write("free", 4, "latin1");
-  freeBox.write(xmp, 8, "utf8");
-  const video = Buffer.concat([await readFile(clip), freeBox]);
+  // Caja `uuid` de XMP al final del MP4, donde la ponen las herramientas (el UUID es el que fija la norma de XMP)
+  const xmpUuid = Buffer.from("be7acfcb97a942e89c71999491e3afac", "hex");
+  const head = Buffer.alloc(8);
+  head.writeUInt32BE(8 + xmpUuid.length + Buffer.byteLength(xmp), 0);
+  head.write("uuid", 4, "latin1");
+  const video = Buffer.concat([await readFile(clip), head, xmpUuid, Buffer.from(xmp, "utf8")]);
   assert.equal((await detectAiProvenance(video))?.origin, "generated");
   const sentVideo = await upload("/api/me/photos", ana, video, "ia.mp4", { private: "1" });
   assert.equal(sentVideo.status, 200);
   const savedVideo = await sentVideo.json() as { kind: string; ai: string | null };
   assert.equal(savedVideo.kind, "video");
-  assert.equal(savedVideo.ai, null);
+  assert.equal(savedVideo.ai, "generated");
 });

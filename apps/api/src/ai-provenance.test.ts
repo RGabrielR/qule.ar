@@ -206,6 +206,44 @@ describe("sin falsos positivos", () => {
   });
 });
 
+describe("videos (MP4/MOV)", () => {
+  const box = (type: string, payload: Uint8Array | string) => {
+    const body = typeof payload === "string" ? Buffer.from(payload, "utf8") : Buffer.from(payload);
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(8 + body.length, 0);
+    head.write(type, 4, "latin1");
+    return Buffer.concat([head, body]);
+  };
+  const xmp = (type: string) => '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+    + '<rdf:Description rdf:about="" xmlns:Iptc4xmpExt="http://iptc.org/std/Iptc4xmpExt/2008-02-29/" '
+    + `Iptc4xmpExt:DigitalSourceType="http://cv.iptc.org/newscodes/digitalsourcetype/${type}"/></rdf:RDF></x:xmpmeta>`;
+  const ftyp = box("ftyp", "isom\u0000\u0000\u0002\u0000isomiso2mp41");
+  const mdat = (size: number, inside = "") => box("mdat", Buffer.concat([Buffer.from(inside), Buffer.alloc(size)]));
+
+  test("lee la marca de las cajas de metadatos, antes o después del video", async () => {
+    const mark = box("uuid", "\u00be\u007a\u00cf\u00cb\u0097\u00a9\u0042\u00e8\u009c\u0071\u0099\u0094\u0091\u00e3\u00af\u00ac" + xmp("trainedAlgorithmicMedia"));
+    const moov = box("moov", box("mvhd", Buffer.alloc(100)));
+    assert.deepEqual(await detectAiProvenance(Buffer.concat([ftyp, moov, mark, mdat(1000)])), { origin: "generated", source: "xmp" });
+    assert.deepEqual(await detectAiProvenance(Buffer.concat([ftyp, mdat(1000), moov, mark])), { origin: "generated", source: "xmp" });
+    // Dentro de moov › udta, aunque moov sea enorme (tablas de un video largo)
+    const bigMoov = box("moov", Buffer.concat([box("trak", Buffer.alloc(5 * 1024 * 1024)), box("udta", box("XMP_", xmp("trainedAlgorithmicMedia")))]));
+    assert.equal((await detectAiProvenance(Buffer.concat([ftyp, mdat(1000), bigMoov])))?.origin, "generated");
+  });
+
+  test("no recorre el video: un MP4 de 80 MB se revisa en un ratito", async () => {
+    // Una marca escondida en los datos del video no cuenta (y buscarla obligaría a recorrer los 80 MB)
+    const big = Buffer.concat([ftyp, box("moov", box("mvhd", Buffer.alloc(100))), mdat(80 * 1024 * 1024, xmp("trainedAlgorithmicMedia"))]);
+    const start = performance.now();
+    assert.equal(await detectAiProvenance(big), null);
+    assert.ok(performance.now() - start < 200, `tardó ${Math.round(performance.now() - start)} ms`);
+  });
+
+  test("un MP4 roto no traba ni rompe nada", async () => {
+    const broken = Buffer.concat([ftyp, box("moov", ""), Buffer.from([0, 0, 0, 3, 0x6d, 0x64, 0x61, 0x74])]);
+    assert.equal(await detectAiProvenance(broken), null);
+  });
+});
+
 describe("aiOriginOf: detectado + lo que manda la web", () => {
   test("gana la señal más fuerte; lo declarado solo suma", async () => {
     const plain = new Uint8Array([1, 2, 3]);

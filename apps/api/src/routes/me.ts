@@ -287,8 +287,9 @@ meRoutes.post("/me/photos", requireUser, requireProfile, async (c) => {
 
   const bytes = await file.arrayBuffer();
   // Antes de procesarla: al guardarla se le borran los metadatos. `ai` lo manda la web si el original (antes del
-  // recorte) traía la marca. Los videos no se revisan: recorrer hasta 80 MB traba el API para todo el mundo.
-  const ai = isVideo ? null : await aiOriginOf(bytes, body.ai);
+  // recorte) traía la marca. En los videos se miran solo las cajas de metadatos, no el video entero (ver
+  // videoMetadata en packages/shared/src/aiProvenance.ts).
+  const ai = await aiOriginOf(bytes, body.ai);
   let saved: { key: string; posterKey: string | null; seconds: number | null };
   try {
     saved = isVideo ? await saveVideo(bytes) : { key: await saveImage(bytes), posterKey: null, seconds: null };
