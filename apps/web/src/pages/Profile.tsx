@@ -37,7 +37,7 @@ function ProfileView({ id }: { id: string }) {
   const [staffing, setStaffing] = useState(false);
   const { me } = useMe();
   const isOwner = Boolean(me?.user.access?.includes("owner"));
-  const { refreshAfterBlock, refreshConversations } = useTabData();
+  const { refreshAfterBlock, setConversationFavorite } = useTabData();
   const [params, setParams] = useSearchParams();
   const requestedAlbum = params.get("album");
   const [viewing, setViewing] = useState<{ items: Media[]; start: number; title: string; fromChat?: boolean } | null>(null);
@@ -80,8 +80,8 @@ function ProfileView({ id }: { id: string }) {
     setP({ ...p, favorite: fav });
     try {
       await api(`/favorites/${id}`, { method: fav ? "PUT" : "DELETE" });
-      // La estrellita de Mensajes sale de la lista de chats: se actualiza por detrás
-      void refreshConversations("refresh");
+      // La estrellita de Mensajes: se cambia en la bandeja que ya está cargada, sin pedirla entera
+      setConversationFavorite(id, fav);
     } catch {
       setP({ ...p, favorite: !fav });
     }

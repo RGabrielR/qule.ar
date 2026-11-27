@@ -223,11 +223,6 @@ async function albumNoticeStates(
   return states;
 }
 
-/**
- * La bandeja, de a INBOX_LIMIT chats, del más reciente al más viejo. Con `before` y `beforeId` (la fecha y el id del
- * último chat de la página anterior) trae los que siguen. Los bloqueos y los chats sin mensajes se filtran en la
- * consulta, así una página corta quiere decir que no hay más.
- */
 /** De estas personas, cuáles marcó `meId` como favoritas (para la estrellita de Mensajes). */
 async function favoritesAmong(meId: string, ids: string[]) {
   if (!ids.length) return new Set<string>();
@@ -236,6 +231,11 @@ async function favoritesAmong(meId: string, ids: string[]) {
   return new Set(rows.map((r) => r.id));
 }
 
+/**
+ * La bandeja, de a INBOX_LIMIT chats, del más reciente al más viejo. Con `before` y `beforeId` (la fecha y el id del
+ * último chat de la página anterior) trae los que siguen. Los bloqueos y los chats sin mensajes se filtran en la
+ * consulta, así una página corta quiere decir que no hay más.
+ */
 socialRoutes.get("/conversations", async (c) => {
   const me = c.get("user");
   const cursor = z.object({ before: z.iso.datetime({ offset: true }), beforeId: z.string().min(1).max(64) })
