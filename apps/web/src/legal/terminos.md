@@ -58,7 +58,7 @@ Las reglas completas de convivencia están en el [Código de conducta](https://g
 - Sos responsable de lo que publicás y de tener derecho a publicarlo.
 - Podemos ocultar o borrar contenido que rompa estas reglas, sobre todo si alguien lo reporta.
 
-**Fotos del perfil.** Se permiten fotos sugerentes o con desnudos: a quien eligió taparlas se las mostramos borrosas, con un botón para verlas igual. Para eso, la app revisa las fotos públicas del perfil en nuestro servidor (lo explica la [Política de privacidad](/privacidad)). Esa marca solo tapa la foto: no es una sanción, y si creés que se equivocó podés pedir una revisión. Si una foto trae en sus propios datos la marca de que se hizo con IA, la mostramos con el aviso "Hecha con IA".
+**Fotos del perfil.** Si una foto del perfil muestra desnudos explícitos, a quien eligió taparlas se la mostramos borrosa, con un botón para verla igual. Para eso, la app revisa las fotos públicas del perfil en nuestro servidor (lo explica la [Política de privacidad](/privacidad)). Esa marca solo tapa la foto: no es una sanción, y si creés que se equivocó podés pedir una revisión. Si una foto trae en sus propios datos la marca de que se hizo con IA, la mostramos con el aviso "Hecha con IA".
 
 **Grupos.** Quien crea un grupo lo administra, y puede sumar a otras personas para moderarlo. Puede aceptar o rechazar a quien pide entrar, expulsar, poner reglas contra el spam y, si el grupo tiene fotos, pausarlas. Quienes administran un grupo tienen que cuidar que se respeten estas reglas. El equipo de moderación de qule.ar puede intervenir en cualquier grupo y darlo de baja.
 
