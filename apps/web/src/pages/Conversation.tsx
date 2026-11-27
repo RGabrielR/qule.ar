@@ -23,6 +23,7 @@ import { ShareAlbumMenu } from "../features/chat/ShareAlbumMenu";
 import { Watermark } from "../features/photos/Watermark";
 import { ChatPhotoViewer } from "../features/messages/ChatPhotoViewer";
 import { useNewArrivals } from "../features/messages/useNewArrivals";
+import { useBottomAnchor } from "../features/messages/useBottomAnchor";
 import { useConversationActions } from "../features/messages/ConversationActions";
 import { ConversationHeaderMenu } from "../features/messages/ConversationHeaderMenu";
 import { chatDateFormat, chatDay, useChatToday } from "../features/messages/chatDates";
@@ -240,14 +241,9 @@ function ConversationThread({ id }: { id: string }) {
   }
 
   useLayoutEffect(followLatestMessage, [messages, typing]);
-
-  useLayoutEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const observer = new ResizeObserver(followLatestMessage);
-    observer.observe(list);
-    return () => observer.disconnect();
-  }, []);
+  // Al abrir el teclado, lo último que se veía queda pegado al campo de texto; y si estabas al final, seguís al final
+  // aunque crezca el campo de texto
+  useBottomAnchor(listRef, stickToBottom, { followWhenStuck: true });
 
   function onListScroll(event: React.UIEvent<HTMLDivElement>) {
     const list = event.currentTarget;

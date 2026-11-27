@@ -26,6 +26,7 @@ import { preparePhotoForUpload } from "../features/photos/preparePhoto";
 import { useSectionBack } from "../useSectionBack";
 import { markBack, usePageTransition } from "../features/navigation/pageTransition";
 import { useNewArrivals } from "../features/messages/useNewArrivals";
+import { useBottomAnchor } from "../features/messages/useBottomAnchor";
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
@@ -372,6 +373,9 @@ function GroupChatThread({ id }: { id: string }) {
     observer.observe(end);
     return () => observer.disconnect();
   }, [id, isMember]);
+
+  // Al abrir el teclado, lo último que se veía queda pegado al campo de texto
+  useBottomAnchor(listRef, stickToBottom, { mounted: `${id}:${isMember}` });
 
   function onScroll() {
     const el = listRef.current;
