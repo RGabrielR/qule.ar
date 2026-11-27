@@ -15,9 +15,11 @@
     "test": "npm test --workspace api",
     "vapid": "node --input-type=module -e \"import {generateVAPIDKeys} from 'web-push'; const k=generateVAPIDKeys(); console.log('VAPID_PUBLIC_KEY='+k.publicKey+'\\nVAPID_PRIVATE_KEY='+k.privateKey)\"",
     "typecheck": "npm run typecheck --workspace api && npm run typecheck --workspace web",
-    "lint": "npm run lint:css && npm run lint:brand",
+    "lint": "npm run lint:css && npm run lint:brand && npm run lint:legal",
     "lint:css": "stylelint \"apps/web/src/**/*.css\"",
     "lint:brand": "node scripts/check-brand.mjs",
+    "lint:legal": "node scripts/check-legal.mjs",
+    "legal:hash": "node scripts/check-legal.mjs --write",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "test:e2e": "playwright test",
     "pretest:e2e": "npm run build"

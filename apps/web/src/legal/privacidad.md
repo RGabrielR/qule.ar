@@ -1,6 +1,6 @@
 # Política de privacidad
 
-**Versión beta · 24 de noviembre de 2026**
+**Versión beta · 27 de noviembre de 2026**
 
 En qule.ar tratamos datos muy personales: quién sos, qué buscás y, si lo contás, cosas sobre tu salud. Por eso esta política intenta decir **exactamente** qué guardamos, dónde y quién lo puede ver, sin letra chica. Sigue la **Ley 25.326 de Protección de Datos Personales**.
 

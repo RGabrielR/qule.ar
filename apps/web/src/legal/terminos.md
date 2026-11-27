@@ -1,6 +1,6 @@
 # Términos y condiciones
 
-**Versión beta · 21 de noviembre de 2026**
+**Versión beta · 27 de noviembre de 2026**
 
 Te damos la bienvenida a qule.ar. Al crear tu cuenta aceptás estos términos y la [Política de privacidad](/privacidad). Los escribimos en criollo para que se entiendan.
 
@@ -12,7 +12,7 @@ qule.ar es una app comunitaria, gratuita y de código abierto para conocer gente
 
 En estos términos, **el Usuario** es toda persona que se registra en qule.ar o la usa.
 
-**Contacto:** por ahora, en las [Discusiones del proyecto](https://github.com/RGabrielR/qule.ar/discussions). Pronto vamos a sumar un mail.
+**Contacto:** por mail a [privacidad@qule.ar](mailto:privacidad@qule.ar), o en las [Discusiones del proyecto](https://github.com/RGabrielR/qule.ar/discussions) si es algo que puede ser público.
 
 ## 2. qule.ar está en beta
 
@@ -28,7 +28,7 @@ En estos términos, **el Usuario** es toda persona que se registra en qule.ar o 
 
 ## 3. Quién puede usarla
 
-- **Solo personas mayores de 18 años.** Si nos enteramos de que una cuenta es de una persona menor, la borramos.
+- **Solo personas mayores de 18 años.** Si hay indicios de que una cuenta es de una persona menor, la suspendemos enseguida, guardamos la prueba y, si corresponde, lo denunciamos a las autoridades.
 - Una cuenta por persona, y con tu edad real. No hace falta usar tu nombre real: podés usar el nombre con el que quieras que te vean.
 - No podés usarla si te suspendimos antes por romper estas reglas.
 
@@ -40,6 +40,8 @@ qule.ar es un espacio para la comunidad LGBTIQ+ y las personas aliadas. Al usarl
 - Respetar el nombre y los pronombres de cada persona.
 - **No compartir fotos, mensajes ni datos de otra persona sin su permiso**, ni capturas del álbum privado o de las fotos temporales.
 - No hacerte pasar por otra persona ni crear perfiles falsos.
+- **No crear ni compartir imágenes falsas de una persona real**, por ejemplo hechas o retocadas con IA, sin su consentimiento, y menos si son sexuales. Es violencia digital (Ley 27.736, "Ley Olimpia").
+- **No hacer reportes falsos** ni usar los reportes para perjudicar a alguien. Los reportes son para cuidar a la comunidad.
 - No mandar spam, publicidad, estafas ni pedidos de plata.
 - No ofrecer ni pedir servicios sexuales pagos ni nada ilegal.
 - **No vender ni ofrecer drogas.** Hablar de consumo cuidado y de reducción de daños sí se puede: esos grupos son bienvenidos.
@@ -56,11 +58,25 @@ Las reglas completas de convivencia están en el [Código de conducta](https://g
 - Sos responsable de lo que publicás y de tener derecho a publicarlo.
 - Podemos ocultar o borrar contenido que rompa estas reglas, sobre todo si alguien lo reporta.
 
+**Fotos del perfil.** Si una foto del perfil muestra desnudos explícitos, a quien eligió taparlas se la mostramos borrosa, con un botón para verla igual. Para eso, la app revisa las fotos públicas del perfil en nuestro servidor (lo explica la [Política de privacidad](/privacidad)). Esa marca solo tapa la foto: no es una sanción, y si creés que se equivocó podés pedir una revisión. Si una foto trae en sus propios datos la marca de que se hizo con IA, la mostramos con el aviso "Hecha con IA".
+
+**Grupos.** Quien crea un grupo lo administra, y puede sumar a otras personas para moderarlo. Puede aceptar o rechazar a quien pide entrar, expulsar, poner reglas contra el spam y, si el grupo tiene fotos, pausarlas. Quienes administran un grupo tienen que cuidar que se respeten estas reglas. El equipo de moderación de qule.ar puede intervenir en cualquier grupo y darlo de baja.
+
 ## 6. Moderación
 
-- Podés reportar perfiles y mensajes desde la app. Un equipo de moderación voluntario revisa los reportes.
-- Para revisar un reporte, quien modera puede ver el mensaje o el perfil reportado.
-- Si alguien rompe las reglas, podemos avisarle, borrar contenido, o suspender o borrar su cuenta. Si creés que nos equivocamos con tu cuenta, podés pedir una revisión desde la misma app: es privado y te respondemos ahí.
+- Podés reportar perfiles, mensajes, fotos y grupos desde la app. Un equipo de moderación voluntario revisa los reportes.
+- Para revisar un reporte, quien modera puede ver el mensaje o el perfil reportado, y la copia que se guarda como prueba.
+- Si alguien rompe las reglas, podemos avisarle, borrar contenido, o suspender o borrar su cuenta. **Al suspender una cuenta, se borra lo que publicó a la vista de otras personas** (mensajes en grupos, fotos, álbumes y videos), salvo lo que haga falta guardar como prueba.
+
+**Medidas automáticas.** Para cuidar a la comunidad cuando nadie del equipo llega a revisar a tiempo, la app toma algunas medidas sola. Ninguna es definitiva: siempre las revisa una persona del equipo.
+
+- Si el nombre o la descripción de un perfil o un grupo tiene señales de que puede haber menores, se le avisa a moderación. Esas señales también impiden crear grupos con esos nombres, como pasa con la venta y los servicios sexuales.
+- Un perfil o un grupo con reportes urgentes de varias personas deja de aparecer en las listas hasta que alguien lo revise.
+- Una foto de un grupo reportada por algo urgente (por ejemplo, menores o contenido íntimo sin consentimiento) deja de verse con el primer reporte, hasta que alguien la revise.
+- Si varias personas distintas reportan una cuenta por el mismo motivo y nadie del equipo lo revisa en un día, la cuenta se suspende hasta que alguien la revise. Lo que publicó no se borra hasta que una persona confirme la suspensión.
+- Hay un tope de reportes por hora y por día. Si alguien usa los reportes de mala fe, moderación puede hacer que sus reportes no cuenten para estas medidas, salvo los que son por menores, que cuentan siempre.
+
+Si creés que nos equivocamos con tu cuenta, podés pedir una revisión desde la misma app: es privado y te respondemos ahí.
 
 ## 7. Encuentros en persona: cuidate
 
