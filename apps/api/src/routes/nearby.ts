@@ -18,6 +18,8 @@ const { profile } = schema;
 const MAX_OFFSET = 2000;
 /** Cuánto tiempo después de cerrar la app se te sigue mostrando como "hace un rato". */
 const RECENT_MS = 15 * 60_000;
+/** Cuántos días se ve una cuenta en la pestaña Nuevos de Gente. */
+export const NEW_DAYS = 7;
 
 export const nearbyRoutes = new Hono<AppEnv>();
 nearbyRoutes.use("/nearby", requireUser, requireProfile);
@@ -109,6 +111,8 @@ const filtersSchema = z.object({
   online: z.enum(["1"]).optional(),
   withPhoto: z.enum(["1"]).optional(),
   favorites: z.enum(["1"]).optional(),
+  // Pestaña Nuevos: cuentas de los últimos NEW_DAYS días con foto de perfil. No es un filtro de perfil (no va a Mensajes).
+  nuevos: z.enum(["1"]).optional(),
   offset: z.coerce.number().int().min(0).max(MAX_OFFSET).default(0),
   limit: z.coerce.number().int().min(1).max(NEARBY_PAGE_SIZE).default(NEARBY_PAGE_SIZE),
 }).transform((f) => ordered(ordered(ordered(f, "ageMin", "ageMax"), "heightMin", "heightMax"), "weightMin", "weightMax"));
@@ -198,6 +202,11 @@ export async function nearbyPage(me: Me, f: NearbyFilters) {
     sql`not exists (select 1 from block b where b.blocker_id = p.user_id and b.blocked_id = ${u.id})`,
   ];
   conds.push(...profileFilterConds(u.id, f));
+  if (f.nuevos) {
+    conds.push(sql`p.created_at > ${new Date(Date.now() - NEW_DAYS * 86_400_000).toISOString()}::timestamptz`);
+    // Recién aparece cuando sube una foto al perfil: así no se llena de cuentas vacías
+    conds.push(sql`exists (select 1 from photo ph where ph.user_id = p.user_id and ph.is_private = false)`);
+  }
 
   // Sin pasar por el ORM: son miles de filas chicas y convertirlas una por una era lo que más tiempo llevaba
   const [hidden, unlisted, favorites, result] = await Promise.all([

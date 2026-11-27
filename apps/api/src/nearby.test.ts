@@ -277,6 +277,37 @@ test("una cuenta nueva aparece en Gente recién cuando confirma el mail", async 
   }
 });
 
+test("Nuevos: solo cuentas de los últimos 7 días con foto de perfil, de la más cercana a la más lejana", async () => {
+  const day = 86_400_000;
+  const ids = ["nueva-lejos", "nueva-cerca", "nueva-sin-foto", "nueva-foto-privada", "vieja-con-foto"];
+  await db.insert(schema.user).values(ids.map((id) => ({ id, name: id, email: `${id}@example.test`, emailVerified: true })));
+  const base = { birthdate: "1990-01-01", bodyType: "pestaña-nuevos" };
+  await db.insert(schema.profile).values([
+    { ...base, userId: "nueva-lejos", displayName: "Lejos", cellLat: -34.6 + 1, cellLng: -58.4, createdAt: new Date(Date.now() - day) },
+    { ...base, userId: "nueva-cerca", displayName: "Cerca", cellLat: -34.6, cellLng: -58.4, createdAt: new Date(Date.now() - 6 * day) },
+    { ...base, userId: "nueva-sin-foto", displayName: "Sin foto", cellLat: -34.6, cellLng: -58.4 },
+    { ...base, userId: "nueva-foto-privada", displayName: "Privada", cellLat: -34.6, cellLng: -58.4 },
+    { ...base, userId: "vieja-con-foto", displayName: "Vieja", cellLat: -34.6, cellLng: -58.4, createdAt: new Date(Date.now() - 8 * day) },
+  ]);
+  await db.insert(schema.photo).values([
+    { id: "nl-a", userId: "nueva-lejos", key: "nl-a.jpg", position: 0, isPrivate: false },
+    { id: "nc-a", userId: "nueva-cerca", key: "nc-a.jpg", position: 0, isPrivate: false },
+    { id: "np-a", userId: "nueva-foto-privada", key: "np-a.jpg", position: 0, isPrivate: true },
+    { id: "vc-a", userId: "vieja-con-foto", key: "vc-a.jpg", position: 0, isPrivate: false },
+  ]);
+  try {
+    const me = MES["con ubicación"];
+    const all = await nearbyPage(me, parseNearbyFilters({ bodyType: "pestaña-nuevos" }));
+    assert.equal(all.total, ids.length, "en Todos aparecen todas");
+    const nuevos = await nearbyPage(me, parseNearbyFilters({ bodyType: "pestaña-nuevos", nuevos: "1" }));
+    assert.deepEqual(nuevos.people.map((p) => p.id), ["nueva-cerca", "nueva-lejos"]);
+    // Nuevos no es un filtro de perfil: en Mensajes no cambia nada
+    assert.equal(await chatPeopleMatching(ME, parseNearbyFilters({ nuevos: "1" })), null);
+  } finally {
+    await db.delete(schema.user).where(inArray(schema.user.id, ids));
+  }
+});
+
 test("Mensajes: de las personas con chat, solo las que cumplen los filtros de perfil", async () => {
   // Chats con algunas personas: favoritas, bloqueadas, suspendidas o en incógnito también (el chat sigue existiendo)
   const others = Array.from({ length: N }, (_, i) => `u${i}`).filter((_, i) => i % 7 === 0 || i % 37 === 0);

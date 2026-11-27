@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
-import { api } from "../api";
 import { useMe } from "../App";
 import { albumCount, AlbumViewer } from "../components/AlbumViewer";
 import { EditIcon, EyeIcon, LockIcon, SettingsIcon, StarIcon } from "../components/Icons";
@@ -11,12 +10,7 @@ import { useTabTransition } from "../features/navigation/pageTransition";
 export function MyProfileOverview() {
   const { me } = useMe();
   const [viewingAlbum, setViewingAlbum] = useState<string | null>(null);
-  const [unseen, setUnseen] = useState(0);
   const enter = useTabTransition();
-
-  useEffect(() => {
-    api<{ count: number }>("/toques/unseen").then(({ count }) => setUnseen(count)).catch(() => {});
-  }, []);
 
   if (!me?.profile) return null;
   const { profile, photos } = me;
@@ -48,10 +42,6 @@ export function MyProfileOverview() {
           <nav className="quicklinks" aria-label="Tu actividad">
             <Link to="/visitas" className="quicklink"><EyeIcon /> Quién me vio</Link>
             <Link to="/favoritos" className="quicklink"><StarIcon size={18} /> Favoritos</Link>
-            <Link to="/cerca/toques" className="quicklink">
-              <img src="/reacciones/rayo.svg" alt="" width={18} height={18} /> Toques
-              {unseen > 0 && <span className="badge badge--inline" aria-label={`${unseen} sin ver`}>{unseen}</span>}
-            </Link>
             {me.user.isAdmin && <Link to="/admin" className="quicklink quicklink--wide">Moderación</Link>}
           </nav>
         </section>

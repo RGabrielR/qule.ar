@@ -60,6 +60,16 @@ export function toQuery(f: Filters) {
   return q.toString();
 }
 
+/** Las pestañas de Gente que muestran la grilla: Todos y Nuevos (cuentas de los últimos 7 días con foto). */
+export type GridView = "todos" | "nuevos";
+
+/** Lo que se pide al servidor: los filtros y, en Nuevos, la marca de la pestaña. */
+function gridQuery(f: Filters, view: GridView) {
+  const q = toQuery(f);
+  if (view !== "nuevos") return q;
+  return q ? `${q}&nuevos=1` : "nuevos=1";
+}
+
 export function countFilters(f: Filters) {
   let n = 0;
   if (f.ageMin != null || f.ageMax != null) n++;
@@ -108,7 +118,7 @@ function keepPhotos(people: NearbyPerson[]) {
   }
 }
 
-export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
+export function Nearby({ tabs, view = "todos" }: { tabs?: React.ReactNode; view?: GridView }) {
   const { me, reload } = useMe();
   const location = useLocation();
   const navigate = useNavigate();
@@ -119,7 +129,7 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
   const entry = filtersEntry ?? location.key;
   const userId = me?.user.id;
   const [filters, setFilters] = useState<Filters>(loadFilters);
-  const [cached] = useState(() => (gridCache && gridCache.userId === userId && gridCache.query === toQuery(filters) ? gridCache : null));
+  const [cached] = useState(() => (gridCache && gridCache.userId === userId && gridCache.query === gridQuery(filters, view) ? gridCache : null));
   const [people, setPeople] = useState<NearbyPerson[]>(() => cached?.people ?? []);
   // Las fotos de lo que ya estaba guardado se muestran directo, sin ocultarse hasta cargar ni fundido
   const [cachedIds] = useState(() => new Set(cached?.people.map((p) => p.id)));
@@ -142,7 +152,7 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
   const [returnPosition] = useState(() => {
     const previousEntry = typeof state?.nearbyEntry === "string" ? state.nearbyEntry : entry;
     const saved = positions.get(entry) ?? positions.get(previousEntry);
-    if (!saved || saved.userId !== userId || saved.query !== toQuery(filters)) return undefined;
+    if (!saved || saved.userId !== userId || saved.query !== gridQuery(filters, view)) return undefined;
     // Si desde el perfil pasaste a personas de páginas que la grilla no había cargado, se cargan también.
     const list = getGridList(positions.has(entry) ? entry : previousEntry, userId);
     const swiped = list && list.query === saved.query ? list.people.length : 0;
@@ -161,10 +171,10 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
   // El perfil usa esta lista para pasar al anterior o al siguiente, con el mismo orden y los mismos filtros.
   useLayoutEffect(() => {
     if (status !== "ready" || !userId) return;
-    saveGridList(entry, { userId, query: toQuery(filtersRef.current), people: people.map(toGridPerson), nextOffset });
-    gridCache = { userId, query: toQuery(filtersRef.current), people, nextOffset };
+    saveGridList(entry, { userId, query: gridQuery(filtersRef.current, view), people: people.map(toGridPerson), nextOffset });
+    gridCache = { userId, query: gridQuery(filtersRef.current, view), people, nextOffset };
     keepPhotos(people);
-  }, [entry, userId, people, nextOffset, status]);
+  }, [entry, userId, people, nextOffset, status, view]);
 
   useLayoutEffect(() => {
     visible.current = { people, ready: status === "ready" };
@@ -180,14 +190,14 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
       const { people, ready } = visible.current;
       if (page && userId && ready) {
         positions.delete(entry);
-        positions.set(entry, { userId, query: toQuery(filtersRef.current), top: page.scrollTop, count: people.length });
+        positions.set(entry, { userId, query: gridQuery(filtersRef.current, view), top: page.scrollTop, count: people.length });
         if (positions.size > POSITION_LIMIT) {
           const oldest = positions.keys().next().value;
           if (oldest !== undefined) positions.delete(oldest);
         }
       }
     };
-  }, [entry, userId]);
+  }, [entry, userId, view]);
 
   const load = useCallback(async (f: Filters, offset = 0, releasedDistance = 0, restoreCount = 0) => {
     requestRef.current?.abort();
@@ -203,7 +213,7 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
     );
     const loaded = [...previous];
     const seen = new Set(previous.map((p) => p.id));
-    const query = new URLSearchParams(toQuery(f));
+    const query = new URLSearchParams(gridQuery(f, view));
     let cursor: number | null = offset;
     let hasLocation: boolean;
     setRefreshDistance(releasedDistance);
@@ -227,7 +237,7 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
       if (!offset) gridFetchedAt = Date.now();
       setPeople(loaded);
       setNextOffset(cursor);
-      setPeopleQuery(toQuery(f));
+      setPeopleQuery(gridQuery(f, view));
       if (releasedDistance > 0) setRefreshes((n) => n + 1);
       setStatus("ready");
     } catch {
@@ -240,7 +250,7 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
         setRefreshDistance(0);
       }
     }
-  }, []);
+  }, [view]);
 
   const cancelPull = useCallback(() => {
     pull.current = null;
@@ -424,9 +434,11 @@ export function Nearby({ tabs }: { tabs?: React.ReactNode }) {
 
       {status === "ready" && people.length === 0 && (
         <div className="empty">
-          <p className="empty__title">{active ? "Nadie con esos filtros" : "Todavía no hay nadie más"}</p>
+          <p className="empty__title">{active ? "Nadie con esos filtros" : view === "nuevos" ? "Nadie nuevo esta semana" : "Todavía no hay nadie más"}</p>
           {active ? (
             <button className="btn btn--small" onClick={() => applyFilters(EMPTY)}>Sacar filtros</button>
+          ) : view === "nuevos" ? (
+            <p className="muted">Quien se suma aparece acá durante 7 días, cuando sube una foto a su perfil.</p>
           ) : (
             <p className="muted">Pasate por el chat general o los grupos mientras tanto.</p>
           )}

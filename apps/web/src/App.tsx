@@ -34,7 +34,7 @@ import { MyProfileOverview } from "./pages/MyProfileOverview";
 import { Settings } from "./pages/Settings";
 import { BlockedPeople } from "./pages/BlockedPeople";
 import { ChatIcon, GridIcon, GroupIcon, UserIcon } from "./components/Icons";
-import { Nearby } from "./pages/Nearby";
+import { Nearby, type GridView } from "./pages/Nearby";
 import { Favorites, Toques, Views } from "./pages/People";
 import { PeopleTabs } from "./features/people/PeopleTabs";
 import { useUnseenToques } from "./features/toques/useUnseenToques";
@@ -83,7 +83,8 @@ export function App() {
         <Route element={<RequireAuth needProfile><Shell /></RequireAuth>}>
           <Route path="/" element={<Navigate to="/cerca" replace />} />
           <Route path="/cerca" element={<PeopleView />} />
-          <Route path="/cerca/toques" element={<PeopleView showToques />} />
+          <Route path="/cerca/nuevos" element={<PeopleView view="nuevos" />} />
+          <Route path="/cerca/toques" element={<PeopleView view="toques" />} />
           <Route path="/grupos" element={<Groups />} />
           <Route path="/grupos/:id" element={<GroupChat />} />
           <Route path="/grupos/:id/info" element={<GroupInfo />} />
@@ -148,10 +149,12 @@ function RequirePermission({ allows }: { allows: (me: Me) => boolean }) {
 
 const UnseenToquesContext = createContext(0);
 
-function PeopleView({ showToques = false }: { showToques?: boolean }) {
+/** Gente: las pestañas Todos, Nuevos y Toques. */
+function PeopleView({ view = "todos" }: { view?: GridView | "toques" }) {
   const unseen = useContext(UnseenToquesContext);
   const tabs = <PeopleTabs unseen={unseen} />;
-  return showToques ? <Toques tabs={tabs} /> : <Nearby tabs={tabs} />;
+  // Con key, cada pestaña de la grilla arranca de cero (su propia consulta, posición y caché)
+  return view === "toques" ? <Toques tabs={tabs} /> : <Nearby key={view} view={view} tabs={tabs} />;
 }
 
 type Toast = { id: number; text: string; to?: string };
