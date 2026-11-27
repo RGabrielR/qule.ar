@@ -204,6 +204,8 @@ function ProfileView({ id }: { id: string }) {
 
   return (
     <div className={`page profile ${enter}${swipeClass}`} {...swipeProps}>
+      {/* Borde de arriba fijo, para que iOS 26 no desenfoque la parte de arriba de la foto (ver .profile__edge) */}
+      <div className="profile__edge" aria-hidden="true" />
       <ProfileCover
         photos={p?.photos}
         photosBlur={p?.photosBlur}

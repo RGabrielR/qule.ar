@@ -389,6 +389,11 @@ html:has(.pull-refresh), .page:has(> .pull-refresh) { overscroll-behavior-y: non
 
 /* ---------- Perfil ---------- */
 .profile { padding-bottom: 32px; }
+/* En las webs instaladas, iOS 26 dibuja un desenfoque debajo de la barra de estado que se mete en la página, salvo
+   que un elemento fijo ocupe todo el borde de arriba (en las demás pantallas es el encabezado). El perfil arranca
+   directo con la foto, y el desenfoque tapaba los indicadores de fotos y la flecha de volver. Esta franja casi
+   invisible ocupa ese borde: más de 10 px de alto, que es lo que mira WebKit, y sin ocupar lugar ni recibir toques. */
+.profile__edge { position: sticky; top: 0; z-index: var(--z-sticky); height: 12px; margin-bottom: -12px; background: color-mix(in srgb, var(--bg) 1%, transparent); pointer-events: none; }
 .profile__photo { position: relative; isolation: isolate; aspect-ratio: 4 / 5; max-height: 70vh; width: 100%; background: var(--surface-2); overflow: hidden; }
 .profile__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .profile__cover-media { position: absolute; inset: 0; }
