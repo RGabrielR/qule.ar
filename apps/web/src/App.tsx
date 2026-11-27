@@ -12,6 +12,7 @@ import { useHidePrivateMediaWhenAway } from "./features/photos/Watermark";
 import { Legal } from "./pages/Legal";
 import { Logo } from "./components/Logo";
 import { TAB_PATHS, useTabSwipe } from "./features/navigation/useTabSwipe";
+import { useForgetPageIntent } from "./features/navigation/pageTransition";
 import { TabDataProvider, useTabData } from "./features/navigation/tabData";
 import { APP_NAME } from "./brand";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
@@ -108,8 +109,15 @@ export function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <UpdateBanner />
+      <PageIntentReset />
     </MeContext.Provider>
   );
+}
+
+// Aparte, para que cambiar de pantalla no vuelva a dibujar toda la app (ver pageTransition.ts)
+function PageIntentReset() {
+  useForgetPageIntent();
+  return null;
 }
 
 function LoginRoute() {
@@ -209,6 +217,10 @@ function ShellContent() {
   const inMyProfile = /^\/yo(?:\/|$)/.test(loc.pathname);
   const nearbyEntry = loc.pathname.startsWith("/perfil/") ? loc.state?.nearbyEntry : undefined;
 
+  // Al tocar una pestaña, su ícono rebota (cada toque lo vuelve a montar con otra key); los contadores hacen "pop" al cambiar
+  const pendingLabel = pending > 99 ? "99+" : String(pending);
+  const unreadLabel = unread > 99 ? "99+" : String(unread);
+
   return (
     <div ref={chatShell} className={`shell${inThread ? " shell--thread" : ""}${canSwipeTabs ? " shell--swipe" : ""}`}>
       <main className="shell__main" ref={main} {...swipeHandlers}>
@@ -230,11 +242,11 @@ function ShellContent() {
           </NavLink>
           <NavLink to={TAB_PATHS[1]} className="tabbar__item">
             <GroupIcon /> <span>Grupos</span>
-            {pending > 0 && <b className="badge">{pending > 99 ? "99+" : pending}</b>}
+            {pending > 0 && <b className="badge" key={pendingLabel}>{pendingLabel}</b>}
           </NavLink>
           <NavLink to={TAB_PATHS[2]} className="tabbar__item">
             <ChatIcon /> <span>Mensajes</span>
-            {unread > 0 && <b className="badge">{unread > 99 ? "99+" : unread}</b>}
+            {unread > 0 && <b className="badge" key={unreadLabel}>{unreadLabel}</b>}
           </NavLink>
           <NavLink to={TAB_PATHS[3]} className="tabbar__item">
             <UserIcon /> <span>Yo</span>

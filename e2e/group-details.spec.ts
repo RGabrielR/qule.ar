@@ -65,6 +65,8 @@ test("los detalles conservan el origen al abrirse desde Grupos o desde el chat",
     await expect(viewChat).toHaveCount(0);
     await page.getByRole("button", { name: "Volver", exact: true }).click();
     await expect(detailsLink).toBeVisible();
+    // El chat entra deslizando: se mide cuando terminó de moverse
+    await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
     const box = (await target.boundingBox())!;
     const x = target === header ? 2 : box.width / 2;
     const y = target === header ? 2 : box.height / 2;
@@ -162,6 +164,8 @@ test("las invitaciones se envían y cancelan desde su pantalla", async ({ page, 
   await picker.getByRole("listitem").filter({ hasText: guest.name }).getByRole("button", { name: "Invitar", exact: true }).click();
   await expect(picker.getByText("Invitación enviada")).toBeVisible();
   await picker.getByRole("button", { name: "Listo", exact: true }).click();
+  // La hoja baja antes de cerrarse: hasta entonces, su fila de la persona sigue en pantalla
+  await expect(picker).toHaveCount(0);
 
   const row = page.getByRole("listitem").filter({ hasText: guest.name });
   await expect(row).toContainText("sin responder");

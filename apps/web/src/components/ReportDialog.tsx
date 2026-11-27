@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, upload } from "../api";
 import { REPORT_REASONS, URGENT_REASONS } from "../options";
 import { DialogFocus } from "./DialogFocus";
+import { useSheetExit } from "./useSheetExit";
 
 type Props = {
   // Se reporta a una persona (userId) o a un grupo (groupId)
@@ -21,6 +22,7 @@ export function ReportDialog({ userId, groupId, name, messageId, messageKind, on
   const [capturesEnabled, setCapturesEnabled] = useState(false);
   const [capture, setCapture] = useState<File | null>(null);
   const [error, setError] = useState("");
+  const { close, backdrop } = useSheetExit(onClose);
   const showCapture = capturesEnabled && Boolean(userId) && !groupId && Boolean(reason) && reason !== "menor de edad";
 
   useEffect(() => {
@@ -49,16 +51,16 @@ export function ReportDialog({ userId, groupId, name, messageId, messageKind, on
   }
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
+    <div className="sheet-backdrop" {...backdrop}>
       <div className="sheet sheet--list report-dialog" role="dialog" aria-modal aria-labelledby="report-title" onClick={(e) => e.stopPropagation()}>
-        <DialogFocus onClose={onClose} />
+        <DialogFocus onClose={close} />
         {state === "done" ? (
           <>
             <h2 id="report-title">Gracias por avisar</h2>
             <p className="muted">
               Vamos a revisar el reporte.{groupId ? " Si sos parte del grupo, también podés salir." : ` Si te hace sentir mejor, también podés bloquear a ${name}.`}
             </p>
-            <button className="btn btn--primary" onClick={onClose}>Listo</button>
+            <button className="btn btn--primary" onClick={() => close()}>Listo</button>
           </>
         ) : (
           <>
@@ -94,7 +96,7 @@ export function ReportDialog({ userId, groupId, name, messageId, messageKind, on
             )}
             {state === "error" && <p className="error" role="alert">{error || "No se pudo mandar el reporte. Probá de nuevo."}</p>}
             <div className="row">
-              <button className="btn" onClick={onClose}>Cancelar</button>
+              <button className="btn" onClick={() => close()}>Cancelar</button>
               <button className="btn btn--danger" disabled={!reason || state === "sending"} onClick={send}>
                 {state === "sending" ? "Mandando…" : "Reportar"}
               </button>
