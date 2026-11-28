@@ -1,3 +1,4 @@
+import { GroupTagList } from "../features/groups/GroupTags";
 import { groupOutbox, newMessageKey, SendFailure, usePending, useTimeline } from "../features/messages/outbox";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -606,6 +607,7 @@ function GroupChatThread({ id }: { id: string }) {
           <GroupAvatar name={info.name} photo={info.photo} general={info.isGeneral} size="big" />
           <h2>{info.name}</h2>
           {info.description && <p className="muted group-description">{info.description}</p>}
+          <GroupTagList tags={info.tags} />
           <p className="muted small">{info.memberCount} {info.memberCount === 1 ? "miembro" : "miembros"} · {rulesText}</p>
           <div className="preview__request">
             {info.pending && info.pendingMessage && (

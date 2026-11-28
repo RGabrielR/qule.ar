@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./groupTags": "./src/groupTags.ts",
     "./nearby": "./src/nearby.ts",
+    "./peopleFilters": "./src/peopleFilters.ts",
     "./realtime": "./src/realtime.ts"
   }
 }

@@ -570,6 +570,12 @@ button.photos__add:hover:not(:disabled) { border-color: var(--accent); color: va
 .people-tabs a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 .tabs :is(button[aria-selected="true"], a[aria-current="page"]) { color: var(--text); border-bottom-color: var(--accent); }
 .searchbar { padding: 12px 16px 4px; }
+.group-search { display: flex; gap: 8px; }
+.group-search .input { flex: 1; min-width: 0; }
+.group-search .btn { flex: none; }
+.group-tags { overflow-wrap: anywhere; }
+.group-tags-editor > summary { cursor: pointer; }
+.group-tags-editor > .form { margin-top: 12px; }
 /* Atajos de filtros en Mensajes: una fila que se desliza de costado si no entra */
 .inbox-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
 .inbox-filters::-webkit-scrollbar { display: none; }

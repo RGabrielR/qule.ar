@@ -236,6 +236,7 @@ export type MyGroup = {
   id: string;
   name: string;
   description: string | null;
+  tags: string[];
   isGeneral: boolean;
   /** Foto del grupo (miniatura). null: sin foto. */
   photo: string | null;
@@ -248,6 +249,7 @@ export type GroupListing = {
   id: string;
   name: string;
   description: string | null;
+  tags: string[];
   photo: string | null;
   memberCount: number;
   role: Role | null;

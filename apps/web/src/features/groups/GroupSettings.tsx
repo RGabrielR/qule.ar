@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { api, type GroupInfo, type SpamRules } from "../../api";
+import { GroupTagEditor } from "./GroupTags";
 
-export function GroupSettings({ info, onSaved }: { info: GroupInfo; onSaved: (name: string) => void }) {
+export function GroupSettings({ info, onSaved }: { info: GroupInfo; onSaved: (name: string, tags: string[]) => void }) {
   const [name, setName] = useState(info.name);
   const [description, setDescription] = useState(info.description ?? "");
+  const [tags, setTags] = useState(info.tags ?? []);
   // Lo que está escrito en cada campo, como texto: así se puede borrar y volver a escribir sin que aparezca "0" o "05"
   const [draft, setDraft] = useState(() => rulesToDraft(info.rules));
   const [state, setState] = useState<"idle" | "saving" | "ok">("idle");
@@ -29,9 +31,9 @@ export function GroupSettings({ info, onSaved }: { info: GroupInfo; onSaved: (na
     setState("saving");
     setError("");
     try {
-      await api(`/groups/${info.id}`, { method: "PATCH", json: { name, description: description || null, rules: checked.rules } });
+      await api(`/groups/${info.id}`, { method: "PATCH", json: { name, description: description || null, tags, rules: checked.rules } });
       setState("ok");
-      onSaved(name.trim());
+      onSaved(name.trim(), tags);
     } catch (err) {
       setError((err as Error).message);
       setState("idle");
@@ -48,6 +50,8 @@ export function GroupSettings({ info, onSaved }: { info: GroupInfo; onSaved: (na
         <span>Descripción</span>
         <textarea className="input" rows={3} maxLength={300} value={description} onChange={(e) => { setDescription(e.target.value); setState("idle"); }} />
       </label>
+
+      <GroupTagEditor tags={tags} onChange={(next) => { setTags(next); setState("idle"); }} />
 
       <h3 className="subhead">Antispam</h3>
       <p className="muted small">

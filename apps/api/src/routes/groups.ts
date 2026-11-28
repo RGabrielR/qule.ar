@@ -1,3 +1,4 @@
+import { GROUP_TAG_COUNT, groupTagsFromQuery, isGroupTag } from "@mortero/shared/groupTags";
 import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -145,6 +146,8 @@ async function notifyMods(groupId: string, event: string, payload: unknown) {
 const groupInput = z.object({
   name: z.string().trim().min(3, "El nombre tiene que tener al menos 3 letras").max(40, "Máximo 40 caracteres"),
   description: z.string().trim().max(300, "Máximo 300 caracteres").nullish(),
+  tags: z.array(z.string().refine(isGroupTag, "Elegí una etiqueta de la lista"))
+    .max(GROUP_TAG_COUNT).transform((tags) => [...new Set(tags)]).optional(),
 });
 
 /** Un número entero entre min y max, con un error que dice qué campo está mal. */
@@ -222,7 +225,7 @@ async function closeGroup(groupId: string, reason: string) {
 groupRoutes.get("/groups", async (c) => {
   const u = c.get("user");
   const rows = await db
-    .select({ id: group.id, name: group.name, description: group.description, isGeneral: group.isGeneral, photoKey: group.photoKey, role: groupMember.role })
+    .select({ id: group.id, name: group.name, description: group.description, tags: group.tags, isGeneral: group.isGeneral, photoKey: group.photoKey, role: groupMember.role })
     .from(groupMember)
     .innerJoin(group, eq(group.id, groupMember.groupId))
     .where(and(eq(groupMember.userId, u.id), isNull(group.removedAt)))
@@ -245,10 +248,12 @@ export const EXPLORE_PAGE = 60;
 groupRoutes.get("/groups/all", async (c) => {
   const u = c.get("user");
   const q = (c.req.query("q") ?? "").trim().slice(0, 40);
+  const tags = groupTagsFromQuery(c.req.query("tags"));
   const offset = Math.max(0, Math.min(10_000, Number(c.req.query("offset")) || 0));
   const pageSize = Math.max(1, Math.min(300, Number(c.req.query("limit")) || EXPLORE_PAGE));
   const conds = [eq(group.isGeneral, false), isNull(group.removedAt)];
   if (q) conds.push(or(ilike(group.name, `%${q}%`), ilike(group.description, `%${q}%`))!);
+  if (tags.length) conds.push(sql`${group.tags} @> ${JSON.stringify(tags)}::jsonb`);
   // Cuenta con el índice de la clave de group_member (group_id, user_id)
   const members = sql<number>`(select count(*)::int from ${groupMember} where ${groupMember.groupId} = ${group.id})`;
   const page = await db.select({ g: group, n: members }).from(group).where(and(...conds))
@@ -270,6 +275,7 @@ groupRoutes.get("/groups/all", async (c) => {
     id: g.id,
     name: g.name,
     description: g.description,
+    tags: g.tags,
     photo: thumbUrl(g.photoKey),
     memberCount: counts.get(g.id) ?? 0,
     role: roles.get(g.id) ?? null,
@@ -291,7 +297,7 @@ groupRoutes.post("/groups", async (c) => {
     .where(and(eq(groupMember.userId, u.id), eq(groupMember.role, "owner")));
   if (owned >= MAX_OWNED) throw new HTTPException(400, { message: `Podés ser dueño de hasta ${MAX_OWNED} grupos` });
   const id = newId();
-  await db.insert(group).values({ id, name: data.name, description: data.description ?? null, ownerId: u.id });
+  await db.insert(group).values({ id, name: data.name, description: data.description ?? null, tags: data.tags ?? [], ownerId: u.id });
   await db.insert(groupMember).values({ groupId: id, userId: u.id, role: "owner" });
   forgetMemberCount(id);
   syncGroupRoom(u.id, id, true);
@@ -308,6 +314,7 @@ groupRoutes.get("/groups/:id", async (c) => {
     id: g.id,
     name: g.name,
     description: g.description,
+    tags: g.tags,
     photo: thumbUrl(g.photoKey),
     isGeneral: g.isGeneral,
     rules: g.spamRules,
@@ -346,6 +353,7 @@ groupRoutes.patch("/groups/:id", async (c) => {
     .set({
       ...(data.name !== undefined && { name: data.name }),
       ...(data.description !== undefined && { description: data.description ?? null }),
+      ...(data.tags !== undefined && { tags: data.tags }),
       ...(data.rules && { spamRules: { ...DEFAULT_SPAM_RULES, ...data.rules } }),
     })
     .where(eq(group.id, g.id));
