@@ -258,6 +258,7 @@ export const group = pgTable("group", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
   ownerId: text("owner_id").references(() => user.id, { onDelete: "set null" }),
   isGeneral: boolean("is_general").notNull().default(false),
   // Foto del grupo (la pone el dueño). El general no tiene: muestra el logo de la app.
@@ -269,7 +270,7 @@ export const group = pgTable("group", {
   // guardado 90 días como prueba (ver moderation.ts y docs/MODERACION.md). null = activo.
   removedAt: timestamp("removed_at", { withTimezone: true }),
   removedReason: text("removed_reason"),
-});
+}, (t) => [index("group_tags_idx").using("gin", t.tags)]);
 
 export const groupMember = pgTable("group_member", {
   groupId: text("group_id").notNull().references(() => group.id, { onDelete: "cascade" }),

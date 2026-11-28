@@ -30,6 +30,9 @@ export const DotsIcon = () => (
 export const GridIcon = () => (
   <svg {...base}><rect x="3" y="3" width="7.5" height="7.5" rx="2" /><rect x="13.5" y="3" width="7.5" height="7.5" rx="2" /><rect x="3" y="13.5" width="7.5" height="7.5" rx="2" /><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" /></svg>
 );
+export const HashIcon = () => (
+  <svg {...base}><path d="M5 9h15M4 15h15M11 4l-4 16M17 4l-4 16" /></svg>
+);
 export const FilterIcon = () => (
   <svg {...base} width={16} height={16}><path d="M4 6h16M7 12h10M10 18h4" /></svg>
 );

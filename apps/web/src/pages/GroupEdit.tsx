@@ -97,8 +97,8 @@ export function GroupEdit() {
               refreshGroups("refresh");
             }} />
           </section>
-          <GroupSettings key={id} info={current} onSaved={(name) => {
-            setGroup((prev) => prev?.id === id ? { ...prev, name } : prev);
+          <GroupSettings key={id} info={current} onSaved={(name, tags) => {
+            setGroup((prev) => prev?.id === id ? { ...prev, name, tags } : prev);
             refreshGroups("refresh");
           }} />
           <section className="section stack">

@@ -1,3 +1,4 @@
+import { GroupTagList } from "../features/groups/GroupTags";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { api, getSocket, ROLE_LABEL, type GroupInfo as Info, type Member, type MemberPage } from "../api";
@@ -159,6 +160,7 @@ export function GroupInfo() {
       <section className="section">
         <h2 className="section__title">Sobre el grupo</h2>
         {info.description && <p className="profile__about group-description">{info.description}</p>}
+        <GroupTagList tags={info.tags} />
         <p className="muted small hint">
           {info.memberCount} {info.memberCount === 1 ? "miembro" : "miembros"} · Tu rol: {ROLE_LABEL[info.role!]}
         </p>

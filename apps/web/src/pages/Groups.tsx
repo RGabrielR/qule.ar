@@ -1,3 +1,4 @@
+import { groupTagsFromQuery } from "@mortero/shared/groupTags";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { loadedCount, useRememberScroll } from "../features/navigation/viewMemory";
@@ -7,9 +8,10 @@ import { PhotoPicker } from "../components/GroupPhoto";
 import { preparePhotoForUpload } from "../features/photos/preparePhoto";
 import { GROUP_EVENTS, useTabData } from "../features/navigation/tabData";
 import { usePullToRefresh } from "../features/navigation/pullToRefresh";
-import { PlusIcon } from "../components/Icons";
+import { HashIcon, PlusIcon } from "../components/Icons";
 import { MyInvites } from "../components/Invite";
 import { JoinButton } from "../components/JoinButton";
+import { GroupTagEditor, GroupTagFilter, GroupTagList } from "../features/groups/GroupTags";
 import { useGroupOrder } from "../features/groups/useGroupOrder";
 import { useMe } from "../App";
 import { DialogFocus } from "../components/DialogFocus";
@@ -29,39 +31,51 @@ export function Groups() {
   const { ordered, move, reset } = useGroupOrder(me?.user.id ?? "", mine);
   const [ordering, setOrdering] = useState(false);
   const [all, setAll] = useState<GroupListing[] | null>(null);
+  const [resultKey, setResultKey] = useState<string | null>(null);
+  const [tagFilterOpen, setTagFilterOpen] = useState(false);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  // La búsqueda va en la dirección: al volver de un grupo sigue ahí
+  // La búsqueda y las etiquetas van en la dirección para recuperarlas al volver de un grupo.
   const q = params.get("q") ?? "";
-  const setQ = (value: string) => setParams(value ? { ver: "todos", q: value } : { ver: "todos" }, { replace: true });
+  const tags = groupTagsFromQuery(params.get("tags"));
+  const tagQuery = tags.join(",");
+  const query = new URLSearchParams({ q, ...(tagQuery && { tags: tagQuery }) }).toString();
+  const searchKey = `grupos:${query}`;
+  const currentKey = useRef(searchKey);
+  currentKey.current = searchKey;
+  const visible = resultKey === searchKey ? all : null;
+  const shown = visible?.length ?? 0;
+
+  function setSearch(text: string, selectedTags: string[]) {
+    setParams({ ver: "todos", ...(text && { q: text }), ...(selectedTags.length && { tags: selectedTags.join(",") }) }, { replace: true });
+  }
+
   const enter = useTabTransition();
   const pageRef = useRef<HTMLDivElement>(null);
-  useRememberScroll(pageRef, tab === "mine" ? mine != null : all != null);
+  useRememberScroll(pageRef, tab === "mine" ? mine != null : visible != null);
   const [creating, setCreating] = useState(false);
-  const shown = all?.length ?? 0;
-  // Las tarjetas entran escalonadas cuando llegan. Al volver a "Todos los grupos" (ya se habían visto) no se
-  // anima la primera tanda: la lista vuelve a estar donde estaba.
-  const [returning] = useState(() => loadedCount.get(`grupos:${q}`) > 0);
+  const [returning] = useState(() => loadedCount.get(searchKey) > 0);
   const arriveMine = useArrival(mine?.map((g) => g.id));
-  const arriveAll = useArrival(all?.map((g) => g.id), { quietFirst: returning });
+  const arriveAll = useArrival(visible?.map((g) => g.id), { quietFirst: returning });
 
-  // Los grupos con más gente primero, de a páginas. Al recargar (por un evento o al unirse) se pide de una vez
-  // todo lo que ya se estaba viendo, para no volver a la primera página.
-  const loadAll = useCallback(
-    (query = q, keep = 0) => {
-      const limit = Math.max(GROUPS_PAGE, Math.min(300, keep));
-      return api<GroupPage>(`/groups/all?q=${encodeURIComponent(query)}&limit=${limit}`)
-        .then((r) => { setAll(r.groups); setNextOffset(r.nextOffset); })
-        .catch(() => {});
-    },
-    [q],
-  );
+  // Al recargar por un evento o al unirse, se conserva lo que ya estaba cargado.
+  const loadAll = useCallback((keep = 0) => {
+    const limit = Math.max(GROUPS_PAGE, Math.min(300, keep));
+    return api<GroupPage>(`/groups/all?${query}&limit=${limit}`)
+      .then((r) => {
+        if (currentKey.current !== searchKey) return;
+        setAll(r.groups);
+        setNextOffset(r.nextOffset);
+        setResultKey(searchKey);
+      }).catch(() => {});
+  }, [query, searchKey]);
 
   async function loadMore() {
-    if (nextOffset == null) return;
+    if (resultKey !== searchKey || nextOffset == null || loadingMore) return;
     setLoadingMore(true);
     try {
-      const r = await api<GroupPage>(`/groups/all?q=${encodeURIComponent(q)}&offset=${nextOffset}`);
+      const r = await api<GroupPage>(`/groups/all?${query}&offset=${nextOffset}`);
+      if (currentKey.current !== searchKey) return;
       setAll((prev) => {
         const seen = new Set((prev ?? []).map((g) => g.id));
         return [...(prev ?? []), ...r.groups.filter((g) => !seen.has(g.id))];
@@ -69,34 +83,34 @@ export function Groups() {
       setNextOffset(r.nextOffset);
     } catch {
       // Se puede volver a tocar
+    } finally {
+      setLoadingMore(false);
     }
-    setLoadingMore(false);
   }
 
   const pullRefresh = usePullToRefresh(pageRef, () =>
-    Promise.all([refreshGroups("refresh"), tab === "all" ? loadAll(q, shown) : undefined]),
+    Promise.all([refreshGroups("refresh"), tab === "all" ? loadAll(shown) : undefined]),
   );
 
   useEffect(() => {
     if (tab !== "all") return;
     const s = getSocket();
-    const refresh = () => loadAll(q, shown);
+    const refresh = () => loadAll(shown);
     for (const ev of GROUP_EVENTS) s.on(ev, refresh);
     return () => {
       for (const ev of GROUP_EVENTS) s.off(ev, refresh);
     };
-  }, [loadAll, tab, q, shown]);
+  }, [loadAll, tab, shown]);
 
-  // Cuántos grupos había cargados con esta búsqueda, para volver a mostrarlos todos
   useEffect(() => {
-    if (all) loadedCount.set(`grupos:${q}`, all.length);
-  }, [all, q]);
+    if (visible) loadedCount.set(searchKey, visible.length);
+  }, [visible, searchKey]);
 
   useEffect(() => {
     if (tab !== "all") return;
-    const t = setTimeout(() => loadAll(q, loadedCount.get(`grupos:${q}`)), 250);
+    const t = setTimeout(() => loadAll(loadedCount.get(searchKey)), 250);
     return () => clearTimeout(t);
-  }, [tab, q, loadAll]);
+  }, [tab, searchKey, loadAll]);
 
   return (
     <div className={`page ${enter}`} ref={pageRef}>
@@ -135,6 +149,7 @@ export function Groups() {
                     {g.role !== "member" && <span className="pill">{ROLE_LABEL[g.role]}</span>}
                   </div>
                   <p className="gcard__desc">{g.description}</p>
+                  <GroupTagList tags={g.tags} />
                   <p className="gcard__meta">{g.memberCount} {g.memberCount === 1 ? "miembro" : "miembros"}</p>
                 </div>
                 {g.pendingCount > 0 && <span className="badge badge--inline" title="Solicitudes pendientes">{g.pendingCount}</span>}
@@ -158,17 +173,22 @@ export function Groups() {
         </>
       ) : (
         <>
-          <div className="searchbar">
-            <input className="input" type="search" placeholder="Buscar grupos…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar grupos" />
+          <div className="searchbar group-search">
+            <input className="input" type="search" placeholder="Buscar grupos…" value={q} onChange={(e) => setSearch(e.target.value, tags)} aria-label="Buscar grupos" />
+            <button type="button" className={tags.length ? "btn btn--primary" : "btn"} aria-haspopup="dialog"
+              aria-label={tags.length ? `Filtrar por etiquetas · ${tags.length}` : "Filtrar por etiquetas"} onClick={() => setTagFilterOpen(true)}>
+              <HashIcon />{tags.length > 0 && <span>{tags.length}</span>}
+            </button>
           </div>
-          {all == null ? <GroupsSkeleton /> : all.length === 0 ? (
+          {tags.length > 0 && <div className="searchbar"><GroupTagList tags={tags} /></div>}
+          {visible == null ? <GroupsSkeleton /> : visible.length === 0 ? (
             <div className="empty">
-              <p className="empty__title">{q ? "No encontramos grupos con eso" : "Todavía no hay grupos"}</p>
-              <p className="muted">¿Por qué no creás el primero?</p>
+              <p className="empty__title">{q || tags.length ? "No encontramos grupos con esos filtros" : "Todavía no hay grupos"}</p>
+              {!q && tags.length === 0 && <p className="muted">¿Por qué no creás el primero?</p>}
             </div>
           ) : (
             <ul className="glist">
-              {all.map((g) => {
+              {visible.map((g) => {
                 const { className, style } = arriveAll(g.id);
                 return (
                 <li key={g.id} className={`gcard gcard--static ${className}`} style={style}>
@@ -177,13 +197,14 @@ export function Groups() {
                     <Link className="gcard__details" to={`/grupos/${g.id}${g.role ? "/info" : ""}`}>
                       <b>{g.name}</b>
                       {g.description && <p className="gcard__desc">{g.description}</p>}
+                      <GroupTagList tags={g.tags} />
                     </Link>
                     <p className="gcard__meta">
                       {g.memberCount} {g.memberCount === 1 ? "miembro" : "miembros"}
                     </p>
                   </div>
                   <div className="gcard__action">
-                    <JoinButton g={g} onChange={() => { loadAll(q, shown); refreshGroups("refresh"); }} />
+                    <JoinButton g={g} onChange={() => { loadAll(shown); refreshGroups("refresh"); }} />
                   </div>
                 </li>
                 );
@@ -198,6 +219,12 @@ export function Groups() {
         </>
       )}
 
+      {tab === "all" && tagFilterOpen && (
+        <GroupTagFilter initial={tags} onClose={() => setTagFilterOpen(false)} onApply={(next) => {
+          setSearch(q, next);
+          setTagFilterOpen(false);
+        }} />
+      )}
       {creating && <CreateGroup onClose={() => setCreating(false)} />}
     </div>
   );
@@ -213,6 +240,7 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
   const { refreshGroups } = useTabData();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
   const [photo, setPhoto] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -222,7 +250,7 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError("");
     try {
-      const { id } = await api<{ id: string }>("/groups", { method: "POST", json: { name, description: description || null } });
+      const { id } = await api<{ id: string }>("/groups", { method: "POST", json: { name, description: description || null, tags } });
       // El grupo ya está creado: si la foto falla, se puede volver a poner desde la info del grupo
       if (photo) await upload(`/groups/${id}/photo`, await preparePhotoForUpload(photo)).catch(() => {});
       refreshGroups("refresh");
@@ -235,21 +263,26 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
-      <form className="sheet" role="dialog" aria-modal aria-labelledby="create-title" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+      <form className="sheet sheet--tall" role="dialog" aria-modal aria-labelledby="create-title" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <DialogFocus onClose={onClose} />
-        <h2 id="create-title">Crear un grupo</h2>
-        <PhotoPicker name={name || "?"} file={photo} onPick={setPhoto} />
-        <label className="field">
-          <span>Nombre</span>
-          <input className="input" required minLength={3} maxLength={40} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        </label>
-        <label className="field">
-          <span>Descripción</span>
-          <textarea className="input" rows={3} maxLength={300} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="¿De qué va el grupo?" />
-        </label>
-        <p className="muted small">Vas a ser el dueño. Se entra pidiendo ingreso o aceptando una invitación tuya o de tus moderadores.</p>
-        {error && <p className="error" role="alert">{error}</p>}
-        <div className="row">
+        <div className="sheet__head">
+          <h2 id="create-title">Crear un grupo</h2>
+        </div>
+        <div className="sheet__body form">
+          <PhotoPicker name={name || "?"} file={photo} onPick={setPhoto} />
+          <label className="field">
+            <span>Nombre</span>
+            <input className="input" required minLength={3} maxLength={40} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </label>
+          <label className="field">
+            <span>Descripción</span>
+            <textarea className="input" rows={3} maxLength={300} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="¿De qué va el grupo?" />
+          </label>
+          <GroupTagEditor tags={tags} onChange={setTags} />
+          <p className="muted small">Vas a ser el dueño. Se entra pidiendo ingreso o aceptando una invitación tuya o de tus moderadores.</p>
+          {error && <p className="error" role="alert">{error}</p>}
+        </div>
+        <div className="row sheet__foot">
           <button type="button" className="btn" onClick={onClose}>Cancelar</button>
           <button className="btn btn--primary" disabled={busy || name.trim().length < 3}>{busy ? "Creando…" : "Crear grupo"}</button>
         </div>
